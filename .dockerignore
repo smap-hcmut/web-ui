@@ -1,0 +1,76 @@
+# ============================================
+# Docker Ignore File
+# ============================================
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+.next
+out
+dist
+build
+
+# Cache
+.cache
+.parcel-cache
+.next/cache
+
+# Testing
+coverage
+.nyc_output
+
+# Environment files (should be passed at runtime)
+.env
+.env.local
+.env*.local
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+!CHART_DATA_STRUCTURES.md
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Replit
+.replit
+.replit.md
+replit.md
+
+# Logs
+logs
+*.log
+
+# Temporary files
+*.tmp
+.tmp
+.temp
+
+# TypeScript build info
+*.tsbuildinfo
