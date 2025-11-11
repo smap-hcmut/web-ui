@@ -7,8 +7,7 @@
 }
 
 .react-flow__controls-button {
-    @apply bg-card border-border fill-foreground;
-    @apply hover: bg-accent;
+    @apply bg-card border border-border fill-foreground;
 }
 
 .react-flow__controls-button:hover {
