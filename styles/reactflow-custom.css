@@ -1,20 +1,20 @@
 .react-flow {
-  background-color: transparent !important;
+    background-color: transparent !important;
 }
 
 .react-flow__controls {
-  @apply bg-card border border-border shadow-lg;
+    @apply bg-card border border-border shadow-lg;
 }
 
 .react-flow__controls-button {
-  @apply bg-card border-border fill-foreground;
-  @apply hover:bg-accent;
+    @apply bg-card border-border fill-foreground;
+    @apply hover: bg-accent;
 }
 
 .react-flow__controls-button:hover {
-  @apply bg-accent;
+    @apply bg-accent;
 }
 
 .react-flow__panel {
-  @apply text-foreground;
+    @apply text-foreground;
 }
