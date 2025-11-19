@@ -230,6 +230,46 @@
     "sectionsIncluded": "Sections Included",
     "reportFeatures": "Report Features"
   },
+  "landing": {
+    "header": {
+      "home": "Home",
+      "features": "Features",
+      "solutions": "Solutions",
+      "feedback": "Feedback",
+      "pricing": "Pricing",
+      "aboutUs": "About Us",
+      "contact": "Contact",
+      "login": "Login",
+      "getStarted": "Get Started"
+    },
+    "hero": {
+      "tagline": "One input, endless insights",
+      "subtitle": "Proud to be the pioneering force in business data analytics driven by user trends, empowered by cutting‑edge technology and a team of engineers from Ho Chi Minh University of Technology.",
+      "cta": "Start Free Trial",
+      "watchDemo": "Watch Demo"
+    },
+    "footer": {
+      "description": "Advanced social media analytics platform helping businesses understand their audience and grow their brand.",
+      "product": "Product",
+      "features": "Features",
+      "solutions": "Solutions",
+      "pricing": "Pricing",
+      "company": "Company",
+      "aboutUs": "About Us",
+      "careers": "Careers",
+      "blog": "Blog",
+      "contact": "Contact",
+      "support": "Support",
+      "documentation": "Documentation",
+      "helpCenter": "Help Center",
+      "community": "Community",
+      "legal": "Legal",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "copyright": "© 2025 SMAP SOLUTION. All rights reserved.",
+      "followUs": "Follow Us"
+    }
+  },
   "emptyState": {
     "welcome": {
       "title": "Welcome to SMAP Analytics",

@@ -230,6 +230,46 @@
     "sectionsIncluded": "Phần được bao gồm",
     "reportFeatures": "Tính năng báo cáo"
   },
+  "landing": {
+    "header": {
+      "home": "Trang chủ",
+      "features": "Tính năng",
+      "solutions": "Giải pháp",
+      "feedback": "Phản hồi",
+      "pricing": "Bảng giá",
+      "aboutUs": "Về chúng tôi",
+      "contact": "Liên hệ",
+      "login": "Đăng nhập",
+      "getStarted": "Bắt đầu ngay"
+    },
+    "hero": {
+      "tagline": "One input, endless insights",
+      "subtitle": "Tự hào là những cánh chim tiên phong trong lĩnh vực phân tích dữ liệu doanh nghiệp dựa trên xu hướng người dùng với đội ngũ kỹ sư và công nghệ tiên tiến đến từ Đại học Bách Khoa.",
+      "cta": "Dùng thử miễn phí",
+      "watchDemo": "Xem Demo"
+    },
+    "footer": {
+      "description": "Nền tảng phân tích mạng xã hội tiên tiến giúp doanh nghiệp hiểu rõ khán giả và phát triển thương hiệu.",
+      "product": "Sản phẩm",
+      "features": "Tính năng",
+      "solutions": "Giải pháp",
+      "pricing": "Bảng giá",
+      "company": "Công ty",
+      "aboutUs": "Về chúng tôi",
+      "careers": "Tuyển dụng",
+      "blog": "Blog",
+      "contact": "Liên hệ",
+      "support": "Hỗ trợ",
+      "documentation": "Tài liệu",
+      "helpCenter": "Trung tâm trợ giúp",
+      "community": "Cộng đồng",
+      "legal": "Pháp lý",
+      "privacy": "Chính sách bảo mật",
+      "terms": "Điều khoản dịch vụ",
+      "copyright": "© 2025 SMAP SOLUTION. Bảo lưu mọi quyền.",
+      "followUs": "Theo dõi chúng tôi"
+    }
+  },
   "emptyState": {
     "welcome": {
       "title": "Chào mừng đến với SMAP Analytics",
