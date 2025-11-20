@@ -248,6 +248,79 @@
       "cta": "Start Free Trial",
       "watchDemo": "Watch Demo"
     },
+    "features": {
+      "title": "Powerful Data Collection & AI Analysis",
+      "subtitle": "Connect multiple social media platforms and let our AI transform raw data into actionable insights",
+      "step1Title": "Data Preparation",
+      "step1Description": "Listen to discussions about your business or competitors from the perspective of social media users.",
+      "step2Title": "Data Analysis",
+      "step2Description": "Standardize data, detect trends, and train models to extract hidden value.",
+      "step3Title": "Data Visualization",
+      "step3Description": "Transform insights into charts, dashboards, and easy-to-understand reports to support your business unconditionally.",
+      "cta": "Get Started Now"
+    },
+    "solutions": {
+      "title": "Your platform to make smarter decisions",
+      "subtitle": "Unlock powerful insights and drive growth with our all-in-one platform. We provide the tools you need to succeed in the competitive digital landscape.",
+      "solution1Title": "Crisis Management",
+      "solution1Description": "Proactively identify and manage potential risks before they escalate, protecting your brand reputation.",
+      "solution2Title": "Market Trend Analysis",
+      "solution2Description": "Stay ahead by capturing and analyzing emerging trends in your industry in real-time.",
+      "solution3Title": "Competitive Analysis",
+      "solution3Description": "Gain an edge by tracking, analyzing marketing strategies and customer responses to competitors.",
+      "solution4Title": "Campaign Optimization",
+      "solution4Description": "Measure marketing and social media campaign effectiveness visually to optimize ROI.",
+      "solution5Title": "Deep Customer Insights",
+      "solution5Description": "Understand target audience needs, desires and behaviors through social media data analysis.",
+      "solution6Title": "Product & Service Improvement",
+      "solution6Description": "Listen to customer feedback to improve products, services and enhance user experience."
+    },
+    "feedback": {
+      "title": "Trusted by our customers",
+      "subtitle": "Thousands of businesses have transformed how they analyze social media data with our platform",
+      "stats": {
+        "customersCount": "5000+",
+        "customersLabel": "Happy Customers",
+        "rating": "4.9/5",
+        "ratingLabel": "Average Rating",
+        "growthRate": "300%",
+        "growthLabel": "Growth in 2024",
+        "satisfaction": "98%",
+        "satisfactionLabel": "Satisfaction Rate"
+      },
+      "testimonials": {
+        "testimonial1Name": "John Smith",
+        "testimonial1Position": "CEO",
+        "testimonial1Company": "TechViet Co.",
+        "testimonial1Quote": "SMAP Solution helped us understand our customers and competitors better. ROI increased 200% in just 6 months. This is an indispensable tool for our marketing strategy.",
+        "testimonial2Name": "Sarah Johnson",
+        "testimonial2Position": "Marketing Director",
+        "testimonial2Company": "FastFood Chain",
+        "testimonial2Quote": "With SMAP, we can detect PR crises before they spread. The support team is very professional and the platform is easy to use.",
+        "testimonial3Name": "Michael Chen",
+        "testimonial3Position": "Social Media Manager",
+        "testimonial3Company": "Fashion Brand",
+        "testimonial3Quote": "Intuitive dashboard, accurate insights and automated reporting save me 10 hours every week. I can focus on strategy instead of manual data analysis."
+      },
+      "caseStudiesTitle": "Success Stories",
+      "caseStudies": {
+        "case1": {
+          "metric": "250%",
+          "title": "Engagement Growth",
+          "description": "Fashion brand increased engagement rate from 2% to 5% in 3 months"
+        },
+        "case2": {
+          "metric": "85%",
+          "title": "Time Saved",
+          "description": "F&B company reduced data analysis time by 85% with automation"
+        },
+        "case3": {
+          "metric": "40%",
+          "title": "Lower Ad Costs",
+          "description": "Tech startup optimized targeting and reduced cost per conversion by 40%"
+        }
+      }
+    },
     "footer": {
       "description": "Advanced social media analytics platform helping businesses understand their audience and grow their brand.",
       "product": "Product",

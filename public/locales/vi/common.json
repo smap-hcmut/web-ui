@@ -248,6 +248,79 @@
       "cta": "Dùng thử miễn phí",
       "watchDemo": "Xem Demo"
     },
+    "features": {
+      "title": "Thu Thập Dữ Liệu & Phân Tích AI Mạnh Mẽ",
+      "subtitle": "Kết nối nhiều nền tảng mạng xã hội và để AI chuyển đổi dữ liệu thô thành thông tin hữu ích",
+      "step1Title": "Chuẩn bị dữ liệu",
+      "step1Description": "Lắng nghe những bàn tán về doanh nghiệp của bạn hoặc đối thủ dưới góc nhìn người dùng mạng xã hội.",
+      "step2Title": "Phân tích dữ liệu",
+      "step2Description": "Chuẩn hóa dữ liệu, phát hiện xu hướng và huấn luyện mô hình để khai thác giá trị tiềm ẩn.",
+      "step3Title": "Trực quan hóa dữ liệu",
+      "step3Description": "Biến insight thành biểu đồ, dashboard và báo cáo dễ hiểu để hỗ trợ doanh nghiệp vô điều kiện.",
+      "cta": "Bắt đầu ngay"
+    },
+    "solutions": {
+      "title": "Nền tảng của bạn để đưa ra quyết định sáng suốt hơn",
+      "subtitle": "Khai phá những insight mạnh mẽ và thúc đẩy tăng trưởng với nền tảng tất-cả-trong-một. Chúng tôi cung cấp các công cụ bạn cần để thành công trong bối cảnh kỹ thuật số cạnh tranh.",
+      "solution1Title": "Xử lý khủng hoảng truyền thống",
+      "solution1Description": "Chủ động xác định và quản lý các rủi ro tiềm ẩn trước khi chúng leo thang, bảo vệ danh tiếng thương hiệu của bạn.",
+      "solution2Title": "Nắm bắt xu hướng thị trường",
+      "solution2Description": "Đi trước đón đầu bằng cách nắm bắt và phân tích các xu hướng mới nổi trong ngành của bạn theo thời gian thực.",
+      "solution3Title": "Phân tích đối thủ cạnh tranh",
+      "solution3Description": "Giành lợi thế bằng cách theo dõi, phân tích chiến lược marketing và phản ứng của khách hàng đối với đối thủ.",
+      "solution4Title": "Tối ưu hóa chiến dịch",
+      "solution4Description": "Đo lường hiệu quả các chiến dịch marketing, social media một cách trực quan để tối ưu hóa ROI.",
+      "solution5Title": "Thấu hiểu khách hàng sâu sắc",
+      "solution5Description": "Hiểu rõ nhu cầu, mong muốn và hành vi của khán giả mục tiêu thông qua phân tích dữ liệu mạng xã hội.",
+      "solution6Title": "Cải thiện sản phẩm & dịch vụ",
+      "solution6Description": "Lắng nghe phản hồi của khách hàng để cải tiến sản phẩm, dịch vụ và nâng cao trải nghiệm người dùng."
+    },
+    "feedback": {
+      "title": "Khách hàng tin tưởng chúng tôi",
+      "subtitle": "Hàng nghìn doanh nghiệp đã chuyển đổi cách họ phân tích dữ liệu mạng xã hội với nền tảng của chúng tôi",
+      "stats": {
+        "customersCount": "5000+",
+        "customersLabel": "Khách hàng tin dùng",
+        "rating": "4.9/5",
+        "ratingLabel": "Đánh giá trung bình",
+        "growthRate": "300%",
+        "growthLabel": "Tăng trưởng năm 2024",
+        "satisfaction": "98%",
+        "satisfactionLabel": "Mức độ hài lòng"
+      },
+      "testimonials": {
+        "testimonial1Name": "Nguyễn Văn An",
+        "testimonial1Position": "CEO",
+        "testimonial1Company": "TechViet Co.",
+        "testimonial1Quote": "SMAP Solution đã giúp chúng tôi hiểu rõ hơn về khách hàng và đối thủ cạnh tranh. ROI tăng 200% chỉ trong 6 tháng. Đây là công cụ không thể thiếu cho chiến lược marketing của chúng tôi.",
+        "testimonial2Name": "Trần Thị Bình",
+        "testimonial2Position": "Marketing Director",
+        "testimonial2Company": "FastFood Chain",
+        "testimonial2Quote": "Với SMAP, chúng tôi có thể phát hiện khủng hoảng truyền thông trước khi nó lan rộng. Đội ngũ hỗ trợ rất chuyên nghiệp và nền tảng rất dễ sử dụng.",
+        "testimonial3Name": "Lê Minh Châu",
+        "testimonial3Position": "Social Media Manager",
+        "testimonial3Company": "Fashion Brand",
+        "testimonial3Quote": "Dashboard trực quan, insights chính xác và báo cáo tự động giúp tôi tiết kiệm 10 giờ mỗi tuần. Tôi có thể tập trung vào chiến lược thay vì phân tích dữ liệu thủ công."
+      },
+      "caseStudiesTitle": "Câu chuyện thành công",
+      "caseStudies": {
+        "case1": {
+          "metric": "250%",
+          "title": "Tăng trưởng tương tác",
+          "description": "Thương hiệu thời trang tăng engagement rate từ 2% lên 5% sau 3 tháng"
+        },
+        "case2": {
+          "metric": "85%",
+          "title": "Tiết kiệm thời gian",
+          "description": "Công ty F&B giảm 85% thời gian phân tích dữ liệu với automation"
+        },
+        "case3": {
+          "metric": "40%",
+          "title": "Giảm chi phí quảng cáo",
+          "description": "Startup tech tối ưu hóa targeting và giảm 40% chi phí mỗi conversion"
+        }
+      }
+    },
     "footer": {
       "description": "Nền tảng phân tích mạng xã hội tiên tiến giúp doanh nghiệp hiểu rõ khán giả và phát triển thương hiệu.",
       "product": "Sản phẩm",
