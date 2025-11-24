@@ -13,6 +13,7 @@
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-tooltip": "^1.2.8",
         "autoprefixer": "^10.4.21",
+        "axios": "^1.13.2",
         "chart.js": "^4.5.1",
         "chartjs-chart-wordcloud": "^4.4.5",
         "class-variance-authority": "^0.7.1",

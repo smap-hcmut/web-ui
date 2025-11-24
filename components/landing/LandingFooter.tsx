@@ -36,40 +36,24 @@ export default function LandingFooter() {
   const { t } = useTranslation('common')
 
   return (
-    <footer className="border-t border-border/40 bg-background">
+    <footer className="border-t border-amber-300/60 dark:border-white/20 bg-white/40 dark:bg-gray-900/40 backdrop-blur-md">
       <div className="container mx-auto px-4 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8 mb-8">
           {/* Brand & Description */}
           <div className="lg:col-span-2">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center">
-                <svg
-                  className="w-10 h-10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
-                    fill="#E74C3C"
-                    stroke="#E74C3C"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-lg font-bold" style={{ color: '#E74C3C' }}>
+              <div className="w-10 h-10 rounded-lg bg-yellow-400 shadow-lg dark:bg-white" />
+              <h2 className="text-lg font-black text-gray-900 dark:text-white">
                 {t('navbar.brand')}
               </h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 max-w-xs">
               {t('landing.footer.description')}
             </p>
 
             {/* Social Links */}
             <div>
-              <h3 className="text-sm font-semibold mb-3">{t('landing.footer.followUs')}</h3>
+              <h3 className="text-sm font-black mb-3 text-gray-900 dark:text-white">{t('landing.footer.followUs')}</h3>
               <div className="flex items-center gap-3">
                 {socialLinks.map((social) => {
                   const Icon = social.icon
@@ -79,10 +63,10 @@ export default function LandingFooter() {
                       href={social.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-border/40 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-amber-300/60 dark:border-white/20 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg hover:bg-white/80 dark:hover:bg-gray-900/80 transition-all duration-200"
                       aria-label={social.label}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-4 w-4 text-gray-900 dark:text-white" />
                     </a>
                   )
                 })}
@@ -92,13 +76,13 @@ export default function LandingFooter() {
 
           {/* Product */}
           <div>
-            <h3 className="text-sm font-semibold mb-4">{t('landing.footer.product')}</h3>
+            <h3 className="text-sm font-black mb-4 text-gray-900 dark:text-white">{t('landing.footer.product')}</h3>
             <ul className="space-y-3">
               {footerLinks.product.map((link) => (
                 <li key={link.key}>
                   <a
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     {t(`landing.footer.${link.key}`)}
                   </a>
@@ -109,13 +93,13 @@ export default function LandingFooter() {
 
           {/* Company */}
           <div>
-            <h3 className="text-sm font-semibold mb-4">{t('landing.footer.company')}</h3>
+            <h3 className="text-sm font-black mb-4 text-gray-900 dark:text-white">{t('landing.footer.company')}</h3>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.key}>
                   <a
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     {t(`landing.footer.${link.key}`)}
                   </a>
@@ -126,13 +110,13 @@ export default function LandingFooter() {
 
           {/* Support */}
           <div>
-            <h3 className="text-sm font-semibold mb-4">{t('landing.footer.support')}</h3>
+            <h3 className="text-sm font-black mb-4 text-gray-900 dark:text-white">{t('landing.footer.support')}</h3>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.key}>
                   <a
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     {t(`landing.footer.${link.key}`)}
                   </a>
@@ -143,13 +127,13 @@ export default function LandingFooter() {
 
           {/* Legal */}
           <div>
-            <h3 className="text-sm font-semibold mb-4">{t('landing.footer.legal')}</h3>
+            <h3 className="text-sm font-black mb-4 text-gray-900 dark:text-white">{t('landing.footer.legal')}</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.key}>
                   <a
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                   >
                     {t(`landing.footer.${link.key}`)}
                   </a>
@@ -160,19 +144,21 @@ export default function LandingFooter() {
         </div>
 
         {/* Divider */}
-        <div className="border-t border-border/40 pt-8">
+        <div className="border-t border-amber-300/60 dark:border-white/20 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('landing.footer.copyright')}
             </p>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Mail className="h-4 w-4" />
-              <a
-                href="mailto:contact@smapsolution.com"
-                className="text-sm hover:text-foreground transition-colors"
-              >
-                contact@smapsolution.com
-              </a>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-white rounded-lg shadow-lg">
+                <Mail className="h-4 w-4 text-white dark:text-gray-900" />
+                <a
+                  href="mailto:contact@smapsolution.com"
+                  className="text-sm font-semibold text-white dark:text-gray-900 hover:underline underline-offset-2"
+                >
+                  contact@smapsolution.com
+                </a>
+              </div>
             </div>
           </div>
         </div>

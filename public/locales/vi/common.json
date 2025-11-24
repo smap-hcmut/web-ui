@@ -321,6 +321,120 @@
         }
       }
     },
+    "pricing": {
+      "title": "Bảng giá minh bạch",
+      "subtitle": "Chọn gói phù hợp với nhu cầu của bạn. Không có chi phí ẩn, hủy bất cứ lúc nào.",
+      "popular": "Phổ biến nhất",
+      "perMonth": "tháng",
+      "getStarted": "Bắt đầu ngay",
+      "note": "Tất cả các gói đều bao gồm hỗ trợ 24/7 và cập nhật miễn phí. Dùng thử 14 ngày không cần thẻ tín dụng.",
+      "plans": {
+        "starter": {
+          "name": "Starter",
+          "price": "1.990K",
+          "description": "Phù hợp cho startup và doanh nghiệp nhỏ bắt đầu phân tích social media.",
+          "features": {
+            "feature1": "3 dự án theo dõi",
+            "feature2": "1.000 mentions/tháng",
+            "feature3": "Báo cáo cơ bản"
+          }
+        },
+        "professional": {
+          "name": "Professional",
+          "price": "4.990K",
+          "description": "Dành cho doanh nghiệp muốn phân tích chuyên sâu và tối ưu chiến lược.",
+          "features": {
+            "feature1": "10 dự án theo dõi",
+            "feature2": "10.000 mentions/tháng",
+            "feature3": "Phân tích sentiment AI",
+            "feature4": "Báo cáo tùy chỉnh",
+            "feature5": "API access"
+          }
+        },
+        "enterprise": {
+          "name": "Enterprise",
+          "price": "Liên hệ",
+          "description": "Giải pháp toàn diện cho doanh nghiệp lớn với nhu cầu đặc biệt.",
+          "features": {
+            "feature1": "Không giới hạn dự án",
+            "feature2": "Không giới hạn mentions",
+            "feature3": "AI & ML tùy chỉnh",
+            "feature4": "Dedicated support",
+            "feature5": "On-premise option",
+            "feature6": "SLA cam kết 99.9%"
+          }
+        }
+      }
+    },
+"contact": {
+      "title": "Liên Hệ Với Chúng Tôi",
+      "subtitle": "Bạn có câu hỏi hoặc cần tư vấn? Đội ngũ của chúng tôi sẵn sàng hỗ trợ bạn 24/7.",
+      "form": {
+        "title": "Gửi tin nhắn",
+        "name": "Họ và tên",
+        "namePlaceholder": "Nhập họ và tên của bạn",
+        "email": "Email",
+        "emailPlaceholder": "email@example.com",
+        "company": "Công ty",
+        "companyPlaceholder": "Tên công ty của bạn",
+        "message": "Tin nhắn",
+        "messagePlaceholder": "Bạn cần hỗ trợ gì?",
+        "submit": "Gửi tin nhắn"
+      },
+      "info": {
+        "email": "Email",
+        "phone": "Điện thoại",
+        "address": "Địa chỉ",
+        "addressValue": "268 Lý Thường Kiệt, P.14, Q.10, TP.HCM",
+        "hours": "Giờ làm việc",
+        "hoursValue": "Thứ 2 - Thứ 6: 8:00 - 18:00"
+      }
+    },
+    "about": {
+      "title": "Về Chúng Tôi",
+      "subtitle": "Chúng tôi là đội ngũ đam mê công nghệ và dữ liệu, cam kết mang đến giải pháp phân tích mạng xã hội tốt nhất cho doanh nghiệp Việt Nam.",
+      "mission": {
+        "title": "Sứ mệnh",
+        "description": "Giúp doanh nghiệp Việt Nam ra quyết định thông minh hơn thông qua việc khai thác sức mạnh của dữ liệu mạng xã hội và trí tuệ nhân tạo."
+      },
+      "vision": {
+        "title": "Tầm nhìn",
+        "description": "Trở thành nền tảng phân tích mạng xã hội hàng đầu Đông Nam Á, đồng hành cùng sự phát triển của hàng nghìn doanh nghiệp."
+      },
+      "story": {
+        "title": "Câu chuyện của chúng tôi",
+        "description": "Được thành lập bởi đội ngũ kỹ sư từ Đại học Bách Khoa TP.HCM, SMAP Solution ra đời từ niềm đam mê biến dữ liệu thành giá trị thực cho doanh nghiệp. Chúng tôi tin rằng mỗi doanh nghiệp đều xứng đáng có công cụ phân tích đẳng cấp thế giới."
+      },
+      "values": {
+        "title": "Giá trị cốt lõi",
+        "innovation": {
+          "title": "Đổi mới",
+          "description": "Không ngừng nghiên cứu và áp dụng công nghệ tiên tiến"
+        },
+        "transparency": {
+          "title": "Minh bạch",
+          "description": "Trung thực và rõ ràng trong mọi hoạt động"
+        },
+        "customerFirst": {
+          "title": "Khách hàng là trọng tâm",
+          "description": "Mọi quyết định đều hướng đến lợi ích khách hàng"
+        },
+        "excellence": {
+          "title": "Xuất sắc",
+          "description": "Cam kết chất lượng cao nhất trong từng sản phẩm"
+        }
+      },
+      "stats": {
+        "yearsExperience": "5+",
+        "yearsLabel": "Năm kinh nghiệm",
+        "teamMembers": "50+",
+        "teamLabel": "Thành viên",
+        "projectsCompleted": "500+",
+        "projectsLabel": "Dự án hoàn thành",
+        "clientSatisfaction": "98%",
+        "satisfactionLabel": "Khách hàng hài lòng"
+      }
+    },
     "footer": {
       "description": "Nền tảng phân tích mạng xã hội tiên tiến giúp doanh nghiệp hiểu rõ khán giả và phát triển thương hiệu.",
       "product": "Sản phẩm",
@@ -341,6 +455,89 @@
       "terms": "Điều khoản dịch vụ",
       "copyright": "© 2025 SMAP SOLUTION. Bảo lưu mọi quyền.",
       "followUs": "Theo dõi chúng tôi"
+    }
+  },
+  "register": {
+    "title": "Tạo tài khoản",
+    "subtitle": "Đăng ký miễn phí để bắt đầu phân tích",
+    "name": "Họ và tên",
+    "namePlaceholder": "Nhập họ và tên của bạn",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu (tối thiểu 8 ký tự)",
+    "confirmPassword": "Xác nhận mật khẩu",
+    "confirmPasswordPlaceholder": "Nhập lại mật khẩu của bạn",
+    "agreeToTerms": "Tôi đồng ý với",
+    "termsLink": "Điều khoản dịch vụ",
+    "and": "và",
+    "privacyLink": "Chính sách bảo mật",
+    "submit": "Đăng ký",
+    "hasAccount": "Đã có tài khoản?",
+    "login": "Đăng nhập",
+    "backToHome": "Quay lại trang chủ",
+    "benefits": {
+      "benefit1": {
+        "title": "Dùng thử 14 ngày miễn phí",
+        "description": "Không cần thẻ tín dụng, hủy bất cứ lúc nào"
+      },
+      "benefit2": {
+        "title": "Kết nối đa nền tảng",
+        "description": "Tích hợp Facebook, Instagram, TikTok, Twitter và nhiều hơn nữa"
+      },
+      "benefit3": {
+        "title": "Hỗ trợ 24/7",
+        "description": "Đội ngũ chuyên gia sẵn sàng giúp đỡ bạn mọi lúc"
+      }
+    }
+  },
+  "forgotPassword": {
+    "title": "Quên mật khẩu?",
+    "subtitle": "Nhập email của bạn và chúng tôi sẽ gửi link đặt lại mật khẩu",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "submit": "Gửi link đặt lại",
+    "successTitle": "Đã gửi email!",
+    "successMessage": "Vui lòng kiểm tra hộp thư của bạn để đặt lại mật khẩu.",
+    "checkSpam": "Không thấy email? Kiểm tra thư mục spam.",
+    "backToLogin": "Quay lại đăng nhập",
+    "backToHome": "Quay lại trang chủ"
+  },
+  "login": {
+    "welcome": "Chào mừng trở lại!",
+    "welcomeSubtitle": "Đăng nhập để truy cập dashboard phân tích mạng xã hội và khám phá insights mới nhất.",
+    "title": "Đăng nhập",
+    "subtitle": "Nhập email để nhận link đăng nhập",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Nhập mật khẩu",
+    "rememberMe": "Ghi nhớ đăng nhập",
+    "forgotPassword": "Quên mật khẩu?",
+    "submit": "Đăng nhập",
+    "or": "hoặc",
+    "continueWithGoogle": "Tiếp tục với Google",
+    "loginWithGoogle": "Google",
+    "loginWithApple": "Apple",
+    "noAccount": "Chưa có tài khoản?",
+    "register": "Đăng ký tại đây",
+    "backToHome": "Quay lại trang chủ",
+    "trustedBy": "Được tin dùng bởi +5000 khách hàng",
+    "tagline": "Phân tích mạng xã hội siêu năng lực",
+    "footerDescription": "Phân tích dữ liệu mạng xã hội, theo dõi xu hướng và nhiều hơn nữa. Hỗ trợ tiếng Việt và đa ngôn ngữ.",
+    "features": {
+      "feature1": {
+        "title": "Phân tích thời gian thực",
+        "description": "Theo dõi và phân tích dữ liệu mạng xã hội ngay lập tức với công nghệ AI tiên tiến"
+      },
+      "feature2": {
+        "title": "Thông tin chi tiết sâu sắc",
+        "description": "Khám phá xu hướng ẩn và hành vi khách hàng với phân tích sentiment AI"
+      },
+      "feature3": {
+        "title": "Bảo mật dữ liệu",
+        "description": "Dữ liệu của bạn được mã hóa và bảo vệ với tiêu chuẩn bảo mật cao nhất"
+      }
     }
   },
   "emptyState": {

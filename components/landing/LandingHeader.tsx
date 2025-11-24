@@ -11,8 +11,8 @@ const navItems = [
   { key: 'features', href: '#features' },
   { key: 'solutions', href: '#solutions' },
   { key: 'feedback', href: '#feedback' },
-  { key: 'pricing', href: '#pricing' },
   { key: 'aboutUs', href: '#about' },
+  { key: 'pricing', href: '#pricing' },
   { key: 'contact', href: '#contact' },
 ]
 
@@ -39,7 +39,7 @@ export default function LandingHeader() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
+    <header className="fixed top-0 left-0 right-0 z-50 w-full border-b backdrop-blur-xl bg-white/40 dark:bg-gray-900/30 border-amber-200/50 dark:border-white/10">
       <div className="container mx-auto px-4 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo & Brand */}
@@ -49,40 +49,24 @@ export default function LandingHeader() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="flex h-10 w-10 items-center justify-center">
-              <svg
-                className="w-10 h-10"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
-                  fill="#E74C3C"
-                  stroke="#E74C3C"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <h1 className="text-xl font-bold text-foreground">
+            <div className="w-8 h-8 rounded-lg bg-yellow-400 shadow-lg dark:bg-white" />
+            <h1 className="text-xl font-black text-gray-900 dark:text-white">
               {t('navbar.brand')}
             </h1>
           </motion.div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-2">
             {navItems.map((item, index) => (
               <motion.a
                 key={item.key}
                 href={item.href}
                 onClick={(e) => handleSmoothScroll(e, item.href)}
-                className="relative px-4 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground"
+                className="relative px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200 rounded-lg"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ scale: 1.05 }}
+                whileHover={{ y: -2 }}
               >
                 {t(`landing.header.${item.key}`)}
               </motion.a>
@@ -94,9 +78,9 @@ export default function LandingHeader() {
             {/* Theme Toggle */}
             <motion.button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="inline-flex items-center justify-center rounded-md p-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="inline-flex items-center justify-center rounded-lg p-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg"
               aria-label="Toggle theme"
-              whileHover={{ scale: 1.1 }}
+              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
               <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -107,13 +91,13 @@ export default function LandingHeader() {
             <div className="relative">
               <motion.button
                 onClick={() => setLangOpen(!langOpen)}
-                className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 hover:bg-white/80 dark:hover:bg-white/20 transition-all duration-200 shadow-lg backdrop-blur-sm"
                 aria-label="Change language"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Globe className="h-4 w-4" />
-                <span className="hidden sm:inline-block">{i18n.language.toUpperCase()}</span>
+                <Globe className="h-4 w-4 text-gray-900 dark:text-white" />
+                <span className="hidden sm:inline-block text-gray-900 dark:text-white font-semibold text-sm">{i18n.language.toUpperCase()}</span>
               </motion.button>
 
               {langOpen && (
@@ -121,13 +105,15 @@ export default function LandingHeader() {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 mt-2 w-32 rounded-md border bg-popover p-1 shadow-lg"
+                  className="absolute right-0 mt-2 w-32 rounded-lg border border-amber-300/50 dark:border-white/20 bg-white/90 dark:bg-gray-900/90 p-2 shadow-lg backdrop-blur-xl"
                 >
                   <button
                     onClick={() => changeLanguage('en')}
                     className={cn(
-                      'w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent',
-                      i18n.language === 'en' && 'bg-accent'
+                      'w-full rounded-md px-2 py-1.5 text-left text-sm font-semibold transition-all',
+                      i18n.language === 'en'
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                        : 'hover:bg-yellow-100/50 dark:hover:bg-white/10'
                     )}
                   >
                     {t('language.en')}
@@ -135,8 +121,10 @@ export default function LandingHeader() {
                   <button
                     onClick={() => changeLanguage('vi')}
                     className={cn(
-                      'w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent',
-                      i18n.language === 'vi' && 'bg-accent'
+                      'w-full rounded-md px-2 py-1.5 text-left text-sm font-semibold transition-all',
+                      i18n.language === 'vi'
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                        : 'hover:bg-yellow-100/50 dark:hover:bg-white/10'
                     )}
                   >
                     {t('language.vi')}
@@ -149,17 +137,17 @@ export default function LandingHeader() {
             <div className="hidden md:flex items-center gap-2 ml-2">
               <motion.a
                 href="/login"
-                className="px-4 py-2 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
+                className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
                 {t('landing.header.login')}
               </motion.a>
               <motion.a
-                href="/dashboard"
-                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-violet-600 shadow-md transition-all hover:shadow-lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                href="/register"
+                className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
                 {t('landing.header.getStarted')}
               </motion.a>
@@ -168,7 +156,7 @@ export default function LandingHeader() {
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden inline-flex items-center justify-center rounded-md p-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="md:hidden inline-flex items-center justify-center rounded-lg p-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg"
               aria-label="Toggle mobile menu"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -182,14 +170,14 @@ export default function LandingHeader() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-border/40 py-4"
+            className="md:hidden border-t border-amber-200/50 dark:border-white/10 py-4 bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl"
           >
             <nav className="flex flex-col gap-2">
               {navItems.map((item) => (
                 <a
                   key={item.key}
                   href={item.href}
-                  className="px-4 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground hover:bg-accent rounded-md"
+                  className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-yellow-100/30 dark:hover:bg-white/10 transition-all duration-200 rounded-lg mx-2"
                   onClick={(e) => {
                     handleSmoothScroll(e, item.href)
                     setMobileMenuOpen(false)
@@ -198,17 +186,17 @@ export default function LandingHeader() {
                   {t(`landing.header.${item.key}`)}
                 </a>
               ))}
-              <div className="flex flex-col gap-2 mt-2 px-4">
+              <div className="flex flex-col gap-2 mt-2 px-2">
                 <a
                   href="/login"
-                  className="px-4 py-2 text-sm font-medium text-center border border-border rounded-md transition-colors hover:bg-accent"
+                  className="px-4 py-2 text-sm font-semibold text-center rounded-lg bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 transition-all hover:bg-white/80 dark:hover:bg-white/20 shadow-lg backdrop-blur-sm"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t('landing.header.login')}
                 </a>
                 <a
                   href="/dashboard"
-                  className="px-4 py-2 text-sm font-medium text-center text-white bg-gradient-to-r from-blue-600 to-violet-600 rounded-md shadow-md"
+                  className="px-4 py-2 text-sm font-semibold text-center bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {t('landing.header.getStarted')}

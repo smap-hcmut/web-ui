@@ -321,6 +321,120 @@
         }
       }
     },
+    "pricing": {
+      "title": "Transparent Pricing",
+      "subtitle": "Choose the plan that fits your needs. No hidden fees, cancel anytime.",
+      "popular": "Most Popular",
+      "perMonth": "month",
+      "getStarted": "Get Started",
+      "note": "All plans include 24/7 support and free updates. 14-day trial without credit card.",
+      "plans": {
+        "starter": {
+          "name": "Starter",
+          "price": "$49",
+          "description": "Perfect for startups and small businesses starting social media analysis.",
+          "features": {
+            "feature1": "3 tracking projects",
+            "feature2": "1,000 mentions/month",
+            "feature3": "Basic reporting"
+          }
+        },
+        "professional": {
+          "name": "Professional",
+          "price": "$149",
+          "description": "For businesses wanting in-depth analysis and strategy optimization.",
+          "features": {
+            "feature1": "10 tracking projects",
+            "feature2": "10,000 mentions/month",
+            "feature3": "AI sentiment analysis",
+            "feature4": "Custom reports",
+            "feature5": "API access"
+          }
+        },
+        "enterprise": {
+          "name": "Enterprise",
+          "price": "Contact Us",
+          "description": "Comprehensive solution for large enterprises with special needs.",
+          "features": {
+            "feature1": "Unlimited projects",
+            "feature2": "Unlimited mentions",
+            "feature3": "Custom AI & ML",
+            "feature4": "Dedicated support",
+            "feature5": "On-premise option",
+            "feature6": "99.9% SLA guarantee"
+          }
+        }
+      }
+    },
+"contact": {
+      "title": "Get In Touch",
+      "subtitle": "Have questions or need consultation? Our team is ready to support you 24/7.",
+      "form": {
+        "title": "Send a message",
+        "name": "Full Name",
+        "namePlaceholder": "Enter your full name",
+        "email": "Email",
+        "emailPlaceholder": "email@example.com",
+        "company": "Company",
+        "companyPlaceholder": "Your company name",
+        "message": "Message",
+        "messagePlaceholder": "How can we help you?",
+        "submit": "Send Message"
+      },
+      "info": {
+        "email": "Email",
+        "phone": "Phone",
+        "address": "Address",
+        "addressValue": "268 Ly Thuong Kiet, Ward 14, District 10, HCMC",
+        "hours": "Working Hours",
+        "hoursValue": "Mon - Fri: 8:00 AM - 6:00 PM"
+      }
+    },
+    "about": {
+      "title": "About Us",
+      "subtitle": "We are a passionate team of technology and data experts, committed to delivering the best social media analytics solutions for businesses.",
+      "mission": {
+        "title": "Mission",
+        "description": "Help businesses make smarter decisions by harnessing the power of social media data and artificial intelligence."
+      },
+      "vision": {
+        "title": "Vision",
+        "description": "Become the leading social media analytics platform in Southeast Asia, accompanying the growth of thousands of businesses."
+      },
+      "story": {
+        "title": "Our Story",
+        "description": "Founded by a team of engineers from Ho Chi Minh University of Technology, SMAP Solution was born from a passion to turn data into real value for businesses. We believe every business deserves world-class analytics tools."
+      },
+      "values": {
+        "title": "Core Values",
+        "innovation": {
+          "title": "Innovation",
+          "description": "Continuously researching and applying cutting-edge technology"
+        },
+        "transparency": {
+          "title": "Transparency",
+          "description": "Honest and clear in all operations"
+        },
+        "customerFirst": {
+          "title": "Customer First",
+          "description": "Every decision is oriented toward customer benefit"
+        },
+        "excellence": {
+          "title": "Excellence",
+          "description": "Committed to the highest quality in every product"
+        }
+      },
+      "stats": {
+        "yearsExperience": "5+",
+        "yearsLabel": "Years Experience",
+        "teamMembers": "50+",
+        "teamLabel": "Team Members",
+        "projectsCompleted": "500+",
+        "projectsLabel": "Projects Completed",
+        "clientSatisfaction": "98%",
+        "satisfactionLabel": "Client Satisfaction"
+      }
+    },
     "footer": {
       "description": "Advanced social media analytics platform helping businesses understand their audience and grow their brand.",
       "product": "Product",
@@ -341,6 +455,89 @@
       "terms": "Terms of Service",
       "copyright": "© 2025 SMAP SOLUTION. All rights reserved.",
       "followUs": "Follow Us"
+    }
+  },
+  "register": {
+    "title": "Create account",
+    "subtitle": "Sign up free to start analyzing",
+    "name": "Full Name",
+    "namePlaceholder": "Enter your full name",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password (min 8 characters)",
+    "confirmPassword": "Confirm Password",
+    "confirmPasswordPlaceholder": "Re-enter your password",
+    "agreeToTerms": "I agree to the",
+    "termsLink": "Terms of Service",
+    "and": "and",
+    "privacyLink": "Privacy Policy",
+    "submit": "Register",
+    "hasAccount": "Already have an account?",
+    "login": "Sign in",
+    "backToHome": "Back to home",
+    "benefits": {
+      "benefit1": {
+        "title": "14-day free trial",
+        "description": "No credit card required, cancel anytime"
+      },
+      "benefit2": {
+        "title": "Multi-platform connection",
+        "description": "Integrate Facebook, Instagram, TikTok, Twitter and more"
+      },
+      "benefit3": {
+        "title": "24/7 support",
+        "description": "Expert team ready to help you anytime"
+      }
+    }
+  },
+  "forgotPassword": {
+    "title": "Forgot password?",
+    "subtitle": "Enter your email and we'll send you a reset link",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "submit": "Send reset link",
+    "successTitle": "Email sent!",
+    "successMessage": "Please check your inbox to reset your password.",
+    "checkSpam": "Didn't receive the email? Check your spam folder.",
+    "backToLogin": "Back to login",
+    "backToHome": "Back to home"
+  },
+  "login": {
+    "welcome": "Welcome back!",
+    "welcomeSubtitle": "Sign in to access your social media analytics dashboard and discover the latest insights.",
+    "title": "Sign In",
+    "subtitle": "Enter your email to receive your login link",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "submit": "Login",
+    "or": "or",
+    "continueWithGoogle": "Continue with Google",
+    "loginWithGoogle": "Google",
+    "loginWithApple": "Apple",
+    "noAccount": "Not registered?",
+    "register": "Do it here",
+    "backToHome": "Back to home",
+    "trustedBy": "Trusted by +5000 happy users",
+    "tagline": "Social Media Analytics with Superpowers",
+    "footerDescription": "Analyze social media data, track trends, and more. Just connect and let our AI handle the rest! Works in 50+ languages.",
+    "features": {
+      "feature1": {
+        "title": "Real-time Analytics",
+        "description": "Track and analyze social media data instantly with advanced AI technology"
+      },
+      "feature2": {
+        "title": "Deep Insights",
+        "description": "Discover hidden trends and customer behaviors with AI sentiment analysis"
+      },
+      "feature3": {
+        "title": "Data Security",
+        "description": "Your data is encrypted and protected with the highest security standards"
+      }
     }
   },
   "emptyState": {
