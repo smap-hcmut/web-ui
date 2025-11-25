@@ -4,6 +4,7 @@ import '../styles/reactflow-custom.css'
 import type { AppProps } from 'next/app'
 import { appWithTranslation } from 'next-i18next'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { DashboardProvider } from '@/contexts/DashboardContext'
 import nextI18NextConfig from '../next-i18next.config.js'
 
 function MyApp({ Component, pageProps }: AppProps) {
@@ -14,7 +15,9 @@ function MyApp({ Component, pageProps }: AppProps) {
       enableSystem
       disableTransitionOnChange
     >
-      <Component {...pageProps} />
+      <DashboardProvider>
+        <Component {...pageProps} />
+      </DashboardProvider>
     </ThemeProvider>
   )
 }

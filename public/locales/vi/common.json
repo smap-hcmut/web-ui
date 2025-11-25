@@ -589,5 +589,42 @@
       "title": "Tại sao cần xác thực?",
       "description": "Xác thực email giúp chúng tôi đảm bảo bảo mật tài khoản và bảo vệ khỏi truy cập trái phép."
     }
+  },
+  "projects": {
+    "title": "Dự Án Của Tôi",
+    "subtitle": "Quản lý các dự án giám sát thương hiệu và phân tích đối thủ cạnh tranh",
+    "createNew": "Tạo Dự Án Mới",
+    "searchPlaceholder": "Tìm kiếm dự án...",
+    "error": "Không thể tải danh sách dự án",
+    "noProjects": "Chưa có dự án nào",
+    "noProjectsDescription": "Tạo dự án đầu tiên để bắt đầu phân tích dữ liệu mạng xã hội",
+    "createFirst": "Tạo Dự Án Đầu Tiên",
+    "noResults": "Không tìm thấy dự án",
+    "noResultsDescription": "Thử điều chỉnh từ khóa tìm kiếm",
+    "noDescription": "Chưa có mô tả",
+    "brands": "Thương hiệu",
+    "competitors": "Đối thủ",
+    "created": "Tạo lúc",
+    "confirmDelete": "Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác.",
+    "status": {
+      "active": "Hoạt động",
+      "inactive": "Tạm dừng",
+      "processing": "Đang xử lý"
+    },
+    "actions": {
+      "view": "Xem Dự Án",
+      "edit": "Chỉnh Sửa",
+      "delete": "Xóa Dự Án"
+    },
+    "deleteConfirm": {
+      "title": "Xóa Dự Án?",
+      "text": "Bạn có chắc chắn muốn xóa dự án này?",
+      "confirm": "Có, Xóa",
+      "cancel": "Hủy",
+      "success": "Đã Xóa!",
+      "successText": "Dự án đã được xóa thành công.",
+      "error": "Lỗi!",
+      "errorText": "Không thể xóa dự án. Vui lòng thử lại."
+    }
   }
 }

@@ -1,7 +1,8 @@
 import type { NextPage } from 'next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 import { useTranslation } from 'next-i18next'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import DashboardHeader from '@/components/dashboard/DashboardHeader'
@@ -12,13 +13,26 @@ import EmptyState from '@/components/dashboard/EmptyState'
 import ProjectSetupWizard from '@/components/dashboard/ProjectSetupWizard'
 import ProjectProcessingState from '@/components/dashboard/ProjectProcessingState'
 import ProjectSuccessState from '@/components/dashboard/ProjectSuccessState'
-import { DashboardProvider, useDashboard, Project } from '@/contexts/DashboardContext'
+import { useDashboard, Project } from '@/contexts/DashboardContext'
 import { useIsMobile } from '@/hooks/useResponsive'
 
 const DashboardContent: React.FC = () => {
-  const { state, addProject } = useDashboard()
+  const router = useRouter()
+  const { state, addProject, setProject } = useDashboard()
   const isMobile = useIsMobile()
   const [showWizard, setShowWizard] = useState(false)
+
+  // Handle project selection from URL query parameter
+  useEffect(() => {
+    const projectId = router.query.project as string
+    if (projectId && projectId !== state.selectedProject) {
+      // Check if project exists in the projects list
+      const projectExists = state.projects.some(p => p.id === projectId)
+      if (projectExists) {
+        setProject(projectId)
+      }
+    }
+  }, [router.query.project, state.selectedProject, state.projects, setProject])
 
   const handleCreateProject = () => {
     setShowWizard(true)
@@ -133,11 +147,7 @@ const DashboardContent: React.FC = () => {
 const Dashboard: NextPage = () => {
   const { t } = useTranslation('common')
 
-  return (
-    <DashboardProvider>
-      <DashboardContent />
-    </DashboardProvider>
-  )
+  return <DashboardContent />
 }
 
 export async function getStaticProps({ locale }: { locale: string }) {
