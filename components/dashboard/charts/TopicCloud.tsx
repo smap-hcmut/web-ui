@@ -207,7 +207,7 @@ export default function TopicCloud({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.7 }}
-      className="bg-card border border-border rounded-lg p-6"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
     >
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -215,7 +215,7 @@ export default function TopicCloud({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.8 }}
-            className="text-lg font-semibold"
+            className="text-lg font-semibold text-gray-900 dark:text-white"
           >
             {title}
           </motion.h3>
@@ -237,7 +237,7 @@ export default function TopicCloud({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Download className="h-4 w-4" />
           </motion.button>
@@ -245,7 +245,7 @@ export default function TopicCloud({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Maximize2 className="h-4 w-4" />
           </motion.button>
@@ -256,9 +256,9 @@ export default function TopicCloud({
         {renderFallback ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="text-4xl font-bold text-muted-foreground mb-2">📊</div>
-              <div className="text-sm text-muted-foreground">Word cloud unavailable</div>
-              <div className="text-xs text-muted-foreground mt-1">Showing topic list below</div>
+              <div className="text-4xl font-bold text-gray-600 dark:text-gray-400 mb-2">📊</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Word cloud unavailable</div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Showing topic list below</div>
             </div>
           </div>
         ) : (
@@ -280,7 +280,7 @@ export default function TopicCloud({
       >
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="h-4 w-4 text-green-600" />
-          <h4 className="text-sm font-medium text-muted-foreground">Top Trending Topics</h4>
+          <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Top Trending Topics</h4>
         </div>
 
         {topTrendingTopics.map((topic, index) => (
@@ -290,12 +290,12 @@ export default function TopicCloud({
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 1.1 + index * 0.1 }}
             onClick={() => handleTopicClick(topic)}
-            className={`flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors ${
+            className={`flex items-center justify-between p-3 rounded-lg bg-gray-200/50 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
               interaction === 'click-filter' ? 'cursor-pointer hover:shadow-md' : ''
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs font-bold">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-xs font-bold">
                 {index + 1}
               </div>
               <div

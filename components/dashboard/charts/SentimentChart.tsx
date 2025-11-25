@@ -38,7 +38,7 @@ const CustomTooltip = ({ active, payload }: any) => {
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-card border border-border rounded-lg p-3 shadow-lg"
+        className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-3 shadow-lg"
       >
         <div className="flex items-center gap-2 mb-1">
           <div
@@ -47,7 +47,7 @@ const CustomTooltip = ({ active, payload }: any) => {
           />
           <span className="font-medium">{data.payload.name}</span>
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           {data.value}% ({data.payload.value} mentions)
         </div>
       </motion.div>
@@ -71,7 +71,7 @@ const CustomLegend = ({ payload }: any) => {
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: entry.color }}
           />
-          <span className="text-sm text-muted-foreground">{entry.value}</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{entry.value}</span>
         </motion.div>
       ))}
     </div>
@@ -114,7 +114,7 @@ export default function SentimentChart({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.8, delay: 0.2 }}
-      className="bg-card border border-border rounded-lg p-6"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
     >
       {}
       <div className="flex items-center justify-between mb-6">
@@ -123,7 +123,7 @@ export default function SentimentChart({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-lg font-semibold"
+            className="text-lg font-semibold text-gray-900 dark:text-white"
           >
             {title}
           </motion.h3>
@@ -155,7 +155,7 @@ export default function SentimentChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Download className="h-4 w-4" />
           </motion.button>
@@ -163,7 +163,7 @@ export default function SentimentChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Maximize2 className="h-4 w-4" />
           </motion.button>
@@ -222,7 +222,7 @@ export default function SentimentChart({
             className={`text-center p-3 rounded-lg transition-colors cursor-pointer ${
               selectedSentiment === item.name
                 ? 'bg-primary/10 border border-primary/20'
-                : 'bg-muted/50 hover:bg-muted'
+                : 'bg-gray-200/50 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
             onClick={() => setSelectedSentiment(
               selectedSentiment === item.name ? null : item.name
@@ -231,8 +231,8 @@ export default function SentimentChart({
             <div className="text-lg font-bold" style={{ color: item.color }}>
               {item.value}%
             </div>
-            <div className="text-sm text-muted-foreground">{item.name}</div>
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-sm text-gray-600 dark:text-gray-400">{item.name}</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               {Math.round((item.value / 100) * totalMentions)} mentions
             </div>
           </motion.div>
@@ -245,10 +245,10 @@ export default function SentimentChart({
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className="mt-4 p-4 bg-muted/50 rounded-lg"
+          className="mt-4 p-4 bg-gray-200/50 dark:bg-gray-700/50 rounded-lg"
         >
           <h4 className="font-medium mb-2">Details for {selectedSentiment}</h4>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
             This represents {data.find(d => d.name === selectedSentiment)?.value}% of total mentions.
             {selectedSentiment === 'Positive' && ' Great sentiment indicates strong brand perception.'}
             {selectedSentiment === 'Negative' && ' Consider addressing concerns to improve sentiment.'}

@@ -207,14 +207,14 @@ export default function DashboardGrid() {
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="bg-card border border-border rounded-lg p-6 animate-pulse">
-              <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-muted rounded w-3/4 mb-2"></div>
-              <div className="h-3 bg-muted rounded w-1/3"></div>
+            <div key={index} className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6 animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
             </div>
           ))}
         </div>
-        <div className="h-80 bg-card border border-border rounded-lg animate-pulse"></div>
+        <div className="h-80 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg animate-pulse"></div>
       </div>
     )
   }
@@ -285,11 +285,11 @@ export default function DashboardGrid() {
               interaction="drill-down"
             />
           ) : (
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6">
               <div className="flex items-center justify-center h-80">
                 <div className="text-center">
-                  <div className="text-muted-foreground mb-2">No competitor data available</div>
-                  <div className="text-sm text-muted-foreground">Please check your data source</div>
+                  <div className="text-gray-600 dark:text-gray-400 mb-2">No competitor data available</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Please check your data source</div>
                 </div>
               </div>
             </div>

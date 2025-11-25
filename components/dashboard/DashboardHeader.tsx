@@ -41,18 +41,18 @@ export default function DashboardHeader() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border"
+      className="sticky top-0 z-50 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border-b border-amber-300/60 dark:border-white/20"
     >
       <div className="flex items-center justify-between px-6 py-4">
-        {}
+        {/* Left Section */}
         <div className="flex items-center gap-4">
           <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent"
+            className="text-2xl font-black text-gray-900 dark:text-white"
           >
-{t('dashboard.title')}
+            {t('dashboard.title')}
           </motion.h1>
 
           <motion.div

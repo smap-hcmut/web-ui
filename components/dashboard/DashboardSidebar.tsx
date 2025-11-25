@@ -63,7 +63,7 @@ export default function DashboardSidebar() {
       initial={{ width: 280 }}
       animate={{ width: state.sidebarCollapsed ? 60 : 280 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="h-full border-r border-border bg-card/50 flex flex-col"
+      className="h-full border-r border-amber-300/60 dark:border-white/20 bg-white/40 dark:bg-gray-900/40 backdrop-blur-sm flex flex-col"
     >
       <AnimatePresence mode="wait">
         {state.sidebarCollapsed ? (

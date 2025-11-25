@@ -52,7 +52,7 @@ const CounterAnimation = ({ value, color }: { value: string; color: string }) =>
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.5 }}
-          className="text-muted-foreground"
+          className="text-gray-600 dark:text-gray-400"
         >
           {suffix}
         </motion.span>
@@ -88,7 +88,7 @@ const GaugeAnimation = ({ value, color }: { value: string; color: string }) => {
       </motion.div>
 
       {}
-      <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
+      <div className="relative w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
@@ -132,7 +132,7 @@ const ProgressAnimation = ({ value, color }: { value: string; color: string }) =
       </motion.div>
 
       {}
-      <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
+      <div className="relative w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${numericValue}%` }}
@@ -141,7 +141,7 @@ const ProgressAnimation = ({ value, color }: { value: string; color: string }) =
             duration: 1.5,
             ease: "easeOut"
           }}
-          className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+          className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full"
         />
       </div>
     </div>
@@ -198,14 +198,14 @@ export default function MetricCard({
         boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
       }}
       whileTap={{ scale: 0.98 }}
-      className="bg-card border border-border rounded-lg p-6 cursor-pointer hover:border-primary/20 transition-all duration-200"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6 cursor-pointer hover:border-yellow-400 dark:hover:border-yellow-400 transition-all duration-200"
     >
       <div className="flex items-center justify-between mb-2">
         <motion.h4
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="text-sm font-medium text-muted-foreground"
+          className="text-sm font-medium text-gray-600 dark:text-gray-400"
         >
           {title}
         </motion.h4>
@@ -245,14 +245,14 @@ export default function MetricCard({
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="bg-popover text-popover-foreground border border-border rounded-lg px-4 py-3 text-sm shadow-lg z-50 max-w-sm leading-relaxed"
+              className="bg-white dark:bg-gray-900 text-gray-900 dark:text-white border border-amber-300/60 dark:border-white/20 rounded-lg px-4 py-3 text-sm shadow-lg z-50 max-w-sm leading-relaxed"
               sideOffset={8}
               side="top"
               align="center"
             >
-              <div className="font-medium mb-1 text-foreground">{title}</div>
-              <div className="text-muted-foreground">{tooltip}</div>
-              <Tooltip.Arrow className="fill-popover" />
+              <div className="font-medium mb-1 text-gray-900 dark:text-white">{title}</div>
+              <div className="text-gray-600 dark:text-gray-400">{tooltip}</div>
+              <Tooltip.Arrow className="fill-white dark:fill-gray-900" />
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>

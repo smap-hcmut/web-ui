@@ -39,17 +39,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-card border border-border rounded-lg p-3 shadow-lg"
+        className="bg-white dark:bg-gray-900 border border-amber-300/60 dark:border-white/20 rounded-lg p-3 shadow-lg"
       >
-        <p className="text-sm font-medium mb-2">{label}</p>
+        <p className="text-sm font-medium mb-2 text-gray-900 dark:text-white">{label}</p>
         {payload.map((entry: any, index: number) => (
           <div key={index} className="flex items-center gap-2 text-sm">
             <div
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: entry.color }}
             />
-            <span className="text-muted-foreground">{entry.dataKey}:</span>
-            <span className="font-medium">{entry.value.toLocaleString()}</span>
+            <span className="text-gray-600 dark:text-gray-400">{entry.dataKey}:</span>
+            <span className="font-medium text-gray-900 dark:text-white">{entry.value.toLocaleString()}</span>
           </div>
         ))}
       </motion.div>
@@ -92,7 +92,7 @@ export default function TrendChart({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="bg-card border border-border rounded-lg p-6"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
     >
       {}
       <div className="flex items-center justify-between mb-6">
@@ -101,7 +101,7 @@ export default function TrendChart({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-lg font-semibold"
+            className="text-lg font-semibold text-gray-900 dark:text-white"
           >
             {title}
           </motion.h3>
@@ -120,7 +120,7 @@ export default function TrendChart({
             <span className={`text-sm font-medium ${
               trend === 'up' ? 'text-green-600' :
               trend === 'down' ? 'text-red-600' :
-              'text-muted-foreground'
+              'text-gray-600 dark:text-gray-400'
             }`}>
               {change.toFixed(1)}% vs previous
             </span>
@@ -129,15 +129,15 @@ export default function TrendChart({
 
         <div className="flex items-center gap-2">
           {}
-          <div className="flex items-center bg-muted rounded-md p-1">
+          <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-md p-1">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelectedMetric('mentions')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 selectedMetric === 'mentions'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Mentions
@@ -148,8 +148,8 @@ export default function TrendChart({
               onClick={() => setSelectedMetric('sentiment')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 selectedMetric === 'sentiment'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Sentiment
@@ -157,15 +157,15 @@ export default function TrendChart({
           </div>
 
           {}
-          <div className="flex items-center bg-muted rounded-md p-1">
+          <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-md p-1">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setChartType('area')}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 chartType === 'area'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Area
@@ -176,8 +176,8 @@ export default function TrendChart({
               onClick={() => setChartType('line')}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 chartType === 'line'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Line
@@ -188,7 +188,7 @@ export default function TrendChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
           >
             <Filter className="h-4 w-4" />
           </motion.button>
@@ -196,7 +196,7 @@ export default function TrendChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
           >
             <Download className="h-4 w-4" />
           </motion.button>
@@ -204,7 +204,7 @@ export default function TrendChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-400"
           >
             <Maximize2 className="h-4 w-4" />
           </motion.button>

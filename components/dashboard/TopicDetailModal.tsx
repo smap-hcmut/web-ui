@@ -92,9 +92,9 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
             transition={{ type: "spring", duration: 0.5 }}
             className="fixed inset-4 z-50 flex items-center justify-center p-4"
           >
-            <div className="bg-card border border-border rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 border border-amber-300/60 dark:border-white/20 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
               {}
-              <div className="p-6 border-b border-border bg-card/50">
+              <div className="p-6 border-b border-amber-300/60 dark:border-white/20 bg-white/50 dark:bg-gray-900/50">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-primary/10">
@@ -102,7 +102,7 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                     </div>
                     <div>
                       <h1 className="text-2xl font-bold">{topic.text}</h1>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
                           <span>Updated {new Date().toLocaleDateString()}</span>
@@ -144,7 +144,7 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                         <BarChart3 className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Frequency</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Frequency</p>
                         <p className="text-2xl font-bold">{topic.value}</p>
                       </div>
                     </div>
@@ -161,7 +161,7 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                         <MessageSquare className="h-5 w-5 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Mentions</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Mentions</p>
                         <p className="text-2xl font-bold">{topic.mentions || 0}</p>
                       </div>
                     </div>
@@ -178,7 +178,7 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                         <Heart className="h-5 w-5 text-purple-600" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Engagement</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Engagement</p>
                         <p className="text-2xl font-bold">{topic.engagement || 0}</p>
                       </div>
                     </div>
@@ -195,7 +195,7 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                         {getTrendIcon(topic.trend)}
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Trend</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Trend</p>
                         <p className={`text-2xl font-bold capitalize ${getTrendColor(topic.trend)}`}>
                           {topic.trend || 'stable'}
                         </p>
@@ -218,13 +218,13 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Sentiment Score</span>
+                        <span className="text-gray-600 dark:text-gray-400">Sentiment Score</span>
                         <span className="font-medium">
                           {topic.sentiment ? topic.sentiment.toFixed(2) : '0.00'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Confidence</span>
+                        <span className="text-gray-600 dark:text-gray-400">Confidence</span>
                         <span className="font-medium">
                           {topic.confidence ? `${(topic.confidence * 100).toFixed(1)}%` : 'N/A'}
                         </span>
@@ -245,21 +245,21 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Total Mentions</span>
+                          <span className="text-gray-600 dark:text-gray-400">Total Mentions</span>
                           <span className="font-medium">{topic.mentions || 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Engagement Rate</span>
+                          <span className="text-gray-600 dark:text-gray-400">Engagement Rate</span>
                           <span className="font-medium">{topic.engagement || 0}%</span>
                         </div>
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Frequency Score</span>
+                          <span className="text-gray-600 dark:text-gray-400">Frequency Score</span>
                           <span className="font-medium">{topic.value}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Trend Direction</span>
+                          <span className="text-gray-600 dark:text-gray-400">Trend Direction</span>
                           <div className="flex items-center gap-1">
                             {getTrendIcon(topic.trend)}
                             <span className="font-medium capitalize">{topic.trend || 'stable'}</span>
@@ -272,21 +272,21 @@ export default function TopicDetailModal({ topic, isOpen, onClose }: TopicDetail
               </div>
 
               {}
-              <div className="p-6 border-t border-border bg-card/50">
+              <div className="p-6 border-t border-amber-300/60 dark:border-white/20 bg-white/50 dark:bg-gray-900/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
                       <Download className="h-4 w-4" />
                       Export Data
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors">
+                    <button className="flex items-center gap-2 px-4 py-2 border border-amber-300/60 dark:border-white/20 rounded-lg hover:bg-muted transition-colors">
                       <Share2 className="h-4 w-4" />
                       Share
                     </button>
                   </div>
                   <button
                     onClick={onClose}
-                    className="px-6 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
+                    className="px-6 py-2 bg-muted text-gray-600 dark:text-gray-400 rounded-lg hover:bg-muted/80 transition-colors"
                   >
                     Close
                   </button>

@@ -83,7 +83,7 @@ export default function DataTable({
 
   const getSortIcon = (field: SortField) => {
     if (sortField !== field) {
-      return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+      return <ArrowUpDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
     }
 
     return sortDirection === 'asc'
@@ -125,7 +125,7 @@ export default function DataTable({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.8 }}
-      className="bg-card border border-border rounded-lg p-6"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
     >
       {}
       <div className="flex items-center justify-between mb-6">
@@ -133,14 +133,14 @@ export default function DataTable({
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.9 }}
-          className="text-lg font-semibold"
+          className="text-lg font-semibold text-gray-900 dark:text-white"
         >
           {title}
         </motion.h3>
 
         <div className="flex items-center gap-2">
           {}
-          <div className="flex items-center bg-muted rounded-md p-1">
+          <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-md p-1">
             {platforms.map((platform) => (
               <motion.button
                 key={platform}
@@ -149,8 +149,8 @@ export default function DataTable({
                 onClick={() => setFilterPlatform(platform)}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                   filterPlatform === platform
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
                 {platform === 'all' ? 'All' : platform}
@@ -161,7 +161,7 @@ export default function DataTable({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Download className="h-4 w-4" />
           </motion.button>
@@ -169,7 +169,7 @@ export default function DataTable({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Maximize2 className="h-4 w-4" />
           </motion.button>
@@ -180,13 +180,13 @@ export default function DataTable({
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+            <tr className="border-b border-amber-300/60 dark:border-white/20">
+              <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">
                 #
               </th>
               <th
-                className={`text-left py-3 px-4 font-medium text-muted-foreground ${
-                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-foreground' : ''
+                className={`text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400 ${
+                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white' : ''
                 }`}
                 onClick={() => handleSort('title')}
               >
@@ -196,8 +196,8 @@ export default function DataTable({
                 </div>
               </th>
               <th
-                className={`text-left py-3 px-4 font-medium text-muted-foreground ${
-                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-foreground' : ''
+                className={`text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400 ${
+                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white' : ''
                 }`}
                 onClick={() => handleSort('platform')}
               >
@@ -207,8 +207,8 @@ export default function DataTable({
                 </div>
               </th>
               <th
-                className={`text-left py-3 px-4 font-medium text-muted-foreground ${
-                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-foreground' : ''
+                className={`text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400 ${
+                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white' : ''
                 }`}
                 onClick={() => handleSort('engagement')}
               >
@@ -218,8 +218,8 @@ export default function DataTable({
                 </div>
               </th>
               <th
-                className={`text-left py-3 px-4 font-medium text-muted-foreground ${
-                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-foreground' : ''
+                className={`text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400 ${
+                  interaction === 'sort-filter' ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white' : ''
                 }`}
                 onClick={() => handleSort('reach')}
               >
@@ -228,7 +228,7 @@ export default function DataTable({
                   {interaction === 'sort-filter' && getSortIcon('reach')}
                 </div>
               </th>
-              <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+              <th className="text-left py-3 px-4 font-medium text-gray-600 dark:text-gray-400">
                 Actions
               </th>
             </tr>
@@ -243,12 +243,12 @@ export default function DataTable({
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ delay: index * 0.05 }}
                   whileHover={{ backgroundColor: 'rgba(0, 0, 0, 0.02)' }}
-                  className={`border-b border-border transition-colors cursor-pointer ${
+                  className={`border-b border-amber-300/60 dark:border-white/20 transition-colors cursor-pointer ${
                     selectedRow === item.id ? 'bg-primary/5' : ''
                   }`}
                   onClick={() => setSelectedRow(selectedRow === item.id ? null : item.id)}
                 >
-                  <td className="py-4 px-4 text-sm text-muted-foreground">
+                  <td className="py-4 px-4 text-sm text-gray-600 dark:text-gray-400">
                     {index + 1}
                   </td>
                   <td className="py-4 px-4">
@@ -283,16 +283,16 @@ export default function DataTable({
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        className="p-1 rounded-md hover:bg-accent transition-colors"
+                        className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                       >
-                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                        <ExternalLink className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        className="p-1 rounded-md hover:bg-accent transition-colors"
+                        className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                       >
-                        <Share className="h-4 w-4 text-muted-foreground" />
+                        <Share className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                       </motion.button>
                     </div>
                   </td>
@@ -313,7 +313,7 @@ export default function DataTable({
             className="mt-4 p-4 bg-muted/50 rounded-lg"
           >
             <h4 className="font-medium mb-2">Content Analysis</h4>
-            <div className="text-sm text-muted-foreground space-y-1">
+            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
               {(() => {
                 const item = data.find(d => d.id === selectedRow)
                 if (!item) return null
@@ -337,26 +337,26 @@ export default function DataTable({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1.0 }}
-        className="mt-6 grid grid-cols-3 gap-4 pt-4 border-t border-border"
+        className="mt-6 grid grid-cols-3 gap-4 pt-4 border-t border-amber-300/60 dark:border-white/20"
       >
         <div className="text-center">
           <div className="text-2xl font-bold text-blue-600">
             {formatNumber(sortedData.reduce((sum, item) => sum + item.engagement, 0))}
           </div>
-          <div className="text-sm text-muted-foreground">Total Engagement</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Total Engagement</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-green-600">
             {formatNumber(sortedData.reduce((sum, item) => sum + item.reach, 0))}
           </div>
-          <div className="text-sm text-muted-foreground">Total Reach</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Total Reach</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-purple-600">
             {((sortedData.reduce((sum, item) => sum + item.engagement, 0) /
                sortedData.reduce((sum, item) => sum + item.reach, 0)) * 100).toFixed(1)}%
           </div>
-          <div className="text-sm text-muted-foreground">Avg Engagement Rate</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Avg Engagement Rate</div>
         </div>
       </motion.div>
     </motion.div>

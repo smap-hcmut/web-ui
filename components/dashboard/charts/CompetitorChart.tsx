@@ -90,12 +90,12 @@ export default function CompetitorChart({
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, delay: 0.4 }}
-        className="bg-card border border-border rounded-lg p-6"
+        className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
       >
         <div className="flex items-center justify-center h-80">
           <div className="text-center">
-            <div className="text-muted-foreground mb-2">No competitor data available</div>
-            <div className="text-sm text-muted-foreground">Please check your data source</div>
+            <div className="text-gray-600 dark:text-gray-400 mb-2">No competitor data available</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Please check your data source</div>
           </div>
         </div>
       </motion.div>
@@ -200,7 +200,7 @@ export default function CompetitorChart({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, delay: 0.4 }}
-      className="bg-card border border-border rounded-lg p-6"
+      className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6"
     >
       {}
       <div className="flex items-center justify-between mb-6">
@@ -209,7 +209,7 @@ export default function CompetitorChart({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
-            className="text-lg font-semibold"
+            className="text-lg font-semibold text-gray-900 dark:text-white"
           >
             {title}
           </motion.h3>
@@ -231,15 +231,15 @@ export default function CompetitorChart({
 
         <div className="flex items-center gap-2">
           {}
-          <div className="flex items-center bg-muted rounded-md p-1">
+          <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-md p-1">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setSortBy('sov')}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 sortBy === 'sov'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               SOV
@@ -250,8 +250,8 @@ export default function CompetitorChart({
               onClick={() => setSortBy('alphabetical')}
               className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 sortBy === 'alphabetical'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               A-Z
@@ -261,7 +261,7 @@ export default function CompetitorChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Download className="h-4 w-4" />
           </motion.button>
@@ -269,7 +269,7 @@ export default function CompetitorChart({
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2 rounded-md hover:bg-accent transition-colors"
+            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <Maximize2 className="h-4 w-4" />
           </motion.button>
@@ -282,7 +282,7 @@ export default function CompetitorChart({
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="mb-4 p-3 bg-muted/50 rounded-lg"
+          className="mb-4 p-3 bg-gray-200/50 dark:bg-gray-700/50 rounded-lg"
         >
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-green-600" />
@@ -309,7 +309,7 @@ export default function CompetitorChart({
         transition={{ delay: 0.8 }}
         className="mt-6 space-y-2"
       >
-        <h4 className="text-sm font-medium text-muted-foreground mb-3">Brand Rankings</h4>
+        <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">Brand Rankings</h4>
         {rankedData.map((item, index) => (
           <motion.div
             key={item.brand}
@@ -319,14 +319,14 @@ export default function CompetitorChart({
             className={`flex items-center justify-between p-3 rounded-lg transition-colors cursor-pointer ${
               selectedBrand === item.brand
                 ? 'bg-primary/10 border border-primary/20'
-                : 'bg-muted/50 hover:bg-muted'
+                : 'bg-gray-200/50 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
             onClick={() => setSelectedBrand(
               selectedBrand === item.brand ? null : item.brand
             )}
           >
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs font-bold">
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-xs font-bold">
                 {item.rank}
               </div>
               <div
@@ -346,10 +346,10 @@ export default function CompetitorChart({
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          className="mt-4 p-4 bg-muted/50 rounded-lg"
+          className="mt-4 p-4 bg-gray-200/50 dark:bg-gray-700/50 rounded-lg"
         >
           <h4 className="font-medium mb-2">Analysis for {selectedBrand}</h4>
-          <div className="text-sm text-muted-foreground space-y-1">
+          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
             <div>Share of Voice: {rankedData.find(d => d.brand === selectedBrand)?.sov.toFixed(2)}%</div>
             <div>Market Position: #{rankedData.find(d => d.brand === selectedBrand)?.rank}</div>
             {selectedBrand === 'Your Brand' && (
