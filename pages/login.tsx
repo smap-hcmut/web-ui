@@ -1,20 +1,92 @@
 import type { NextPage } from 'next'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'next-i18next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/router'
 import { Mail } from 'lucide-react'
+import { useLogin } from '@/hooks/useLogin'
+import { useSendOtp } from '@/hooks/useOtp'
 
 const Login: NextPage = () => {
   const { t } = useTranslation('common')
+  const router = useRouter()
+  const { login, isLoading: isLoggingIn, error: loginError } = useLogin()
+  const { sendOtp, isLoading: isSendingOtp, error: otpError } = useSendOtp()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [deviceInfo, setDeviceInfo] = useState({
+    device_name: '',
+    user_agent: '',
+    ip_address: ''
+  })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Get device info on mount
+  useEffect(() => {
+    const getUserAgent = () => window.navigator.userAgent
+    const getDeviceName = () => {
+      const ua = window.navigator.userAgent
+      if (/iPhone/.test(ua)) return 'iPhone'
+      if (/iPad/.test(ua)) return 'iPad'
+      if (/Android/.test(ua)) return 'Android'
+      if (/Windows/.test(ua)) return 'Windows PC'
+      if (/Mac/.test(ua)) return 'Mac'
+      if (/Linux/.test(ua)) return 'Linux'
+      return 'Unknown Device'
+    }
+
+    // Get IP address from external service
+    const getIpAddress = async () => {
+      try {
+        const response = await fetch('https://api.ipify.org?format=json')
+        const data = await response.json()
+        return data.ip
+      } catch {
+        return '0.0.0.0'
+      }
+    }
+
+    getIpAddress().then(ip => {
+      setDeviceInfo({
+        device_name: getDeviceName(),
+        user_agent: getUserAgent(),
+        ip_address: ip
+      })
+    })
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log({ email, password })
+
+    try {
+      // First, attempt login
+      await login({
+        email,
+        password,
+        remember,
+        ...deviceInfo
+      })
+
+      // If login successful, send OTP
+      await sendOtp(email, password)
+
+      // Store email and password in sessionStorage for OTP page
+      sessionStorage.setItem('otp_email', email)
+      sessionStorage.setItem('otp_password', password)
+
+      // Redirect to OTP verification page
+      router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
+    } catch (err) {
+      // Error handling is done by hooks
+      console.error('Login/OTP error:', err)
+    }
   }
+
+  const error = loginError || otpError
+  const isLoading = isLoggingIn || isSendingOtp
 
   return (
     <div className="min-h-screen relative bg-amber-50 dark:bg-gray-950 overflow-hidden">
@@ -73,6 +145,13 @@ const Login: NextPage = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700 rounded-lg">
+                <p className="text-sm text-red-800 dark:text-red-200 text-center">{error}</p>
+              </div>
+            )}
+
             {/* Email */}
             <div>
               <label className="block text-sm font-semibold mb-2 text-gray-900 dark:text-white">
@@ -85,6 +164,7 @@ const Login: NextPage = () => {
                 className="w-full px-4 py-3 border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white bg-white/80 dark:bg-gray-900/80 text-gray-900 dark:text-white"
                 placeholder={t('login.emailPlaceholder')}
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -101,15 +181,42 @@ const Login: NextPage = () => {
                 placeholder={t('login.passwordPlaceholder')}
                 required
                 minLength={8}
+                disabled={isLoading}
               />
+            </div>
+
+            {/* Remember Me */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="remember"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 rounded border-amber-300/60 dark:border-white/20 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
+                disabled={isLoading}
+              />
+              <label htmlFor="remember" className="ml-2 text-sm font-semibold text-gray-900 dark:text-white">
+                {t('login.rememberMe')}
+              </label>
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold text-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg"
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold text-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {t('login.submit')}
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  {isSendingOtp ? t('login.sendingOtp') : t('login.loggingIn')}
+                </>
+              ) : (
+                t('login.submit')
+              )}
             </button>
           </form>
 

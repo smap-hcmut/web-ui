@@ -523,6 +523,8 @@
     "register": "Do it here",
     "backToHome": "Back to home",
     "trustedBy": "Trusted by +5000 happy users",
+    "loggingIn": "Logging in...",
+    "sendingOtp": "Sending OTP...",
     "tagline": "Social Media Analytics with Superpowers",
     "footerDescription": "Analyze social media data, track trends, and more. Just connect and let our AI handle the rest! Works in 50+ languages.",
     "features": {
@@ -572,5 +574,20 @@
       }
     },
     "tip": "Tip: You can create multiple projects to track different brands"
+  },
+  "verifyOtp": {
+    "title": "Verify Your Email",
+    "subtitle": "We've sent a 6-digit code to",
+    "enterCode": "Enter verification code",
+    "verify": "Verify",
+    "verifying": "Verifying...",
+    "resendCode": "Resend code",
+    "resending": "Resending...",
+    "resendIn": "Resend code in",
+    "backToLogin": "Back to login",
+    "securityInfo": {
+      "title": "Why verify?",
+      "description": "Email verification helps us ensure your account security and protect against unauthorized access."
+    }
   }
 }

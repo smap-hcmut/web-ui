@@ -523,6 +523,8 @@
     "register": "Đăng ký tại đây",
     "backToHome": "Quay lại trang chủ",
     "trustedBy": "Được tin dùng bởi +5000 khách hàng",
+    "loggingIn": "Đang đăng nhập...",
+    "sendingOtp": "Đang gửi mã OTP...",
     "tagline": "Phân tích mạng xã hội siêu năng lực",
     "footerDescription": "Phân tích dữ liệu mạng xã hội, theo dõi xu hướng và nhiều hơn nữa. Hỗ trợ tiếng Việt và đa ngôn ngữ.",
     "features": {
@@ -572,5 +574,20 @@
       }
     },
     "tip": "Mẹo: Bạn có thể tạo nhiều project để theo dõi các thương hiệu khác nhau"
+  },
+  "verifyOtp": {
+    "title": "Xác Thực Email",
+    "subtitle": "Chúng tôi đã gửi mã 6 số đến",
+    "enterCode": "Nhập mã xác thực",
+    "verify": "Xác thực",
+    "verifying": "Đang xác thực...",
+    "resendCode": "Gửi lại mã",
+    "resending": "Đang gửi lại...",
+    "resendIn": "Gửi lại mã sau",
+    "backToLogin": "Quay lại đăng nhập",
+    "securityInfo": {
+      "title": "Tại sao cần xác thực?",
+      "description": "Xác thực email giúp chúng tôi đảm bảo bảo mật tài khoản và bảo vệ khỏi truy cập trái phép."
+    }
   }
 }
