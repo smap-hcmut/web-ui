@@ -1,6 +1,23 @@
 import apiClient from '../config'
 import { Project, Brand } from '@/contexts/DashboardContext'
 
+// Backend API response interface
+interface ApiProject {
+  id: string
+  name: string
+  description: string
+  brand_name: string
+  brand_keywords: string[]
+  competitor_names: string[]
+  competitor_keywords_map: Record<string, string[]>
+  status: string
+  from_date: string
+  to_date: string
+  created_at: string
+  updated_at: string
+  created_by: string
+}
+
 interface CreateProjectPayload {
   name: string
   description: string
@@ -27,11 +44,42 @@ interface ProjectsListResponse {
   }
 }
 
+// Transform API response to frontend Project format
+const transformApiProject = (apiProject: ApiProject): Project => {
+  // Transform brand
+  const brand: Brand = {
+    id: 'b1',
+    name: apiProject.brand_name,
+    type: 'own',
+    keywords: apiProject.brand_keywords,
+    urls: [],
+  }
+
+  // Transform competitors
+  const competitors: Brand[] = apiProject.competitor_names.map((name, index) => ({
+    id: `c${index + 1}`,
+    name,
+    type: 'competitor' as const,
+    keywords: apiProject.competitor_keywords_map[name] || [],
+    urls: [],
+  }))
+
+  return {
+    id: apiProject.id,
+    name: apiProject.name,
+    description: apiProject.description,
+    brands: [brand],
+    competitors,
+    createdAt: new Date(apiProject.created_at),
+    status: apiProject.status as 'active' | 'inactive' | 'processing',
+  }
+}
+
 export const projectService = {
   // Get all projects
-  getProjects: async (): Promise<ProjectsListResponse> => {
-    const response = await apiClient.get<ProjectsListResponse>('/projects')
-    return response.data
+  getProjects: async (): Promise<Project[]> => {
+    const response = await apiClient.get<ApiProject[]>('/project/projects')
+    return response.data.map(transformApiProject)
   },
 
   // Get single project by ID

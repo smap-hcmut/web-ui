@@ -1,5 +1,5 @@
 import type { NextPage } from 'next'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'next-i18next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 import { motion } from 'framer-motion'
@@ -17,6 +17,14 @@ const Register: NextPage = () => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      router.push('/projects')
+    }
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

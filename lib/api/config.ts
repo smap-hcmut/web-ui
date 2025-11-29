@@ -10,6 +10,7 @@ if (!hostname.startsWith('http://') && !hostname.startsWith('https://')) {
 
 const apiClient = axios.create({
   baseURL: hostname,
+  withCredentials: true, // Enable cookies for HttpOnly authentication
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,7 +23,13 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response) {
       // Server responded with error status
-      return Promise.reject(error.response.data)
+      // Preserve status code for proper error handling
+      const errorData = {
+        ...error.response.data,
+        status: error.response.status,
+        statusText: error.response.statusText,
+      }
+      return Promise.reject(errorData)
     } else if (error.request) {
       // Request made but no response
       return Promise.reject({ message: 'Network error. Please check your connection.' })

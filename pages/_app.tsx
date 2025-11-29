@@ -5,6 +5,7 @@ import type { AppProps } from 'next/app'
 import { appWithTranslation } from 'next-i18next'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { DashboardProvider } from '@/contexts/DashboardContext'
+import { AuthProvider } from '@/contexts/AuthContext'
 import nextI18NextConfig from '../next-i18next.config.js'
 
 function MyApp({ Component, pageProps }: AppProps) {
@@ -15,9 +16,11 @@ function MyApp({ Component, pageProps }: AppProps) {
       enableSystem
       disableTransitionOnChange
     >
-      <DashboardProvider>
-        <Component {...pageProps} />
-      </DashboardProvider>
+      <AuthProvider>
+        <DashboardProvider>
+          <Component {...pageProps} />
+        </DashboardProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

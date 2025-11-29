@@ -7,7 +7,11 @@
     "dataCenter": "Trung tâm dữ liệu",
     "workflow": "Quy trình",
     "analyst": "Phân tích",
-    "reportWizard": "Tạo báo cáo"
+    "reportWizard": "Tạo báo cáo",
+    "login": "Đăng nhập",
+    "register": "Đăng ký",
+    "settings": "Cài đặt",
+    "logout": "Đăng xuất"
   },
   "theme": {
     "light": "Sáng",
@@ -595,6 +599,7 @@
     "subtitle": "Quản lý các dự án giám sát thương hiệu và phân tích đối thủ cạnh tranh",
     "createNew": "Tạo Dự Án Mới",
     "searchPlaceholder": "Tìm kiếm dự án...",
+    "fetchError": "Không thể tải danh sách dự án. Vui lòng thử lại.",
     "error": "Không thể tải danh sách dự án",
     "noProjects": "Chưa có dự án nào",
     "noProjectsDescription": "Tạo dự án đầu tiên để bắt đầu phân tích dữ liệu mạng xã hội",

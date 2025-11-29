@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Project, useDashboard } from '@/contexts/DashboardContext'
 import ProjectSetupWizard from '@/components/dashboard/ProjectSetupWizard'
+import { projectService } from '@/lib/api/services/project.service'
 import Swal from 'sweetalert2'
 
 // Hardcoded projects data - temporary until API is ready
@@ -133,23 +134,39 @@ const ProjectsContent: React.FC = () => {
   const router = useRouter()
   const { state, addProject: addProjectToContext, setProject } = useDashboard()
 
-  // Use projects from context if available, otherwise use mock data
-  const [projects, setProjects] = useState<Project[]>(
-    state.projects.length > 0 ? state.projects : mockProjects
-  )
-  const [isLoading, setIsLoading] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
-  // Sync projects with DashboardContext
+  // Fetch projects from API on mount
   useEffect(() => {
-    if (state.projects.length > 0) {
-      setProjects(state.projects)
+    const fetchProjects = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const data = await projectService.getProjects()
+        setProjects(data)
+
+        // Sync to context if needed
+        data.forEach(project => addProjectToContext(project))
+      } catch (err: any) {
+        console.error('Failed to fetch projects:', err)
+        setError(err?.message || t('projects.fetchError'))
+
+        // Fallback to mock data on error
+        setProjects(mockProjects)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [state.projects])
+
+    fetchProjects()
+  }, [])
 
   // Filter projects by search query
   const filteredProjects = projects.filter(

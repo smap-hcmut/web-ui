@@ -3,8 +3,10 @@ import { useRouter } from 'next/router'
 import { useTranslation } from 'next-i18next'
 import { useTheme } from 'next-themes'
 import { motion } from 'framer-motion'
-import { Moon, Sun, Globe, Menu, X } from 'lucide-react'
+import { Moon, Sun, Globe, Menu, X, User, LogOut, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
 const navItems = [
   { key: 'home', href: '#home' },
@@ -22,6 +24,8 @@ export default function LandingHeader() {
   const { theme, setTheme } = useTheme()
   const [langOpen, setLangOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const { user, isAuthenticated, logout: authLogout } = useAuth()
 
   const changeLanguage = (lang: string) => {
     i18n.changeLanguage(lang)
@@ -36,6 +40,12 @@ export default function LandingHeader() {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
+  }
+
+  const handleLogout = async () => {
+    await authLogout()
+    setUserMenuOpen(false)
+    router.push('/login')
   }
 
   return (
@@ -133,24 +143,78 @@ export default function LandingHeader() {
               )}
             </div>
 
-            {/* Desktop CTA Buttons */}
+            {/* Desktop CTA Buttons / User Menu */}
             <div className="hidden md:flex items-center gap-2 ml-2">
-              <motion.a
-                href="/login"
-                className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {t('landing.header.login')}
-              </motion.a>
-              <motion.a
-                href="/register"
-                className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {t('landing.header.getStarted')}
-              </motion.a>
+              {isAuthenticated ? (
+                <div className="relative">
+                  <motion.button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="inline-flex items-center gap-2 justify-center rounded-lg px-3 py-2 bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 hover:bg-white/80 dark:hover:bg-white/20 transition-all duration-200 shadow-lg backdrop-blur-sm"
+                    aria-label="User menu"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 dark:from-white dark:to-gray-100">
+                      <User className="h-4 w-4 text-gray-900" />
+                    </div>
+                    {user && (
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white max-w-[100px] truncate">
+                        {user.name || user.email}
+                      </span>
+                    )}
+                  </motion.button>
+
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute right-0 mt-2 w-56 rounded-lg border border-amber-300/50 dark:border-white/20 bg-white/90 dark:bg-gray-900/90 p-2 shadow-lg backdrop-blur-xl"
+                    >
+                      {user && (
+                        <div className="px-2 py-2 mb-2 border-b border-amber-200/50 dark:border-white/10">
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.name || user.email}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{user.email}</p>
+                        </div>
+                      )}
+                      <Link
+                        href="/overview"
+                        className="flex items-center gap-2 w-full rounded-md px-2 py-2 text-left text-sm font-semibold transition-all hover:bg-yellow-100/50 dark:hover:bg-white/10 text-gray-900 dark:text-white"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <Settings className="h-4 w-4" />
+                        {t('navbar.dashboard')}
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 w-full rounded-md px-2 py-2 text-left text-sm font-semibold transition-all hover:bg-red-100/50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        {t('navbar.logout')}
+                      </button>
+                    </motion.div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <motion.a
+                    href="/login"
+                    className="px-4 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    {t('landing.header.login')}
+                  </motion.a>
+                  <motion.a
+                    href="/register"
+                    className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    {t('landing.header.getStarted')}
+                  </motion.a>
+                </>
+              )}
             </div>
 
             {/* Mobile Menu Toggle */}
@@ -187,20 +251,49 @@ export default function LandingHeader() {
                 </a>
               ))}
               <div className="flex flex-col gap-2 mt-2 px-2">
-                <a
-                  href="/login"
-                  className="px-4 py-2 text-sm font-semibold text-center rounded-lg bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 transition-all hover:bg-white/80 dark:hover:bg-white/20 shadow-lg backdrop-blur-sm"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t('landing.header.login')}
-                </a>
-                <a
-                  href="/dashboard"
-                  className="px-4 py-2 text-sm font-semibold text-center bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {t('landing.header.getStarted')}
-                </a>
+                {isAuthenticated ? (
+                  <>
+                    {user && (
+                      <div className="px-4 py-2 mb-1 bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 rounded-lg">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.name || user.email}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{user.email}</p>
+                      </div>
+                    )}
+                    <Link
+                      href="/overview"
+                      className="px-4 py-2 text-sm font-semibold text-center rounded-lg bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 transition-all hover:bg-white/80 dark:hover:bg-white/20 shadow-lg backdrop-blur-sm text-gray-900 dark:text-white"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {t('navbar.dashboard')}
+                    </Link>
+                    <button
+                      onClick={() => {
+                        handleLogout()
+                        setMobileMenuOpen(false)
+                      }}
+                      className="px-4 py-2 text-sm font-semibold text-center bg-red-600 text-white rounded-lg shadow-lg hover:bg-red-700 transition-all duration-200"
+                    >
+                      {t('navbar.logout')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <a
+                      href="/login"
+                      className="px-4 py-2 text-sm font-semibold text-center rounded-lg bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 transition-all hover:bg-white/80 dark:hover:bg-white/20 shadow-lg backdrop-blur-sm text-gray-900 dark:text-white"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {t('landing.header.login')}
+                    </a>
+                    <a
+                      href="/register"
+                      className="px-4 py-2 text-sm font-semibold text-center bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {t('landing.header.getStarted')}
+                    </a>
+                  </>
+                )}
               </div>
             </nav>
           </motion.div>

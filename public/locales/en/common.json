@@ -7,7 +7,11 @@
     "dataCenter": "Data Center",
     "workflow": "Workflow",
     "analyst": "Analyst",
-    "reportWizard": "Report Wizard"
+    "reportWizard": "Report Wizard",
+    "login": "Login",
+    "register": "Register",
+    "settings": "Settings",
+    "logout": "Logout"
   },
   "theme": {
     "light": "Light",
@@ -596,6 +600,7 @@
     "createNew": "Create New Project",
     "searchPlaceholder": "Search projects...",
     "error": "Failed to load projects",
+    "fetchError": "Unable to fetch projects. Please try again.",
     "noProjects": "No projects yet",
     "noProjectsDescription": "Create your first project to start analyzing social media data",
     "createFirst": "Create First Project",

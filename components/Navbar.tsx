@@ -3,8 +3,10 @@ import { useRouter } from 'next/router'
 import { useTranslation } from 'next-i18next'
 import { useTheme } from 'next-themes'
 import { motion } from 'framer-motion'
-import { Moon, Sun, Globe, User } from 'lucide-react'
+import { Moon, Sun, Globe, User, LogOut, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
   const navItems = [
     { key: 'overview', href: '/overview' },
@@ -21,11 +23,19 @@ export default function Navbar() {
   const { t, i18n } = useTranslation('common')
   const { theme, setTheme } = useTheme()
   const [langOpen, setLangOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const { user, isAuthenticated, logout: authLogout } = useAuth()
 
   const changeLanguage = (lang: string) => {
     i18n.changeLanguage(lang)
     router.push(router.pathname, router.asPath, { locale: lang })
     setLangOpen(false)
+  }
+
+  const handleLogout = async () => {
+    await authLogout()
+    setUserMenuOpen(false)
+    router.push('/login')
   }
 
   return (
@@ -121,14 +131,65 @@ export default function Navbar() {
           </div>
 
           {}
-          <button
-            className="inline-flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            aria-label="User profile"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600">
-              <User className="h-4 w-4 text-white" />
+          {isAuthenticated ? (
+            <div className="relative">
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="inline-flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label="User menu"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600">
+                  <User className="h-4 w-4 text-white" />
+                </div>
+              </button>
+
+              {userMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-56 rounded-md border bg-popover p-2 shadow-md"
+                >
+                  {user && (
+                    <div className="px-2 py-2 mb-2 border-b">
+                      <p className="text-sm font-medium">{user.name || user.email}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  )}
+                  <Link
+                    href="/settings"
+                    className="flex items-center gap-2 w-full rounded-sm px-2 py-2 text-left text-sm transition-colors hover:bg-accent"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    <Settings className="h-4 w-4" />
+                    {t('navbar.settings')}
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 w-full rounded-sm px-2 py-2 text-left text-sm transition-colors hover:bg-accent text-red-600 dark:text-red-400"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {t('navbar.logout')}
+                  </button>
+                </motion.div>
+              )}
             </div>
-          </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {t('navbar.login')}
+              </Link>
+              <Link
+                href="/register"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {t('navbar.register')}
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </nav>

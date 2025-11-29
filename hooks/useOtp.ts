@@ -53,10 +53,22 @@ export const useVerifyOtp = (): UseVerifyOtpReturn => {
     try {
       const response = await authService.verifyOtp(email, otp)
 
-      // Store token
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token)
-        setToken(response.token)
+      // Extract token and user from response
+      const token = response.data?.token || response.token
+      const user = response.data?.user || response.user || response.data
+
+      // Store token and user data
+      if (token) {
+        localStorage.setItem('auth_token', token)
+        setToken(token)
+      }
+      if (user) {
+        localStorage.setItem('user', JSON.stringify(user))
+      }
+
+      // Dispatch custom event to notify Navbar of auth change
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('authChange'))
       }
 
       setIsSuccess(true)

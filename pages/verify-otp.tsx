@@ -127,8 +127,8 @@ const VerifyOTP: NextPage = () => {
       sessionStorage.removeItem('otp_email')
       sessionStorage.removeItem('otp_password')
 
-      // Redirect to dashboard or home
-      router.push('/')
+      // Redirect to projects page
+      router.push('/projects')
     } catch (err) {
       // Error handled by hook
       console.error('Verify OTP error:', err)

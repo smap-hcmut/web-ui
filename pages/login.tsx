@@ -8,12 +8,14 @@ import { useRouter } from 'next/router'
 import { Mail } from 'lucide-react'
 import { useLogin } from '@/hooks/useLogin'
 import { useSendOtp } from '@/hooks/useOtp'
+import { useAuth } from '@/contexts/AuthContext'
 
 const Login: NextPage = () => {
   const { t } = useTranslation('common')
   const router = useRouter()
   const { login, isLoading: isLoggingIn, error: loginError } = useLogin()
   const { sendOtp, isLoading: isSendingOtp, error: otpError } = useSendOtp()
+  const { isAuthenticated, checkAuth, setUser } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,10 +23,17 @@ const Login: NextPage = () => {
   const [deviceInfo, setDeviceInfo] = useState({
     device_name: '',
     user_agent: '',
-    ip_address: ''
+    ip_address: '0.0.0.0'
   })
 
-  // Get device info on mount
+  // Check if user is already logged in - fast redirect without render
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/projects')
+    }
+  }, [isAuthenticated, router])
+
+  // Get device info on mount (removed slow IP API call)
   useEffect(() => {
     const getUserAgent = () => window.navigator.userAgent
     const getDeviceName = () => {
@@ -38,23 +47,10 @@ const Login: NextPage = () => {
       return 'Unknown Device'
     }
 
-    // Get IP address from external service
-    const getIpAddress = async () => {
-      try {
-        const response = await fetch('https://api.ipify.org?format=json')
-        const data = await response.json()
-        return data.ip
-      } catch {
-        return '0.0.0.0'
-      }
-    }
-
-    getIpAddress().then(ip => {
-      setDeviceInfo({
-        device_name: getDeviceName(),
-        user_agent: getUserAgent(),
-        ip_address: ip
-      })
+    setDeviceInfo({
+      device_name: getDeviceName(),
+      user_agent: getUserAgent(),
+      ip_address: '0.0.0.0'
     })
   }, [])
 
@@ -62,31 +58,49 @@ const Login: NextPage = () => {
     e.preventDefault()
 
     try {
-      // First, attempt login
-      await login({
+      // Attempt login
+      const result = await login({
         email,
         password,
         remember,
         ...deviceInfo
       })
 
-      // If login successful, send OTP
-      await sendOtp(email, password)
+      // Check if user needs OTP verification
+      if (result.needsOtp) {
+        // User not verified, send OTP
+        await sendOtp(email, password)
 
-      // Store email and password in sessionStorage for OTP page
-      sessionStorage.setItem('otp_email', email)
-      sessionStorage.setItem('otp_password', password)
+        // Store email and password in sessionStorage for OTP page
+        sessionStorage.setItem('otp_email', email)
+        sessionStorage.setItem('otp_password', password)
 
-      // Redirect to OTP verification page
-      router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
+        // Redirect to OTP verification page
+        router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
+      } else if (result.isVerified) {
+        // Login successful, update auth context
+        if (result.user) {
+          setUser(result.user)
+        } else {
+          // Fallback: fetch user data from /me endpoint
+          await checkAuth()
+        }
+        // Redirect to projects page
+        router.push('/projects')
+      }
     } catch (err) {
       // Error handling is done by hooks
-      console.error('Login/OTP error:', err)
+      console.error('Login error:', err)
     }
   }
 
   const error = loginError || otpError
   const isLoading = isLoggingIn || isSendingOtp
+
+  // Don't render login form if already authenticated
+  if (isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="min-h-screen relative bg-amber-50 dark:bg-gray-950 overflow-hidden">

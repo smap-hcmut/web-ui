@@ -10,8 +10,15 @@ interface LoginPayload {
   user_agent: string
 }
 
+interface LoginResult {
+  needsOtp: boolean
+  isVerified: boolean
+  user?: any
+  token?: string
+}
+
 interface UseLoginReturn {
-  login: (payload: LoginPayload) => Promise<void>
+  login: (payload: LoginPayload) => Promise<LoginResult>
   isLoading: boolean
   error: string | null
   isSuccess: boolean
@@ -22,7 +29,7 @@ export const useLogin = (): UseLoginReturn => {
   const [error, setError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
 
-  const login = async (payload: LoginPayload) => {
+  const login = async (payload: LoginPayload): Promise<LoginResult> => {
     setIsLoading(true)
     setError(null)
     setIsSuccess(false)
@@ -30,16 +37,34 @@ export const useLogin = (): UseLoginReturn => {
     try {
       const response = await authService.login(payload)
 
-      // Store token if provided (for non-OTP login)
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token)
+      // Check if user needs OTP verification (error_code 20009)
+      if (response.error_code === 20009) {
+        setIsLoading(false)
+        return { needsOtp: true, isVerified: false }
       }
 
+      // User is verified, login successful
+      // Cookie is automatically set by browser via Set-Cookie header
+      // Extract user from response
+      const user = response.data?.user || response.user || response.data
+
       setIsSuccess(true)
-    } catch (err: any) {
-      setError(err?.message || 'Login failed. Please try again.')
-    } finally {
       setIsLoading(false)
+      return {
+        needsOtp: false,
+        isVerified: true,
+        user: user
+      }
+    } catch (err: any) {
+      // Check if error is the 20009 error (user not verified)
+      if (err?.error_code === 20009) {
+        setIsLoading(false)
+        return { needsOtp: true, isVerified: false }
+      }
+
+      setError(err?.message || 'Login failed. Please try again.')
+      setIsLoading(false)
+      throw err
     }
   }
 
