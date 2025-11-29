@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { projectService } from '@/lib/api/services/project.service'
+import { projectService, CreateProjectPayload } from '@/lib/api/services/project.service'
 import { Project } from '@/contexts/DashboardContext'
 
 interface UseProjectsReturn {
@@ -19,8 +19,8 @@ export const useProjects = (): UseProjectsReturn => {
     setError(null)
 
     try {
-      const response = await projectService.getProjects()
-      setProjects(response.data)
+      const projects = await projectService.getProjects()
+      setProjects(projects)
     } catch (err: any) {
       setError(err?.message || 'Failed to load projects')
     } finally {
@@ -41,7 +41,7 @@ export const useProjects = (): UseProjectsReturn => {
 }
 
 interface UseCreateProjectReturn {
-  createProject: (payload: any) => Promise<void>
+  createProject: (payload: CreateProjectPayload) => Promise<Project>
   isLoading: boolean
   error: string | null
   isSuccess: boolean
@@ -52,14 +52,15 @@ export const useCreateProject = (): UseCreateProjectReturn => {
   const [error, setError] = useState<string | null>(null)
   const [isSuccess, setIsSuccess] = useState(false)
 
-  const createProject = async (payload: any) => {
+  const createProject = async (payload: CreateProjectPayload): Promise<Project> => {
     setIsLoading(true)
     setError(null)
     setIsSuccess(false)
 
     try {
-      await projectService.createProject(payload)
+      const newProject = await projectService.createProject(payload)
       setIsSuccess(true)
+      return newProject
     } catch (err: any) {
       setError(err?.message || 'Failed to create project')
       throw err

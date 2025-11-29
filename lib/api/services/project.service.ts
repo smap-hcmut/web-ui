@@ -18,11 +18,28 @@ interface ApiProject {
   created_by: string
 }
 
-interface CreateProjectPayload {
+// Backend API request payload for creating project
+interface CreateProjectApiPayload {
+  name: string
+  description: string
+  brand_name: string
+  brand_keywords: string[]
+  competitor_names: string[]
+  competitor_keywords_map: Record<string, string[]>
+  from_date: string
+  to_date: string
+  status: string
+}
+
+// Frontend payload interface
+export interface CreateProjectPayload {
   name: string
   description: string
   brands: Omit<Brand, 'id'>[]
   competitors: Omit<Brand, 'id'>[]
+  fromDate?: string
+  toDate?: string
+  status?: 'active' | 'inactive' | 'processing'
 }
 
 interface UpdateProjectPayload extends Partial<CreateProjectPayload> {
@@ -75,11 +92,36 @@ const transformApiProject = (apiProject: ApiProject): Project => {
   }
 }
 
+// Transform frontend payload to backend API format
+const transformToApiPayload = (payload: CreateProjectPayload): CreateProjectApiPayload => {
+  // Get the first brand (assuming single brand per project)
+  const brand = payload.brands[0]
+
+  // Build competitor_keywords_map
+  const competitor_keywords_map: Record<string, string[]> = {}
+  payload.competitors.forEach((competitor) => {
+    competitor_keywords_map[competitor.name] = competitor.keywords
+  })
+
+  return {
+    name: payload.name,
+    description: payload.description,
+    brand_name: brand.name,
+    brand_keywords: brand.keywords,
+    competitor_names: payload.competitors.map((c) => c.name),
+    competitor_keywords_map,
+    from_date: payload.fromDate || new Date().toISOString(),
+    to_date: payload.toDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // Default 90 days
+    status: payload.status || 'active',
+  }
+}
+
 export const projectService = {
   // Get all projects
   getProjects: async (): Promise<Project[]> => {
-    const response = await apiClient.get<ApiProject[]>('/project/projects')
-    return response.data.map(transformApiProject)
+    const response = await apiClient.get<{ data: ApiProject[] }>('/project/projects')
+    const projects = response.data.data || response.data
+    return (Array.isArray(projects) ? projects : []).map(transformApiProject)
   },
 
   // Get single project by ID
@@ -89,9 +131,11 @@ export const projectService = {
   },
 
   // Create new project
-  createProject: async (payload: CreateProjectPayload): Promise<ProjectResponse> => {
-    const response = await apiClient.post<ProjectResponse>('/projects', payload)
-    return response.data
+  createProject: async (payload: CreateProjectPayload): Promise<Project> => {
+    const apiPayload = transformToApiPayload(payload)
+    const response = await apiClient.post<{ data: ApiProject }>('/project/projects', apiPayload)
+    const apiProject = response.data.data || response.data
+    return transformApiProject(apiProject as ApiProject)
   },
 
   // Update existing project

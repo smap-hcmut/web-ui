@@ -177,29 +177,41 @@ const ProjectsContent: React.FC = () => {
 
   const handleCreateProject = async (projectData: any) => {
     try {
-      // Simulate API call
-      const newProject: Project = {
-        id: `project_${Date.now()}`,
+      // Call API to create project
+      const newProject = await projectService.createProject({
         name: projectData.name,
         description: projectData.description,
-        brands: projectData.brands.map((b: any, idx: number) => ({
-          ...b,
-          id: `b${Date.now()}-${idx}`,
-        })),
-        competitors: projectData.competitors.map((c: any, idx: number) => ({
-          ...c,
-          id: `c${Date.now()}-${idx}`,
-        })),
-        createdAt: new Date(),
-        status: 'active' as const,
-      }
+        brands: projectData.brands,
+        competitors: projectData.competitors,
+        status: 'active',
+      })
 
-      // Add to context
+      // Add to context and local state
       addProjectToContext(newProject)
       setProjects([...projects, newProject])
       setIsWizardOpen(false)
-    } catch (err) {
+
+      // Show success message
+      await Swal.fire({
+        title: t('projects.deleteConfirm.success'),
+        text: `${t('projects.createSuccess')}`,
+        icon: 'success',
+        confirmButtonColor: '#10b981',
+        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
+      })
+    } catch (err: any) {
       console.error('Create project error:', err)
+
+      // Show error message
+      await Swal.fire({
+        title: t('projects.deleteConfirm.error'),
+        text: err?.message || t('projects.createError'),
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
+      })
     }
   }
 
