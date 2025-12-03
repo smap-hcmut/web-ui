@@ -1,5 +1,5 @@
 import type { NextPage } from 'next'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'next-i18next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,6 +16,9 @@ import {
   Users,
   Target,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
 } from 'lucide-react'
 import { Project, useDashboard } from '@/contexts/DashboardContext'
 import ProjectSetupWizard from '@/components/dashboard/ProjectSetupWizard'
@@ -139,21 +142,47 @@ const ProjectsContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('') // For input field
   const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
-  // Fetch projects from API on mount
+  // Pagination and filters state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'inactive'>('all')
+  const [totalProjects, setTotalProjects] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput)
+      setCurrentPage(1) // Reset to first page on search
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // Fetch projects from API with filters
   useEffect(() => {
     const fetchProjects = async () => {
       setIsLoading(true)
       setError(null)
 
       try {
-        const data = await projectService.getProjects()
-        setProjects(data)
+        const result = await projectService.getProjects({
+          search_name: searchQuery || undefined,
+          statuses: statusFilter !== 'all' ? [statusFilter] : undefined,
+          page: currentPage,
+          limit: pageSize
+        })
+
+        setProjects(result.projects)
+        setTotalProjects(result.paginator.total)
+        setTotalPages(Math.ceil(result.paginator.total / result.paginator.per_page))
 
         // Sync to context if needed
-        data.forEach(project => addProjectToContext(project))
+        result.projects.forEach(project => addProjectToContext(project))
       } catch (err: any) {
         console.error('Failed to fetch projects:', err)
         setError(err?.message || t('projects.fetchError'))
@@ -166,14 +195,10 @@ const ProjectsContent: React.FC = () => {
     }
 
     fetchProjects()
-  }, [])
+  }, [searchQuery, statusFilter, currentPage, pageSize])
 
-  // Filter projects by search query
-  const filteredProjects = projects.filter(
-    (project) =>
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  // Use projects directly (already filtered by API)
+  const filteredProjects = projects
 
   const handleCreateProject = async (projectData: any) => {
     try {
@@ -183,6 +208,8 @@ const ProjectsContent: React.FC = () => {
         description: projectData.description,
         brands: projectData.brands,
         competitors: projectData.competitors,
+        fromDate: projectData.fromDate,
+        toDate: projectData.toDate,
         status: 'active',
       })
 
@@ -193,8 +220,8 @@ const ProjectsContent: React.FC = () => {
 
       // Show success message
       await Swal.fire({
-        title: t('projects.deleteConfirm.success'),
-        text: `${t('projects.createSuccess')}`,
+        title: t('projects.createSuccess.title'),
+        text: t('projects.createSuccess.text'),
         icon: 'success',
         confirmButtonColor: '#10b981',
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
@@ -205,8 +232,8 @@ const ProjectsContent: React.FC = () => {
 
       // Show error message
       await Swal.fire({
-        title: t('projects.deleteConfirm.error'),
-        text: err?.message || t('projects.createError'),
+        title: t('projects.createError.title'),
+        text: err?.message || t('projects.createError.text'),
         icon: 'error',
         confirmButtonColor: '#dc2626',
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
@@ -235,7 +262,10 @@ const ProjectsContent: React.FC = () => {
     if (!result.isConfirmed) return
 
     try {
-      // Simulate API call
+      // Call API to delete project
+      await projectService.deleteProject(id)
+
+      // Update local state
       setProjects(projects.filter((p) => p.id !== id))
       setSelectedProjectId(null)
 
@@ -249,13 +279,13 @@ const ProjectsContent: React.FC = () => {
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
         color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
       })
-    } catch (err) {
+    } catch (err: any) {
       console.error('Delete project error:', err)
 
       // Error notification
       await Swal.fire({
         title: t('projects.deleteConfirm.error'),
-        text: t('projects.deleteConfirm.errorText'),
+        text: err?.message || t('projects.deleteConfirm.errorText'),
         icon: 'error',
         confirmButtonColor: '#dc2626',
         background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
@@ -345,22 +375,63 @@ const ProjectsContent: React.FC = () => {
             </div>
           </motion.div>
 
-          {/* Search Bar */}
+          {/* Search Bar & Filters */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="mb-8"
+            className="mb-8 space-y-4"
           >
-            <div className="relative max-w-md">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('projects.searchPlaceholder')}
-                className="w-full pl-12 pr-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
-              />
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder={t('projects.searchPlaceholder')}
+                  className="w-full pl-12 pr-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as any)
+                    setCurrentPage(1)
+                  }}
+                  className="px-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Results Info */}
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <p>
+                Showing {projects.length} of {totalProjects} projects
+              </p>
+              <div className="flex items-center gap-2">
+                <label>Per page:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="px-3 py-1 bg-white/60 dark:bg-gray-900/60 border border-amber-300/60 dark:border-white/20 rounded-lg"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
             </div>
           </motion.div>
 
@@ -560,6 +631,62 @@ const ProjectsContent: React.FC = () => {
             </motion.div>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="flex items-center justify-center gap-2 mt-8"
+          >
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg border border-amber-300/60 dark:border-white/20 bg-white/60 dark:bg-gray-900/60 hover:bg-white/80 dark:hover:bg-gray-900/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                let pageNum: number
+
+                if (totalPages <= 7) {
+                  pageNum = i + 1
+                } else if (currentPage <= 4) {
+                  pageNum = i + 1
+                } else if (currentPage >= totalPages - 3) {
+                  pageNum = totalPages - 6 + i
+                } else {
+                  pageNum = currentPage - 3 + i
+                }
+
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-10 h-10 rounded-lg border transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                        : 'border-amber-300/60 dark:border-white/20 bg-white/60 dark:bg-gray-900/60 hover:bg-white/80 dark:hover:bg-gray-900/80'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg border border-amber-300/60 dark:border-white/20 bg-white/60 dark:bg-gray-900/60 hover:bg-white/80 dark:hover:bg-gray-900/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
       </div>
 
       {/* Project Setup Wizard */}

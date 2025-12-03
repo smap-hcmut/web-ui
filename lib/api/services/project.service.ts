@@ -8,8 +8,10 @@ interface ApiProject {
   description: string
   brand_name: string
   brand_keywords: string[]
-  competitor_names: string[]
-  competitor_keywords_map: Record<string, string[]>
+  competitors: Array<{
+    name: string
+    keywords: string[]
+  }>
   status: string
   from_date: string
   to_date: string
@@ -24,11 +26,12 @@ interface CreateProjectApiPayload {
   description: string
   brand_name: string
   brand_keywords: string[]
-  competitor_names: string[]
-  competitor_keywords_map: Record<string, string[]>
+  competitors: Array<{
+    name: string
+    keywords: string[]
+  }>
   from_date: string
   to_date: string
-  status: string
 }
 
 // Frontend payload interface
@@ -52,13 +55,24 @@ interface ProjectResponse {
 }
 
 interface ProjectsListResponse {
-  data: Project[]
-  message?: string
-  pagination?: {
-    total: number
-    page: number
-    limit: number
+  error_code: number
+  message: string
+  data: {
+    projects: ApiProject[]
+    paginator: {
+      total: number
+      count: number
+      per_page: number
+      current_page: number
+    }
   }
+}
+
+export interface GetProjectsParams {
+  statuses?: Array<'active' | 'paused' | 'inactive'>
+  search_name?: string
+  page?: number
+  limit?: number
 }
 
 // Transform API response to frontend Project format
@@ -68,16 +82,16 @@ const transformApiProject = (apiProject: ApiProject): Project => {
     id: 'b1',
     name: apiProject.brand_name,
     type: 'own',
-    keywords: apiProject.brand_keywords,
+    keywords: apiProject.brand_keywords || [],
     urls: [],
   }
 
   // Transform competitors
-  const competitors: Brand[] = apiProject.competitor_names.map((name, index) => ({
+  const competitors: Brand[] = (apiProject.competitors || []).map((competitor, index) => ({
     id: `c${index + 1}`,
-    name,
+    name: competitor.name,
     type: 'competitor' as const,
-    keywords: apiProject.competitor_keywords_map[name] || [],
+    keywords: competitor.keywords || [],
     urls: [],
   }))
 
@@ -92,36 +106,80 @@ const transformApiProject = (apiProject: ApiProject): Project => {
   }
 }
 
+// Helper function to format date to "YYYY-MM-DD HH:mm:ss"
+const formatDateToBackend = (dateString: string): string => {
+  const date = new Date(dateString)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
 // Transform frontend payload to backend API format
 const transformToApiPayload = (payload: CreateProjectPayload): CreateProjectApiPayload => {
   // Get the first brand (assuming single brand per project)
   const brand = payload.brands[0]
 
-  // Build competitor_keywords_map
-  const competitor_keywords_map: Record<string, string[]> = {}
-  payload.competitors.forEach((competitor) => {
-    competitor_keywords_map[competitor.name] = competitor.keywords
-  })
+  // Transform competitors to backend format
+  const competitors = payload.competitors.map((competitor) => ({
+    name: competitor.name,
+    keywords: competitor.keywords,
+  }))
 
   return {
     name: payload.name,
     description: payload.description,
     brand_name: brand.name,
     brand_keywords: brand.keywords,
-    competitor_names: payload.competitors.map((c) => c.name),
-    competitor_keywords_map,
-    from_date: payload.fromDate || new Date().toISOString(),
-    to_date: payload.toDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // Default 90 days
-    status: payload.status || 'active',
+    competitors,
+    from_date: payload.fromDate ? formatDateToBackend(payload.fromDate) : formatDateToBackend(new Date().toISOString()),
+    to_date: payload.toDate ? formatDateToBackend(payload.toDate) : formatDateToBackend(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()),
   }
 }
 
 export const projectService = {
-  // Get all projects
-  getProjects: async (): Promise<Project[]> => {
-    const response = await apiClient.get<{ data: ApiProject[] }>('/project/projects')
-    const projects = response.data.data || response.data
-    return (Array.isArray(projects) ? projects : []).map(transformApiProject)
+  // Get all projects with pagination and filters
+  getProjects: async (params?: GetProjectsParams): Promise<{
+    projects: Project[]
+    paginator: {
+      total: number
+      count: number
+      per_page: number
+      current_page: number
+    }
+  }> => {
+    // Build query string
+    const queryParams = new URLSearchParams()
+
+    if (params?.statuses && params.statuses.length > 0) {
+      params.statuses.forEach(status => queryParams.append('statuses', status))
+    }
+
+    if (params?.search_name) {
+      queryParams.append('search_name', params.search_name)
+    }
+
+    if (params?.page) {
+      queryParams.append('page', params.page.toString())
+    }
+
+    if (params?.limit) {
+      queryParams.append('limit', params.limit.toString())
+    }
+
+    const queryString = queryParams.toString()
+    const url = `/project/projects${queryString ? `?${queryString}` : ''}`
+
+    const response = await apiClient.get<ProjectsListResponse>(url)
+
+    return {
+      projects: response.data.data.projects.map(transformApiProject),
+      paginator: response.data.data.paginator
+    }
   },
 
   // Get single project by ID
@@ -145,10 +203,17 @@ export const projectService = {
     return response.data
   },
 
-  // Delete project
-  deleteProject: async (id: string): Promise<{ message: string }> => {
-    const response = await apiClient.delete<{ message: string }>(`/projects/${id}`)
+  // Delete project(s)
+  deleteProjects: async (ids: string[]): Promise<{ message: string }> => {
+    const response = await apiClient.delete<{ message: string }>('/project/projects', {
+      data: { ids }
+    })
     return response.data
+  },
+
+  // Delete single project (convenience method)
+  deleteProject: async (id: string): Promise<{ message: string }> => {
+    return projectService.deleteProjects([id])
   },
 
   // Update project status

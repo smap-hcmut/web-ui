@@ -11,7 +11,8 @@ import {
   Target,
   Users,
   BarChart3,
-  Sparkles
+  Sparkles,
+  Calendar
 } from 'lucide-react'
 
 interface ProjectSetupWizardProps {
@@ -25,6 +26,8 @@ interface ProjectData {
   description: string
   brands: Brand[]
   competitors: Brand[]
+  fromDate: string
+  toDate: string
 }
 
 interface Brand {
@@ -44,14 +47,23 @@ const steps = [
 
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
+
+  // Get today's date in YYYY-MM-DD format for input max attribute
+  const today = new Date().toISOString().split('T')[0]
+
   const [projectData, setProjectData] = useState<ProjectData>({
     name: '',
     description: '',
     brands: [],
-    competitors: []
+    competitors: [],
+    fromDate: '',
+    toDate: ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
+
+  // Store raw keyword input to preserve commas while typing
+  const [keywordInputs, setKeywordInputs] = useState<Record<string, string>>({})
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -61,16 +73,52 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         if (!projectData.name.trim()) {
           newErrors.name = 'Tên project là bắt buộc'
         }
+        if (!projectData.fromDate) {
+          newErrors.fromDate = 'Ngày bắt đầu là bắt buộc'
+        }
+        if (!projectData.toDate) {
+          newErrors.toDate = 'Ngày kết thúc là bắt buộc'
+        }
+        if (projectData.fromDate && projectData.toDate) {
+          if (new Date(projectData.fromDate) > new Date(projectData.toDate)) {
+            newErrors.toDate = 'Ngày kết thúc phải sau ngày bắt đầu'
+          }
+        }
+        // Check if dates are not in the future
+        if (projectData.fromDate && new Date(projectData.fromDate) > new Date(today)) {
+          newErrors.fromDate = 'Ngày bắt đầu không được vượt quá ngày hiện tại'
+        }
+        if (projectData.toDate && new Date(projectData.toDate) > new Date(today)) {
+          newErrors.toDate = 'Ngày kết thúc không được vượt quá ngày hiện tại'
+        }
         break
       case 2:
         if (projectData.brands.length === 0) {
           newErrors.brands = 'Cần ít nhất một thương hiệu'
         }
+        // Validate each brand
+        projectData.brands.forEach((brand, index) => {
+          if (!brand.name.trim()) {
+            newErrors[`brand_name_${index}`] = 'Tên thương hiệu không được để trống'
+          }
+          if (brand.keywords.length === 0) {
+            newErrors[`brand_keywords_${index}`] = 'Cần ít nhất một từ khóa'
+          }
+        })
         break
       case 3:
         if (projectData.competitors.length === 0) {
           newErrors.competitors = 'Cần ít nhất một đối thủ để so sánh'
         }
+        // Validate each competitor
+        projectData.competitors.forEach((competitor, index) => {
+          if (!competitor.name.trim()) {
+            newErrors[`competitor_name_${index}`] = 'Tên đối thủ không được để trống'
+          }
+          if (competitor.keywords.length === 0) {
+            newErrors[`competitor_keywords_${index}`] = 'Cần ít nhất một từ khóa'
+          }
+        })
         break
     }
 
@@ -93,8 +141,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
     setIsLoading(true)
     try {
-
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Pass data as-is, the API service will handle date formatting
       onComplete(projectData)
       onClose()
     } catch (error) {
@@ -184,6 +231,56 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                 placeholder="Mô tả ngắn gọn về mục đích của project này..."
               />
             </div>
+
+            {/* Date Range Selection */}
+            <div className="bg-muted/30 rounded-lg p-4 border border-border">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="h-5 w-5 text-primary" />
+                <h4 className="font-medium">Khoảng thời gian phân tích</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Từ ngày *</label>
+                  <input
+                    type="date"
+                    value={projectData.fromDate}
+                    max={today}
+                    onChange={(e) => setProjectData(prev => ({ ...prev, fromDate: e.target.value }))}
+                    className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                  {errors.fromDate && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      {errors.fromDate}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Đến ngày *</label>
+                  <input
+                    type="date"
+                    value={projectData.toDate}
+                    max={today}
+                    min={projectData.fromDate || undefined}
+                    onChange={(e) => setProjectData(prev => ({ ...prev, toDate: e.target.value }))}
+                    className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                  {errors.toDate && (
+                    <p className="text-red-500 text-sm mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" />
+                      {errors.toDate}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-sm text-muted-foreground mt-3 flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" />
+                Khoảng thời gian không được vượt quá ngày hôm nay
+              </p>
+            </div>
           </div>
         )
 
@@ -225,27 +322,74 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
                       <div>
                         <label className="block text-sm font-medium mb-1">Tên thương hiệu *</label>
                         <input
                           type="text"
                           value={brand.name}
                           onChange={(e) => updateBrand(brand.id, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                            errors[`brand_name_${index}`] ? 'border-red-500' : 'border-border'
+                          }`}
                           placeholder="Ví dụ: Highlands Coffee"
                         />
+                        {errors[`brand_name_${index}`] && (
+                          <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {errors[`brand_name_${index}`]}
+                          </p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium mb-1">Từ khóa (cách nhau bởi dấu phẩy)</label>
+                        <label className="block text-sm font-medium mb-1">Từ khóa (cách nhau bởi dấu phẩy) *</label>
                         <input
                           type="text"
-                          value={brand.keywords.join(', ')}
-                          onChange={(e) => updateBrand(brand.id, 'keywords', e.target.value.split(',').map(k => k.trim()).filter(k => k))}
-                          className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
+                          value={keywordInputs[`brand_${brand.id}`] ?? brand.keywords.join(', ')}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            // Store raw input without splitting
+                            setKeywordInputs(prev => ({
+                              ...prev,
+                              [`brand_${brand.id}`]: value
+                            }))
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value
+                            // Split and save keywords on blur
+                            const keywords = value.split(',').map(k => k.trim()).filter(k => k)
+                            updateBrand(brand.id, 'keywords', keywords)
+                            // Clear raw input state
+                            setKeywordInputs(prev => {
+                              const newInputs = { ...prev }
+                              delete newInputs[`brand_${brand.id}`]
+                              return newInputs
+                            })
+                          }}
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                            errors[`brand_keywords_${index}`] ? 'border-red-500' : 'border-border'
+                          }`}
                           placeholder="highlands, highlands coffee, hc"
                         />
+                        {errors[`brand_keywords_${index}`] && (
+                          <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {errors[`brand_keywords_${index}`]}
+                          </p>
+                        )}
+                        {brand.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {brand.keywords.map((keyword, kidx) => (
+                              <span
+                                key={kidx}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary text-xs rounded-md"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -300,27 +444,74 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
                       <div>
                         <label className="block text-sm font-medium mb-1">Tên đối thủ *</label>
                         <input
                           type="text"
                           value={competitor.name}
                           onChange={(e) => updateBrand(competitor.id, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                            errors[`competitor_name_${index}`] ? 'border-red-500' : 'border-border'
+                          }`}
                           placeholder="Ví dụ: Starbucks"
                         />
+                        {errors[`competitor_name_${index}`] && (
+                          <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {errors[`competitor_name_${index}`]}
+                          </p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium mb-1">Từ khóa (cách nhau bởi dấu phẩy)</label>
+                        <label className="block text-sm font-medium mb-1">Từ khóa (cách nhau bởi dấu phẩy) *</label>
                         <input
                           type="text"
-                          value={competitor.keywords.join(', ')}
-                          onChange={(e) => updateBrand(competitor.id, 'keywords', e.target.value.split(',').map(k => k.trim()).filter(k => k))}
-                          className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
+                          value={keywordInputs[`competitor_${competitor.id}`] ?? competitor.keywords.join(', ')}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            // Store raw input without splitting
+                            setKeywordInputs(prev => ({
+                              ...prev,
+                              [`competitor_${competitor.id}`]: value
+                            }))
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value
+                            // Split and save keywords on blur
+                            const keywords = value.split(',').map(k => k.trim()).filter(k => k)
+                            updateBrand(competitor.id, 'keywords', keywords)
+                            // Clear raw input state
+                            setKeywordInputs(prev => {
+                              const newInputs = { ...prev }
+                              delete newInputs[`competitor_${competitor.id}`]
+                              return newInputs
+                            })
+                          }}
+                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                            errors[`competitor_keywords_${index}`] ? 'border-red-500' : 'border-border'
+                          }`}
                           placeholder="starbucks, sbux, starbucks vietnam"
                         />
+                        {errors[`competitor_keywords_${index}`] && (
+                          <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            {errors[`competitor_keywords_${index}`]}
+                          </p>
+                        )}
+                        {competitor.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {competitor.keywords.map((keyword, kidx) => (
+                              <span
+                                key={kidx}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500/10 text-orange-600 dark:text-orange-400 text-xs rounded-md"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -362,12 +553,38 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
               )}
 
               <div>
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Khoảng thời gian
+                </h4>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{new Date(projectData.fromDate).toLocaleDateString('vi-VN')}</span>
+                  <span>→</span>
+                  <span>{new Date(projectData.toDate).toLocaleDateString('vi-VN')}</span>
+                </div>
+              </div>
+
+              <div>
                 <h4 className="font-medium mb-2">Thương hiệu của bạn ({projectData.brands.length})</h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {projectData.brands.map((brand, index) => (
-                    <div key={brand.id} className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full" />
-                      <span className="text-sm">{brand.name}</span>
+                    <div key={brand.id} className="bg-background/50 rounded-md p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-primary rounded-full" />
+                        <span className="text-sm font-medium">{brand.name}</span>
+                      </div>
+                      {brand.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 ml-4">
+                          {brand.keywords.map((keyword, kidx) => (
+                            <span
+                              key={kidx}
+                              className="inline-flex items-center px-2 py-0.5 bg-primary/10 text-primary text-xs rounded"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -375,11 +592,25 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
               <div>
                 <h4 className="font-medium mb-2">Đối thủ cạnh tranh ({projectData.competitors.length})</h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {projectData.competitors.map((competitor, index) => (
-                    <div key={competitor.id} className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                      <span className="text-sm">{competitor.name}</span>
+                    <div key={competitor.id} className="bg-background/50 rounded-md p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                        <span className="text-sm font-medium">{competitor.name}</span>
+                      </div>
+                      {competitor.keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 ml-4">
+                          {competitor.keywords.map((keyword, kidx) => (
+                            <span
+                              key={kidx}
+                              className="inline-flex items-center px-2 py-0.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 text-xs rounded"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

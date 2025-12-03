@@ -601,8 +601,14 @@
     "searchPlaceholder": "Tìm kiếm dự án...",
     "fetchError": "Không thể tải danh sách dự án. Vui lòng thử lại.",
     "error": "Không thể tải danh sách dự án",
-    "createSuccess": "Dự án đã được tạo thành công!",
-    "createError": "Không thể tạo dự án. Vui lòng thử lại.",
+    "createSuccess": {
+      "title": "Đã Tạo!",
+      "text": "Dự án đã được tạo thành công!"
+    },
+    "createError": {
+      "title": "Lỗi!",
+      "text": "Không thể tạo dự án. Vui lòng thử lại."
+    },
     "noProjects": "Chưa có dự án nào",
     "noProjectsDescription": "Tạo dự án đầu tiên để bắt đầu phân tích dữ liệu mạng xã hội",
     "createFirst": "Tạo Dự Án Đầu Tiên",
