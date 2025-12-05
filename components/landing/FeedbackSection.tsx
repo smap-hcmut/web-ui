@@ -154,7 +154,7 @@ export default function FeedbackSection() {
 
                 {/* Quote */}
                 <blockquote className="text-lg md:text-xl text-center mb-8 leading-relaxed font-semibold">
-                  "{t(`landing.feedback.testimonials.${testimonials[currentIndex].quoteKey}`)}"
+                  &ldquo;{t(`landing.feedback.testimonials.${testimonials[currentIndex].quoteKey}`)}&rdquo;
                 </blockquote>
 
                 {/* Author Info */}

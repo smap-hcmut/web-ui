@@ -195,6 +195,7 @@ const ProjectsContent: React.FC = () => {
     }
 
     fetchProjects()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, statusFilter, currentPage, pageSize])
 
   // Use projects directly (already filtered by API)

@@ -278,20 +278,20 @@ export default function LandingHeader() {
                   </>
                 ) : (
                   <>
-                    <a
+                    <Link
                       href="/login"
                       className="px-4 py-2 text-sm font-semibold text-center rounded-lg bg-white/60 dark:bg-white/10 border border-amber-300/60 dark:border-white/20 transition-all hover:bg-white/80 dark:hover:bg-white/20 shadow-lg backdrop-blur-sm text-gray-900 dark:text-white"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {t('landing.header.login')}
-                    </a>
-                    <a
+                    </Link>
+                    <Link
                       href="/register"
                       className="px-4 py-2 text-sm font-semibold text-center bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {t('landing.header.getStarted')}
-                    </a>
+                    </Link>
                   </>
                 )}
               </div>

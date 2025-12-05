@@ -19,8 +19,8 @@ export const useProjects = (): UseProjectsReturn => {
     setError(null)
 
     try {
-      const projects = await projectService.getProjects()
-      setProjects(projects)
+      const result = await projectService.getProjects()
+      setProjects(result.projects)
     } catch (err: any) {
       setError(err?.message || 'Failed to load projects')
     } finally {
