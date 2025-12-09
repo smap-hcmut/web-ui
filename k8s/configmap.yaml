@@ -7,8 +7,18 @@ metadata:
     app: smap-web
     component: frontend
 data:
+  # Application (Server-side only)
   NODE_ENV: "production"
-  NEXT_TELEMETRY_DISABLED: "1"
   PORT: "5000"
   HOSTNAME: "0.0.0.0"
-  # NEXT_PUBLIC_HOSTNAME: "https://smap-api.tantai.dev/identity"  # Uncomment and set your API URL
+
+  # Next.js
+  NEXT_TELEMETRY_DISABLED: "1"
+
+  # ⚠️ WARNING: NEXT_PUBLIC_* variables below DO NOT WORK at runtime!
+  # They must be set at BUILD TIME via Docker build args.
+  # See k8s/BUILD_GUIDE.md for details.
+  #
+  # These are kept here for documentation only:
+  # NEXT_PUBLIC_HOSTNAME: "https://smap-api.tantai.dev"
+  # NEXT_PUBLIC_WS_URL: "wss://smap-api.tantai.dev/ws"

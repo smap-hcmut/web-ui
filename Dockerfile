@@ -21,6 +21,10 @@ RUN npm ci --legacy-peer-deps --omit=dev && \
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Build arguments for NEXT_PUBLIC_* variables
+ARG NEXT_PUBLIC_HOSTNAME
+ARG NEXT_PUBLIC_WS_URL
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
@@ -41,7 +45,9 @@ COPY config ./config
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=production
+    NODE_ENV=production \
+    NEXT_PUBLIC_HOSTNAME=${NEXT_PUBLIC_HOSTNAME} \
+    NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 
 # Build the application
 RUN npm run build
@@ -65,9 +71,10 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 # Copy necessary files from builder
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+# Note: standalone mode includes public folder in .next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Switch to non-root user
 USER nextjs

@@ -106,12 +106,23 @@ build_and_push() {
     info "Dockerfile: $DOCKERFILE"
     echo ""
     
+    # Get build args from environment or use defaults
+    NEXT_PUBLIC_HOSTNAME="${NEXT_PUBLIC_HOSTNAME:-https://smap-api.tantai.dev}"
+    NEXT_PUBLIC_WS_URL="${NEXT_PUBLIC_WS_URL:-wss://smap-api.tantai.dev/ws}"
+    
+    info "Build arguments:"
+    echo "  NEXT_PUBLIC_HOSTNAME: $NEXT_PUBLIC_HOSTNAME"
+    echo "  NEXT_PUBLIC_WS_URL: $NEXT_PUBLIC_WS_URL"
+    echo ""
+    
     # Build and push with attestation disabled for registry compatibility
     info "Starting multi-stage build..."
     docker buildx build \
         --platform "$PLATFORM" \
         --provenance=false \
         --sbom=false \
+        --build-arg NEXT_PUBLIC_HOSTNAME="$NEXT_PUBLIC_HOSTNAME" \
+        --build-arg NEXT_PUBLIC_WS_URL="$NEXT_PUBLIC_WS_URL" \
         --tag "$image_name" \
         --tag "$latest_name" \
         --file "$DOCKERFILE" \
@@ -167,10 +178,12 @@ Image Format:
     ${REGISTRY}/${PROJECT}/${SERVICE}:latest
 
 Environment Variables:
-    REGISTRY          Docker registry URL (default: registry.tantai.dev)
-    HARBOR_USERNAME   Registry username (optional)
-    HARBOR_PASSWORD   Registry password (optional)
-    PLATFORM          Build platform (default: linux/amd64)
+    REGISTRY                Docker registry URL (default: registry.tantai.dev)
+    HARBOR_USERNAME         Registry username (optional)
+    HARBOR_PASSWORD         Registry password (optional)
+    PLATFORM                Build platform (default: linux/amd64)
+    NEXT_PUBLIC_HOSTNAME    API base URL (default: https://smap-api.tantai.dev)
+    NEXT_PUBLIC_WS_URL      WebSocket URL (default: wss://smap-api.tantai.dev/ws)
 
 Build Process:
     1. Dependencies stage - Install npm packages
