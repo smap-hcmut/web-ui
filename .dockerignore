@@ -1,5 +1,5 @@
 # ============================================
-# Docker Ignore File
+# Docker Ignore File - Optimized
 # ============================================
 
 # Dependencies
@@ -8,6 +8,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.pnpm-store
 
 # Build output
 .next
@@ -23,40 +24,51 @@ build
 # Testing
 coverage
 .nyc_output
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
 
 # Environment files (should be passed at runtime)
 .env
-.env.local
-.env*.local
+.env.*
+!.env.example
 
 # Git
 .git
 .gitignore
 .gitattributes
+.gitmodules
 
 # IDE
 .vscode
 .idea
 *.swp
 *.swo
+*.swn
+.editorconfig
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Docker
-Dockerfile
-docker-compose.yml
+Dockerfile*
+docker-compose*.yml
 .dockerignore
+k8s/
 
 # Documentation
 README.md
+documents/
 *.md
-!CHART_DATA_STRUCTURES.md
 
 # CI/CD
 .github
 .gitlab-ci.yml
+.circleci
+.travis.yml
 
 # Replit
 .replit
@@ -71,6 +83,11 @@ logs
 *.tmp
 .tmp
 .temp
+tmp/
 
 # TypeScript build info
 *.tsbuildinfo
+next-env.d.ts
+
+# ESLint
+.eslintcache

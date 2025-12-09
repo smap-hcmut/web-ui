@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smap-web-ingress
+  namespace: smap
+  labels:
+    app: smap-web
+    component: frontend
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "smap-web-service"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+
+    # Rate limiting (optional)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+    # SSL/TLS (uncomment if using cert-manager)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: smap.tantai.dev # Thay bằng domain của bạn
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smap-web-service
+                port:
+                  number: 80
+  # TLS configuration (uncomment khi có SSL certificate)
+  # tls:
+  # - hosts:
+  #   - smap.tantai.dev
+  #   secretName: smap-web-tls
