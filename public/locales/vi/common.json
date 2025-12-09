@@ -620,9 +620,9 @@
     "created": "Tạo lúc",
     "confirmDelete": "Bạn có chắc chắn muốn xóa dự án này? Hành động này không thể hoàn tác.",
     "status": {
-      "active": "Hoạt động",
-      "inactive": "Tạm dừng",
-      "processing": "Đang xử lý"
+      "completed": "Hoàn thành",
+      "draft": "Nháp",
+      "process": "Đang xử lý"
     },
     "actions": {
       "view": "Xem Dự Án",
@@ -638,6 +638,26 @@
       "successText": "Dự án đã được xóa thành công.",
       "error": "Lỗi!",
       "errorText": "Không thể xóa dự án. Vui lòng thử lại."
+    },
+    "draft": {
+      "title": "Dự Án Không Khả Dụng",
+      "message": "Dự án này hiện đang ở trạng thái nháp và không thể truy cập."
+    },
+    "processing": {
+      "initializing": "Đang khởi tạo thu thập dữ liệu...",
+      "crawling": "Đang thu thập dữ liệu từ mạng xã hội...",
+      "processing": "Đang xử lý và phân tích dữ liệu...",
+      "done": "Sắp hoàn tất...",
+      "failed": "Xử lý thất bại. Vui lòng thử lại.",
+      "connected": "Đã kết nối. Đang chờ cập nhật...",
+      "connectionError": "Lỗi kết nối. Đang thử lại...",
+      "connectionFailed": "Kết nối thất bại. Vui lòng làm mới trang."
+    },
+    "error": {
+      "notFound": "Không Tìm Thấy Dự Án",
+      "notFoundText": "Dự án bạn đang tìm không tồn tại.",
+      "invalidStatus": "Trạng Thái Không Hợp Lệ",
+      "invalidStatusText": "Dự án này có trạng thái không hợp lệ."
     }
   }
 }

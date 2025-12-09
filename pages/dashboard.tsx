@@ -34,6 +34,14 @@ const DashboardContent: React.FC = () => {
     }
   }, [router.query.project, state.selectedProject, state.projects, setProject])
 
+  // Handle redirect for draft projects
+  useEffect(() => {
+    const currentProject = state.projects.find(p => p.id === state.selectedProject)
+    if (currentProject?.status === 'draft') {
+      router.push('/projects')
+    }
+  }, [state.selectedProject, state.projects, router])
+
   const handleCreateProject = () => {
     setShowWizard(true)
   }
@@ -51,7 +59,7 @@ const DashboardContent: React.FC = () => {
       brands: projectData.brands,
       competitors: projectData.competitors,
       createdAt: new Date(),
-      status: 'active'
+      status: 'completed'
     }
 
     addProject(newProject)
@@ -79,17 +87,25 @@ const DashboardContent: React.FC = () => {
 
   const currentProject = state.projects.find(p => p.id === state.selectedProject)
 
-  if (currentProject?.status === 'processing') {
+  // Handle processing projects - render ProjectProcessingState with projectId
+  if (currentProject?.status === 'process') {
     return (
       <>
         <Navbar />
-        <ProjectProcessingState />
+        <ProjectProcessingState projectId={currentProject.id} />
         <Footer />
       </>
     )
   }
 
-  if (currentProject?.status === 'active' && currentProject.createdAt &&
+  // Handle draft projects - redirect is handled in useEffect above
+  // This check prevents rendering while redirect is in progress
+  if (currentProject?.status === 'draft') {
+    return null
+  }
+
+  // Handle newly created completed projects - show success state
+  if (currentProject?.status === 'completed' && currentProject.createdAt &&
       (Date.now() - currentProject.createdAt.getTime()) < 10000) {
     return (
       <>

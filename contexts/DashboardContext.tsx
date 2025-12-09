@@ -8,7 +8,7 @@ export interface Project {
   brands: Brand[]
   competitors: Brand[]
   createdAt: Date
-  status: 'active' | 'inactive' | 'processing'
+  status: 'completed' | 'draft' | 'process'
 }
 
 export interface Brand {
@@ -73,7 +73,7 @@ const mockProjects: Project[] = [
       { id: 'comp_2', name: 'Competitor B', type: 'competitor', keywords: ['innovation', 'tech'], urls: ['https://competitor-b.com'] }
     ],
     createdAt: new Date('2024-01-15'),
-    status: 'active'
+    status: 'completed'
   },
   {
     id: 'project_2',
@@ -87,7 +87,7 @@ const mockProjects: Project[] = [
       { id: 'comp_4', name: 'Online Market', type: 'competitor', keywords: ['shopping', 'online'], urls: ['https://onlinemarket.com'] }
     ],
     createdAt: new Date('2024-02-01'),
-    status: 'active'
+    status: 'completed'
   }
 ]
 
