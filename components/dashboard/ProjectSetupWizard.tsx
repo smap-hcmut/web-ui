@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Swal from 'sweetalert2'
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   Sparkles,
   Calendar
 } from 'lucide-react'
+import { projectService } from '@/lib/api/services/project.service'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -139,13 +141,131 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const handleComplete = async () => {
     if (!validateStep(currentStep)) return
 
+    // Step 1: Show confirmation modal
+    const result = await Swal.fire({
+      title: 'Xác nhận tạo project',
+      html: `
+        <p>Bạn có chắc chắn muốn tạo project <strong>${projectData.name}</strong>?</p>
+        <p class="text-sm text-gray-600 mt-2">
+          Project sẽ được tạo và khởi chạy ngay lập tức.
+        </p>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#6b7280',
+    })
+
+    // User cancelled - return early without API calls
+    if (!result.isConfirmed) {
+      return
+    }
+
+    // Step 2: Show loading modal after user confirms
+    Swal.fire({
+      title: 'Đang tạo project...',
+      html: 'Vui lòng đợi trong giây lát',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading()
+      },
+    })
+
     setIsLoading(true)
     try {
-      // Pass data as-is, the API service will handle date formatting
+      // Step 3: Call createProject API with project data
+      const createdProject = await projectService.createProject({
+        name: projectData.name,
+        description: projectData.description,
+        brands: projectData.brands,
+        competitors: projectData.competitors,
+        fromDate: projectData.fromDate,
+        toDate: projectData.toDate,
+      })
+
+      // Step 4: Extract project ID from response
+      if (!createdProject.id) {
+        throw new Error('Project ID not returned from API')
+      }
+
+      // Step 5: Call executeProject API with extracted ID
+      // Execute only runs if create succeeds
+      await projectService.executeProject(createdProject.id)
+
+      // Step 6: Show success modal after both APIs succeed
+      await Swal.fire({
+        title: 'Thành công!',
+        html: 'Project đã được tạo và khởi chạy thành công',
+        icon: 'success',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981',
+      })
+
+      // Step 7: Call onComplete() and onClose() after user clicks OK
       onComplete(projectData)
       onClose()
-    } catch (error) {
-      console.error('Error creating project:', error)
+    } catch (error: any) {
+      // Extract error message from API response or use fallback
+      let errorMessage = 'Có lỗi xảy ra khi tạo project'
+      let errorDetails = ''
+
+      // Handle different error types
+      if (error.message) {
+        // Network errors or custom errors
+        if (error.message.includes('Network error')) {
+          errorMessage = 'Lỗi kết nối mạng'
+          errorDetails = 'Vui lòng kiểm tra kết nối internet của bạn và thử lại.'
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Yêu cầu hết thời gian chờ'
+          errorDetails = 'Máy chủ không phản hồi. Vui lòng thử lại sau.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+
+      // Handle API response errors with status codes
+      if (error.status) {
+        if (error.status >= 400 && error.status < 500) {
+          // Client errors (validation, bad request, etc.)
+          errorMessage = error.message || 'Dữ liệu không hợp lệ'
+          if (error.status === 400) {
+            errorDetails = 'Vui lòng kiểm tra lại thông tin và thử lại.'
+          } else if (error.status === 401) {
+            errorMessage = 'Phiên đăng nhập đã hết hạn'
+            errorDetails = 'Vui lòng đăng nhập lại.'
+          } else if (error.status === 403) {
+            errorMessage = 'Bạn không có quyền thực hiện thao tác này'
+          } else if (error.status === 404) {
+            errorMessage = 'Không tìm thấy tài nguyên'
+          } else if (error.status === 409) {
+            errorMessage = 'Project đã tồn tại'
+            errorDetails = 'Vui lòng sử dụng tên khác.'
+          }
+        } else if (error.status >= 500) {
+          // Server errors
+          errorMessage = 'Lỗi máy chủ'
+          errorDetails = 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+        }
+      }
+
+      // Show error modal with appropriate message
+      await Swal.fire({
+        title: 'Lỗi!',
+        html: `
+          <p class="text-base mb-2">${errorMessage}</p>
+          ${errorDetails ? `<p class="text-sm text-gray-600">${errorDetails}</p>` : ''}
+        `,
+        icon: 'error',
+        confirmButtonText: 'Đóng',
+        confirmButtonColor: '#ef4444',
+      })
+
+      // Log error for debugging
+      console.error('Error creating/executing project:', error)
     } finally {
       setIsLoading(false)
     }

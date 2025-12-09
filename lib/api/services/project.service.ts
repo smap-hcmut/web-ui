@@ -226,4 +226,12 @@ export const projectService = {
     })
     return response.data
   },
+
+  // Execute project
+  executeProject: async (id: string): Promise<{ message: string; status: string }> => {
+    const response = await apiClient.post<{ message: string; status: string }>(
+      `/project/projects/${id}/execute`
+    )
+    return response.data
+  },
 }
