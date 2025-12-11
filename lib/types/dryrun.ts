@@ -22,7 +22,7 @@ export interface DryRunWebSocketMessage {
 export interface DryRunOuterPayload {
   type: 'dryrun_result'
   job_id: string
-  platform: 'tiktok' | 'youtube'
+  platform: 'facebook' | 'tiktok' | 'youtube'
   status: 'success' | 'failed'
   payload: DryRunInnerPayload // Nested payload with actual content
 }
@@ -55,7 +55,7 @@ export interface DryRunContent {
  */
 export interface DryRunContentMeta {
   id: string
-  platform: 'tiktok' | 'youtube'
+  platform: 'facebook' | 'tiktok' | 'youtube'
   job_id: string
   crawled_at: string // ISO 8601 (RFC3339)
   published_at: string // ISO 8601 (RFC3339)
@@ -195,7 +195,7 @@ export interface PlatformCount {
 /**
  * Platform type
  */
-export type Platform = 'tiktok' | 'youtube'
+export type Platform = 'facebook' | 'tiktok' | 'youtube'
 
 /**
  * Status type

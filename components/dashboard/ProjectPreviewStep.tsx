@@ -4,11 +4,16 @@ import { DryRunOuterPayload, DryRunContent, DryRunMetrics } from '@/lib/types/dr
 import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Eye, Sparkles } from 'lucide-react'
 import PreviewMetricsSummary from './preview/PreviewMetricsSummary'
 import PreviewKeywordTabs from './preview/PreviewKeywordTabs'
-import PreviewPostList from './preview/PreviewPostList'
+import PlatformTabs from './preview/PlatformTabs'
+import FacebookPostCard from './preview/FacebookPostCard'
+import TikTokPostCard from './preview/TikTokPostCard'
+import YouTubePostCard from './preview/YouTubePostCard'
 import PreviewLoadingState from './preview/PreviewLoadingState'
 import PreviewErrorState from './preview/PreviewErrorState'
 import { useTranslation } from 'next-i18next'
 import { SAMPLE_PREVIEW_DATA } from './preview/sampleData'
+
+type PlatformType = 'facebook' | 'tiktok' | 'youtube'
 
 interface ProjectPreviewStepProps {
   projectData: {
@@ -37,6 +42,7 @@ export default function ProjectPreviewStep({
 }: ProjectPreviewStepProps) {
   const { t } = useTranslation('common')
   const [selectedKeyword, setSelectedKeyword] = useState<string>('all')
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('tiktok')
   const [metrics, setMetrics] = useState<DryRunMetrics | null>(null)
   const [showRealPreview, setShowRealPreview] = useState<boolean>(false)
   const [isSampleData, setIsSampleData] = useState<boolean>(true)
@@ -87,12 +93,21 @@ export default function ProjectPreviewStep({
   // Determine which data to display
   const displayData = dryRunData || SAMPLE_PREVIEW_DATA
 
-  // Filter posts by selected keyword
-  const filteredPosts = selectedKeyword === 'all'
-    ? displayData.payload.content
-    : displayData.payload.content.filter(
-        post => post.meta.keyword_source === selectedKeyword
-      )
+  // Filter posts by selected keyword AND platform
+  const filteredPosts = displayData.payload.content.filter(post => {
+    const keywordMatch = selectedKeyword === 'all' || post.meta.keyword_source === selectedKeyword
+    const platformMatch = selectedPlatform === 'facebook'
+      ? false // Facebook not supported yet
+      : post.meta.platform === selectedPlatform
+    return keywordMatch && platformMatch
+  })
+
+  // Calculate platform counts
+  const platformCounts = {
+    facebook: 0, // Not supported yet
+    tiktok: displayData.payload.content.filter(p => p.meta.platform === 'tiktok').length,
+    youtube: displayData.payload.content.filter(p => p.meta.platform === 'youtube').length
+  }
 
   return (
     <motion.div
@@ -177,6 +192,13 @@ export default function ProjectPreviewStep({
       {/* Metrics Summary */}
       {metrics && <PreviewMetricsSummary metrics={metrics} />}
 
+      {/* Platform Tabs */}
+      <PlatformTabs
+        selectedPlatform={selectedPlatform}
+        onSelectPlatform={setSelectedPlatform}
+        platformCounts={platformCounts}
+      />
+
       {/* Keyword Filter Tabs */}
       {metrics && (
         <PreviewKeywordTabs
@@ -188,10 +210,30 @@ export default function ProjectPreviewStep({
       )}
 
       {/* Posts List */}
-      <PreviewPostList
-        posts={filteredPosts}
-        platform={displayData.platform}
-      />
+      <div className="space-y-4">
+        {filteredPosts.length === 0 ? (
+          <div className="text-center py-12 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-xl">
+            <p className="text-gray-600 dark:text-gray-400">
+              {selectedPlatform === 'facebook'
+                ? 'Facebook chưa được hỗ trợ'
+                : 'Không có bài đăng nào'}
+            </p>
+          </div>
+        ) : (
+          filteredPosts.map((post, index) => (
+            <motion.div
+              key={post.meta.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+            >
+              {selectedPlatform === 'facebook' && <FacebookPostCard post={post} />}
+              {selectedPlatform === 'tiktok' && <TikTokPostCard post={post} />}
+              {selectedPlatform === 'youtube' && <YouTubePostCard post={post} />}
+            </motion.div>
+          ))
+        )}
+      </div>
 
       {/* Navigation */}
       <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
