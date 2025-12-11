@@ -69,7 +69,7 @@ interface ProjectsListResponse {
 }
 
 export interface GetProjectsParams {
-  statuses?: Array<'active' | 'paused' | 'inactive'>
+  statuses?: Array<'completed' | 'process' | 'draft'>
   search_name?: string
   page?: number
   limit?: number
@@ -95,6 +95,21 @@ const transformApiProject = (apiProject: ApiProject): Project => {
     urls: [],
   }))
 
+  // Map API status to Project status
+  const mapStatus = (apiStatus: string): 'completed' | 'draft' | 'process' => {
+    switch (apiStatus) {
+      case 'completed':
+        return 'completed'
+      case 'process':
+        return 'process'
+      case 'draft':
+        return 'draft'
+      default:
+        console.warn(`Unknown API status: ${apiStatus}, defaulting to draft`)
+        return 'draft'
+    }
+  }
+
   return {
     id: apiProject.id,
     name: apiProject.name,
@@ -102,7 +117,7 @@ const transformApiProject = (apiProject: ApiProject): Project => {
     brands: [brand],
     competitors,
     createdAt: new Date(apiProject.created_at),
-    status: apiProject.status as 'active' | 'inactive' | 'processing',
+    status: mapStatus(apiProject.status),
   }
 }
 
@@ -233,5 +248,46 @@ export const projectService = {
       `/project/projects/${id}/execute`
     )
     return response.data
+  },
+
+  // Create dry-run (trigger keyword preview)
+  createDryRun: async (keywords: string[]): Promise<{ job_id: string; status: string; message: string }> => {
+    try {
+      const response = await apiClient.post<{
+        error_code: number
+        message: string
+        data: {
+          job_id: string
+          status: string
+          message: string
+        }
+      }>('/project/projects/dryrun', {
+        keywords
+      })
+
+      if (response.data.error_code !== 0) {
+        throw new Error(response.data.message || 'Failed to create dry-run')
+      }
+
+      return response.data.data
+    } catch (error: any) {
+      // Extract error details from response
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create dry-run'
+      const errorCode = error.response?.data?.error_code || error.response?.status || 500
+
+      console.error('Dry-run API error:', {
+        errorCode,
+        errorMessage,
+        responseData: error.response?.data,
+        keywords
+      })
+
+      throw {
+        error_code: errorCode,
+        message: errorMessage,
+        status: error.response?.status,
+        statusText: error.response?.statusText || ''
+      }
+    }
   },
 }

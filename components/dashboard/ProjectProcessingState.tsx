@@ -10,15 +10,11 @@ import {
   Target
 } from 'lucide-react'
 import { useDashboard } from '@/contexts/DashboardContext'
+import { createProjectWebSocket } from '@/services/websocketService'
+import type { WebSocketService } from '@/services/websocketService'
 
 interface ProjectProcessingStateProps {
   projectId: string
-}
-
-interface WSMessage<T = any> {
-  type: string
-  payload: T
-  timestamp: string
 }
 
 interface ProgressPayload {
@@ -35,19 +31,12 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
   const [progress, setProgress] = useState(0)
   const [statusMessage, setStatusMessage] = useState('Initializing...')
   const [currentStep, setCurrentStep] = useState<'INITIALIZING' | 'CRAWLING' | 'PROCESSING' | 'DONE' | 'FAILED'>('INITIALIZING')
-  const wsRef = useRef<WebSocket | null>(null)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
-  const maxReconnectAttempts = 5
-  const baseDelay = 1000
+  const wsServiceRef = useRef<WebSocketService | null>(null)
 
   // Use the provided projectId or fall back to currentProject
-  const project = projectId 
-    ? state.projects.find(p => p.id === projectId) 
+  const project = projectId
+    ? state.projects.find(p => p.id === projectId)
     : currentProject
-
-  if (!project || project.status !== 'process') {
-    return null
-  }
 
   const getStatusMessage = useCallback((status: string): string => {
     switch (status) {
@@ -60,235 +49,90 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
     }
   }, [])
 
-  // Validate WSMessage format
-  const validateWSMessage = useCallback((data: any): data is WSMessage => {
-    if (!data || typeof data !== 'object') {
-      console.error('Invalid message: not an object')
-      return false
-    }
-    
-    if (!data.type || typeof data.type !== 'string') {
-      console.error('Invalid message: missing or invalid type field')
-      return false
-    }
-    
-    if (!data.payload) {
-      console.error('Invalid message: missing payload field')
-      return false
-    }
-    
-    if (!data.timestamp || typeof data.timestamp !== 'string') {
-      console.error('Invalid message: missing or invalid timestamp field')
-      return false
-    }
-    
-    return true
-  }, [])
+  // Handle progress updates from WebSocket
+  const handleProgressUpdate = useCallback((data: any) => {
+    const progressData = data as ProgressPayload
 
-  // Validate ProgressPayload format
-  const validateProgressPayload = useCallback((payload: any): payload is ProgressPayload => {
-    if (!payload || typeof payload !== 'object') {
-      console.error('Invalid progress payload: not an object')
-      return false
-    }
-    
-    if (!payload.project_id || typeof payload.project_id !== 'string') {
-      console.error('Invalid progress payload: missing or invalid project_id')
-      return false
-    }
-    
-    if (!payload.status || typeof payload.status !== 'string') {
-      console.error('Invalid progress payload: missing or invalid status')
-      return false
-    }
-    
-    const validStatuses = ['INITIALIZING', 'CRAWLING', 'PROCESSING', 'DONE', 'FAILED']
-    if (!validStatuses.includes(payload.status)) {
-      console.error('Invalid progress payload: invalid status value:', payload.status)
-      return false
-    }
-    
-    if (typeof payload.total !== 'number' || typeof payload.done !== 'number' || typeof payload.errors !== 'number') {
-      console.error('Invalid progress payload: missing or invalid numeric fields')
-      return false
-    }
-    
-    return true
-  }, [])
+    // Update progress bar
+    const progressPercent = progressData.progress_percent ||
+      (progressData.total > 0 ? (progressData.done / progressData.total) * 100 : 0)
+    setProgress(progressPercent)
 
-  const connectWebSocket = useCallback(() => {
-    // Prevent multiple connections
-    if (wsRef.current?.readyState === WebSocket.OPEN || 
-        wsRef.current?.readyState === WebSocket.CONNECTING) {
-      console.log('WebSocket already connected or connecting')
-      return
-    }
+    // Update status message
+    setStatusMessage(getStatusMessage(progressData.status))
 
-    // WebSocket URL from environment variable
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'wss://smap-api.tantai.dev/ws'
-    
-    console.log('🔌 Connecting to WebSocket:', wsUrl)
-    
-    // Create WebSocket connection
-    // Note: Cookies are sent automatically by browser for same-origin or with proper CORS
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-    
-    ws.onopen = () => {
-      console.log('✅ WebSocket connected for project:', projectId)
-      setReconnectAttempts(0)
+    // Update current step
+    setCurrentStep(progressData.status)
+
+    console.log(`📊 Progress update: ${Math.round(progressPercent)}% (${progressData.done}/${progressData.total})`)
+  }, [getStatusMessage])
+
+  // Handle project completion from WebSocket
+  const handleProjectComplete = useCallback((data: any) => {
+    console.log('✅ Project completed:', projectId)
+
+    // Update project status to 'completed' using DashboardContext
+    if (project) {
+      updateProject({
+        ...project,
+        status: 'completed'
+      })
+    }
+  }, [projectId, project, updateProject])
+
+  // WebSocket connection setup
+  useEffect(() => {
+    console.log(`🔌 Setting up WebSocket for project: ${projectId}`)
+
+    // Create project-specific WebSocket connection
+    const wsService = createProjectWebSocket(projectId)
+    wsServiceRef.current = wsService
+
+    // Handle connection events
+    wsService.on('connected', () => {
+      console.log(`✅ WebSocket connected for project: ${projectId}`)
       setStatusMessage('Connected. Waiting for updates...')
-      
-      // Send ping every 30 seconds to keep connection alive
-      const pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }))
-        } else {
-          clearInterval(pingInterval)
-        }
-      }, 30000)
-      
-      // Store interval ID for cleanup
-      ;(ws as any).pingInterval = pingInterval
-    }
-    
-    ws.onmessage = (event) => {
-      try {
-        // Parse incoming message
-        const data = JSON.parse(event.data)
-        
-        // Validate message format against WSMessage interface
-        if (!validateWSMessage(data)) {
-          console.error('Message validation failed:', event.data)
-          return
-        }
-        
-        const message = data as WSMessage
-        
-        // Handle different message types
-        switch (message.type) {
-          case 'project_progress':
-            // Validate progress payload
-            if (!validateProgressPayload(message.payload)) {
-              console.error('Progress payload validation failed:', message.payload)
-              return
-            }
-            
-            const progressData = message.payload as ProgressPayload
-            
-            // Only process messages for this project
-            if (progressData.project_id === projectId) {
-              // Update progress bar
-              const progressPercent = progressData.progress_percent || 
-                (progressData.total > 0 ? (progressData.done / progressData.total) * 100 : 0)
-              setProgress(progressPercent)
-              
-              // Update status message
-              setStatusMessage(getStatusMessage(progressData.status))
-              
-              // Update current step
-              setCurrentStep(progressData.status)
-              
-              console.log(`📊 Progress update: ${Math.round(progressPercent)}% (${progressData.done}/${progressData.total})`)
-            }
-            break
-            
-          case 'project_completed':
-            // Validate completion payload
-            if (!validateProgressPayload(message.payload)) {
-              console.error('Completion payload validation failed:', message.payload)
-              return
-            }
-            
-            const completedData = message.payload as ProgressPayload
-            
-            // Only process completion for this project
-            if (completedData.project_id === projectId) {
-              console.log('✅ Project completed:', projectId)
-              
-              // Update project status to 'completed' using DashboardContext
-              updateProject({
-                ...project,
-                status: 'completed'
-              })
-            }
-            break
-            
-          default:
-            console.warn('Unknown message type:', message.type)
-        }
-      } catch (err) {
-        console.error('Failed to parse WebSocket message:', err)
-      }
-    }
-    
-    ws.onerror = (error) => {
+    })
+
+    wsService.on('disconnected', (code: number, reason: string) => {
+      console.log(`🔌 WebSocket disconnected: ${code} - ${reason}`)
+      setStatusMessage('Connection lost...')
+    })
+
+    wsService.on('reconnecting', (attempt: number) => {
+      console.log(`🔄 Reconnecting... (attempt ${attempt})`)
+      setStatusMessage(`Reconnecting...`)
+    })
+
+    wsService.on('error', (error: Error) => {
       console.error('❌ WebSocket error:', error)
       setStatusMessage('Connection error. Retrying...')
-    }
-    
-    ws.onclose = (event) => {
-      console.log('🔌 WebSocket closed:', event.code, event.reason)
-      
-      // Clear ping interval
-      if ((ws as any).pingInterval) {
-        clearInterval((ws as any).pingInterval)
-      }
-      
-      // Handle different close codes
-      if (event.code === 1000) {
-        // Normal closure
-        console.log('WebSocket closed normally')
-        return
-      }
-      
-      if (event.code === 1008 || event.code === 401 || event.code === 403) {
-        // Unauthorized - redirect to login
-        console.error('Authentication failed. Redirecting to login...')
-        setStatusMessage('Authentication failed. Redirecting...')
-        setTimeout(() => {
-          window.location.href = '/login'
-        }, 2000)
-        return
-      }
-      
-      // Abnormal closure (1006) or other errors - attempt reconnect
-      if (reconnectAttempts < maxReconnectAttempts) {
-        const delay = baseDelay * Math.pow(2, reconnectAttempts)
-        console.log(`🔄 Reconnecting in ${delay}ms... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`)
-        setStatusMessage(`Connection lost. Reconnecting in ${Math.round(delay/1000)}s...`)
-        
-        setTimeout(() => {
-          setReconnectAttempts(prev => prev + 1)
-          connectWebSocket()
-        }, delay)
-      } else {
-        console.error('Max reconnection attempts reached')
-        setStatusMessage('Connection failed. Please refresh the page.')
-      }
-    }
-  }, [projectId, getStatusMessage, validateWSMessage, validateProgressPayload])
-  
-  useEffect(() => {
-    // Only connect once when component mounts
-    connectWebSocket()
-    
+    })
+
+    // Handle progress updates
+    wsService.on('project_progress', handleProgressUpdate)
+
+    // Handle project completion
+    wsService.on('project_completed', handleProjectComplete)
+
+    // Connect
+    wsService.connect().catch((error) => {
+      console.error('Failed to connect WebSocket:', error)
+      setStatusMessage('Connection failed. Please refresh the page.')
+    })
+
+    // Cleanup on unmount or projectId change
     return () => {
-      // Cleanup on unmount
-      if (wsRef.current) {
-        console.log('Cleaning up WebSocket connection')
-        
-        // Clear ping interval if exists
-        if ((wsRef.current as any).pingInterval) {
-          clearInterval((wsRef.current as any).pingInterval)
-        }
-        
-        // Close connection
-        wsRef.current.close(1000, 'Component unmounted')
-        wsRef.current = null
-      }
+      console.log('Cleaning up WebSocket connection')
+      wsService.disconnect()
+      wsServiceRef.current = null
     }
-  }, [projectId]) // Only reconnect if projectId changes
+  }, [projectId, handleProgressUpdate, handleProjectComplete])
+
+  // Early return AFTER all hooks
+  if (!project || project.status !== 'process') {
+    return null
+  }
 
   const processingSteps = [
     {
@@ -327,7 +171,7 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center p-6">
       <div className="max-w-2xl w-full">
-        {}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -352,7 +196,7 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
           </p>
         </motion.div>
 
-        {}
+        {/* Processing Steps */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -401,7 +245,7 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
           ))}
         </motion.div>
 
-        {}
+        {/* Progress Bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -423,7 +267,7 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
           </div>
         </motion.div>
 
-        {}
+        {/* Status Message */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -436,7 +280,7 @@ export default function ProjectProcessingState({ projectId }: ProjectProcessingS
           </div>
         </motion.div>
 
-        {}
+        {/* Project Info */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

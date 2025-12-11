@@ -659,5 +659,46 @@
       "invalidStatus": "Trạng Thái Không Hợp Lệ",
       "invalidStatusText": "Dự án này có trạng thái không hợp lệ."
     }
+  },
+  "preview": {
+    "title": "Xem Trước Dữ Liệu Mẫu",
+    "subtitle": "Xem các bài đăng mẫu thu thập từ từ khóa",
+    "loading": "Đang tải dữ liệu xem trước...",
+    "loadingSubtext": "Quá trình này có thể mất vài phút...",
+    "dataLoaded": "Đã tải dữ liệu xem trước thành công",
+    "noData": "Không có dữ liệu xem trước",
+    "sampleDataBanner": "Dữ Liệu Mẫu",
+    "sampleDataDescription": "Dữ liệu preview sẽ bao gồm các thông tin này",
+    "viewRealDataButton": "Xem trước dữ liệu thực tế của project này",
+    "viewingRealData": "Đang xem dữ liệu thực tế",
+    "noPosts": "Không tìm thấy bài đăng cho từ khóa này",
+    "samplePosts": "Bài Đăng Mẫu",
+    "allKeywords": "Tất Cả Từ Khóa",
+    "matchedKeyword": "Từ Khóa Khớp",
+    "transcription": "Bản Chép Lời",
+    "viewComments": "Xem Bình Luận",
+    "viewOriginal": "Xem Bài Gốc",
+    "moreComments": "bình luận khác",
+    "author": "Tác Giả",
+    "replies": "phản hồi",
+    "followers": "người theo dõi",
+    "videos": "video",
+    "engagement": "tương tác",
+    "errorTitle": "Không Thể Tải Xem Trước",
+    "retry": "Thử Lại",
+    "minutesAgo": "phút trước",
+    "hoursAgo": "giờ trước",
+    "daysAgo": "ngày trước",
+    "metrics": {
+      "views": "Lượt Xem",
+      "likes": "Lượt Thích",
+      "comments": "Bình Luận",
+      "shares": "Chia Sẻ",
+      "avgEngagement": "Tương Tác TB"
+    }
+  },
+  "common": {
+    "back": "Quay Lại",
+    "next": "Tiếp Theo"
   }
 }

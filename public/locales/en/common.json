@@ -653,5 +653,46 @@
       "invalidStatus": "Invalid Status",
       "invalidStatusText": "This project has an invalid status."
     }
+  },
+  "preview": {
+    "title": "Preview Sample Data",
+    "subtitle": "Review sample posts collected from keywords",
+    "loading": "Loading preview data...",
+    "loadingSubtext": "This may take a few moments...",
+    "dataLoaded": "Preview data loaded successfully",
+    "noData": "No preview data available",
+    "sampleDataBanner": "Sample Data Preview",
+    "sampleDataDescription": "Data preview will include these information",
+    "viewRealDataButton": "Preview actual project data",
+    "viewingRealData": "Viewing actual project data",
+    "noPosts": "No posts found for this keyword",
+    "samplePosts": "Sample Posts",
+    "allKeywords": "All Keywords",
+    "matchedKeyword": "Matched Keyword",
+    "transcription": "Transcription",
+    "viewComments": "View Comments",
+    "viewOriginal": "View Original Post",
+    "moreComments": "more comments",
+    "author": "Author",
+    "replies": "replies",
+    "followers": "followers",
+    "videos": "videos",
+    "engagement": "engagement",
+    "errorTitle": "Unable to Load Preview",
+    "retry": "Retry",
+    "minutesAgo": "minutes ago",
+    "hoursAgo": "hours ago",
+    "daysAgo": "days ago",
+    "metrics": {
+      "views": "Views",
+      "likes": "Likes",
+      "comments": "Comments",
+      "shares": "Shares",
+      "avgEngagement": "Avg. Engagement"
+    }
+  },
+  "common": {
+    "back": "Back",
+    "next": "Next"
   }
 }

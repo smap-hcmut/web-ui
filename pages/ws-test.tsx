@@ -448,7 +448,7 @@ export default function WebSocketTest() {
           <h3 className="font-semibold text-blue-900 mb-2">📝 Hướng dẫn:</h3>
           <ul className="text-sm text-blue-800 space-y-1">
             <li>1. <strong>Đăng nhập</strong> để lấy JWT token tự động (khuyến nghị) hoặc nhập token thủ công</li>
-            <li>2. Click <strong>"Kết nối"</strong> để thiết lập WebSocket connection</li>
+            <li>2. Click <strong>&quot;Kết nối&quot;</strong> để thiết lập WebSocket connection</li>
             <li>3. Các tin nhắn từ server sẽ hiển thị tự động bên dưới</li>
             <li>4. Hỗ trợ các loại tin nhắn: <code>project_progress</code>, <code>project_completed</code>, <code>dryrun_result</code></li>
             <li>5. Ping/Pong được xử lý tự động bởi trình duyệt</li>

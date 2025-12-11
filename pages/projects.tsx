@@ -149,7 +149,7 @@ const ProjectsContent: React.FC = () => {
   // Pagination and filters state
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'paused' | 'draft'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'process' | 'draft'>('all')
   const [totalProjects, setTotalProjects] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
@@ -172,7 +172,7 @@ const ProjectsContent: React.FC = () => {
       try {
         const result = await projectService.getProjects({
           search_name: searchQuery || undefined,
-          statuses: statusFilter !== 'all' ? [statusFilter] : undefined,
+          statuses: statusFilter !== 'all' ? [statusFilter as any] : ['completed', 'process', 'draft'],
           page: currentPage,
           limit: pageSize
         })
@@ -211,7 +211,7 @@ const ProjectsContent: React.FC = () => {
         competitors: projectData.competitors,
         fromDate: projectData.fromDate,
         toDate: projectData.toDate,
-        status: 'completed',
+        status: 'active', // API expects 'active', not 'completed'
       })
 
       // Add to context and local state
@@ -450,7 +450,7 @@ const ProjectsContent: React.FC = () => {
                 >
                   <option value="all">All Status</option>
                   <option value="completed">Completed</option>
-                  <option value="paused">Paused</option>
+                  <option value="process">Processing</option>
                   <option value="draft">Draft</option>
                 </select>
               </div>

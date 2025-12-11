@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
 import {
@@ -6,16 +6,17 @@ import {
   ArrowRight,
   Plus,
   X,
-  Upload,
   Check,
   AlertCircle,
   Target,
   Users,
-  BarChart3,
   Sparkles,
   Calendar
 } from 'lucide-react'
 import { projectService } from '@/lib/api/services/project.service'
+import ProjectPreviewStep from './ProjectPreviewStep'
+import { DryRunOuterPayload } from '@/lib/types/dryrun'
+import { dashboardWebSocket } from '@/services/websocketService'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -44,7 +45,8 @@ const steps = [
   { id: 1, title: 'Thông tin cơ bản', description: 'Đặt tên và mô tả project' },
   { id: 2, title: 'Thương hiệu của bạn', description: 'Thêm thương hiệu cần theo dõi' },
   { id: 3, title: 'Đối thủ cạnh tranh', description: 'Thêm các đối thủ để so sánh' },
-  { id: 4, title: 'Xác nhận', description: 'Kiểm tra và tạo project' }
+  { id: 4, title: 'Xem trước dữ liệu', description: 'Kiểm tra mẫu dữ liệu thu thập được' },
+  { id: 5, title: 'Xác nhận', description: 'Kiểm tra và tạo project' }
 ]
 
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
@@ -66,6 +68,35 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
   // Store raw keyword input to preserve commas while typing
   const [keywordInputs, setKeywordInputs] = useState<Record<string, string>>({})
+
+  // Dry-run preview state
+  const [dryRunData, setDryRunData] = useState<DryRunOuterPayload | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
+
+  // WebSocket listener for dry-run results
+  useEffect(() => {
+    const handleDryRunResult = (data: any) => {
+      // Data is already the payload from WebSocket
+      const payload = data as DryRunOuterPayload
+
+      // Only process if it's for our current job
+      if (dryRunJobId && payload.job_id === dryRunJobId) {
+        console.log('Received dry-run result:', payload)
+        setDryRunData(payload)
+        setIsLoadingPreview(false)
+        setPreviewError(null)
+      }
+    }
+
+    // Subscribe to WebSocket message event
+    dashboardWebSocket.on('dryrun_result', handleDryRunResult)
+
+    return () => {
+      dashboardWebSocket.off('dryrun_result', handleDryRunResult)
+    }
+  }, [dryRunJobId])
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -128,14 +159,70 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     return Object.keys(newErrors).length === 0
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (validateStep(currentStep)) {
+      // No longer auto-trigger dry-run when moving from step 3 to 4
+      // User will trigger it manually via button in preview step
       setCurrentStep(prev => Math.min(prev + 1, steps.length))
     }
   }
 
   const handlePrevious = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1))
+  }
+
+  const triggerDryRun = async () => {
+    setIsLoadingPreview(true)
+    setPreviewError(null)
+    setDryRunData(null)
+
+    try {
+      // Collect all keywords from brands and competitors
+      const keywords = [
+        ...projectData.brands.flatMap(b => b.keywords),
+        ...projectData.competitors.flatMap(c => c.keywords)
+      ]
+
+      console.log('Triggering dry-run with keywords:', keywords)
+
+      // Call dry-run API
+      const response = await projectService.createDryRun(keywords)
+      setDryRunJobId(response.job_id)
+
+      console.log('Dry-run job created:', response.job_id)
+
+      // Wait for WebSocket message (handled by useEffect)
+      // Set timeout for 30 seconds
+      setTimeout(() => {
+        if (!dryRunData) {
+          setIsLoadingPreview(false)
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 30 giây')
+        }
+      }, 30000)
+
+    } catch (error: any) {
+      console.error('Dry-run trigger error:', error)
+
+      // Format error message
+      let errorMessage = 'Không thể khởi chạy preview'
+      if (error.message) {
+        errorMessage = error.message
+      }
+      if (error.error_code) {
+        errorMessage = `[Error ${error.error_code}] ${error.message || 'Something went wrong'}`
+      }
+
+      setPreviewError(errorMessage)
+      setIsLoadingPreview(false)
+    }
+  }
+
+  const handleRetryPreview = () => {
+    triggerDryRun()
+  }
+
+  const handleTriggerRealPreview = () => {
+    triggerDryRun()
   }
 
   const handleComplete = async () => {
@@ -650,6 +737,20 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
       case 4:
         return (
+          <ProjectPreviewStep
+            projectData={projectData}
+            dryRunData={dryRunData}
+            isLoading={isLoadingPreview}
+            error={previewError}
+            onBack={handlePrevious}
+            onNext={handleNext}
+            onRetry={handleRetryPreview}
+            onTriggerRealPreview={handleTriggerRealPreview}
+          />
+        )
+
+      case 5:
+        return (
           <div className="space-y-6">
             <div className="text-center mb-6">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
@@ -758,9 +859,11 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
+          className={`bg-background rounded-lg shadow-xl w-full ${
+            currentStep === 4 ? 'max-w-6xl' : 'max-w-2xl'
+          } max-h-[90vh] overflow-hidden`}
         >
-          {}
+          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border">
             <div>
               <h2 className="text-xl font-semibold">Tạo Project Mới</h2>
@@ -806,37 +909,38 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
           </div>
 
-          {}
+          {/* Step Content */}
           <div className="p-6 max-h-96 overflow-y-auto">
             {renderStepContent()}
           </div>
 
-          {}
-          <div className="flex items-center justify-between p-6 border-t border-border">
-            <button
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Quay lại
-            </button>
+          {/* Hide navigation for step 4 (preview) as it has its own navigation */}
+          {currentStep !== 4 && (
+            <div className="flex items-center justify-between p-6 border-t border-border">
+              <button
+                onClick={handlePrevious}
+                disabled={currentStep === 1}
+                className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Quay lại
+              </button>
 
-            <div className="flex items-center gap-3">
-              {currentStep < steps.length ? (
-                <button
-                  onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  Tiếp theo
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={handleComplete}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
+              <div className="flex items-center gap-3">
+                {currentStep < steps.length ? (
+                  <button
+                    onClick={handleNext}
+                    className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Tiếp theo
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleComplete}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
                   {isLoading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -849,9 +953,10 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     </>
                   )}
                 </button>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

@@ -132,6 +132,8 @@ pnpm-lock.yaml
 
 # Claude Code
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # JetBrains IDEs
 .idea/
@@ -200,6 +202,9 @@ replit.md
 
 # Kiro
 .kiro/
+
+# OpenSpec
+openspec/
 
 # ============================================
 # Project Specific
