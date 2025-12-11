@@ -181,7 +181,7 @@ $RECYCLE.BIN/
 
 # Gatsby
 .cache/
-public/
+# public/
 
 # vuepress
 .vuepress/dist/
