@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { DryRunOuterPayload, DryRunContent, DryRunMetrics } from '@/lib/types/dryrun'
-import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Eye, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle, AlertCircle, Eye, Sparkles, X } from 'lucide-react'
 import PreviewMetricsSummary from './preview/PreviewMetricsSummary'
 import PreviewKeywordTabs from './preview/PreviewKeywordTabs'
 import PlatformTabs from './preview/PlatformTabs'
+import FullscreenToggle from './preview/FullscreenToggle'
+import PlatformComparisonView from './preview/PlatformComparisonView'
 import FacebookPostCard from './preview/FacebookPostCard'
 import TikTokPostCard from './preview/TikTokPostCard'
 import YouTubePostCard from './preview/YouTubePostCard'
@@ -46,6 +48,8 @@ export default function ProjectPreviewStep({
   const [metrics, setMetrics] = useState<DryRunMetrics | null>(null)
   const [showRealPreview, setShowRealPreview] = useState<boolean>(false)
   const [isSampleData, setIsSampleData] = useState<boolean>(true)
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
+  const [isComparisonMode, setIsComparisonMode] = useState<boolean>(false)
 
   // Calculate aggregated metrics when data changes
   useEffect(() => {
@@ -96,20 +100,33 @@ export default function ProjectPreviewStep({
   // Filter posts by selected keyword AND platform
   const filteredPosts = displayData.payload.content.filter(post => {
     const keywordMatch = selectedKeyword === 'all' || post.meta.keyword_source === selectedKeyword
-    const platformMatch = selectedPlatform === 'facebook'
-      ? false // Facebook not supported yet
-      : post.meta.platform === selectedPlatform
+    const platformMatch = post.meta.platform === selectedPlatform
     return keywordMatch && platformMatch
   })
 
   // Calculate platform counts
   const platformCounts = {
-    facebook: 0, // Not supported yet
+    facebook: displayData.payload.content.filter(p => p.meta.platform === 'facebook').length,
     tiktok: displayData.payload.content.filter(p => p.meta.platform === 'tiktok').length,
     youtube: displayData.payload.content.filter(p => p.meta.platform === 'youtube').length
   }
 
-  return (
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen)
+    // Auto-enable comparison mode when entering fullscreen
+    if (!isFullscreen) {
+      setIsComparisonMode(true)
+    }
+  }
+
+  // Toggle comparison mode
+  const toggleComparison = () => {
+    setIsComparisonMode(!isComparisonMode)
+  }
+
+  // Render content (normal or fullscreen)
+  const renderContent = () => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -117,13 +134,22 @@ export default function ProjectPreviewStep({
       className="space-y-6"
     >
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
-          {t('preview.title')}
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          {t('preview.subtitle')}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">
+            {t('preview.title')}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            {t('preview.subtitle')}
+          </p>
+        </div>
+        {/* Fullscreen Toggle Button */}
+        <FullscreenToggle
+          isFullscreen={isFullscreen}
+          isComparisonMode={isComparisonMode}
+          onToggleFullscreen={toggleFullscreen}
+          onToggleComparison={toggleComparison}
+        />
       </div>
 
       {/* Sample Data Banner */}
@@ -189,71 +215,167 @@ export default function ProjectPreviewStep({
         </div>
       )}
 
-      {/* Metrics Summary */}
-      {metrics && <PreviewMetricsSummary metrics={metrics} />}
+      {/* Show Comparison View or Normal View */}
+      {isFullscreen && isComparisonMode ? (
+        <>
+          {/* Keyword Filter Tabs (for comparison mode) */}
+          {metrics && (
+            <PreviewKeywordTabs
+              keywords={['all', ...metrics.topKeywords.map(k => k.keyword)]}
+              selectedKeyword={selectedKeyword}
+              onSelectKeyword={setSelectedKeyword}
+              keywordCounts={metrics.topKeywords}
+            />
+          )}
+          {/* 3-Panel Comparison View */}
+          <PlatformComparisonView
+            allPosts={displayData.payload.content}
+            selectedKeyword={selectedKeyword}
+          />
+        </>
+      ) : (
+        <>
+          {/* Platform Tabs */}
+          <PlatformTabs
+            selectedPlatform={selectedPlatform}
+            onSelectPlatform={setSelectedPlatform}
+            platformCounts={platformCounts}
+          />
 
-      {/* Platform Tabs */}
-      <PlatformTabs
-        selectedPlatform={selectedPlatform}
-        onSelectPlatform={setSelectedPlatform}
-        platformCounts={platformCounts}
-      />
+          {/* Keyword Filter Tabs */}
+          {metrics && (
+            <PreviewKeywordTabs
+              keywords={['all', ...metrics.topKeywords.map(k => k.keyword)]}
+              selectedKeyword={selectedKeyword}
+              onSelectKeyword={setSelectedKeyword}
+              keywordCounts={metrics.topKeywords}
+            />
+          )}
 
-      {/* Keyword Filter Tabs */}
-      {metrics && (
-        <PreviewKeywordTabs
-          keywords={['all', ...metrics.topKeywords.map(k => k.keyword)]}
-          selectedKeyword={selectedKeyword}
-          onSelectKeyword={setSelectedKeyword}
-          keywordCounts={metrics.topKeywords}
-        />
+          {/* Posts List */}
+          <div className="space-y-4">
+            {filteredPosts.length === 0 ? (
+              <div className="text-center py-12 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-xl">
+                <p className="text-gray-600 dark:text-gray-400">
+                  Không có bài đăng nào cho {selectedPlatform === 'facebook' ? 'Facebook' : selectedPlatform === 'tiktok' ? 'TikTok' : 'YouTube'}
+                </p>
+              </div>
+            ) : (
+              filteredPosts.map((post, index) => (
+                <motion.div
+                  key={post.meta.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  {selectedPlatform === 'facebook' && <FacebookPostCard post={post} />}
+                  {selectedPlatform === 'tiktok' && <TikTokPostCard post={post} />}
+                  {selectedPlatform === 'youtube' && <YouTubePostCard post={post} />}
+                </motion.div>
+              ))
+            )}
+          </div>
+        </>
       )}
 
-      {/* Posts List */}
-      <div className="space-y-4">
-        {filteredPosts.length === 0 ? (
-          <div className="text-center py-12 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-xl">
-            <p className="text-gray-600 dark:text-gray-400">
-              {selectedPlatform === 'facebook'
-                ? 'Facebook chưa được hỗ trợ'
-                : 'Không có bài đăng nào'}
-            </p>
-          </div>
-        ) : (
-          filteredPosts.map((post, index) => (
-            <motion.div
-              key={post.meta.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              {selectedPlatform === 'facebook' && <FacebookPostCard post={post} />}
-              {selectedPlatform === 'tiktok' && <TikTokPostCard post={post} />}
-              {selectedPlatform === 'youtube' && <YouTubePostCard post={post} />}
-            </motion.div>
-          ))
-        )}
-      </div>
+      {/* Navigation - Hide in fullscreen mode */}
+      {!isFullscreen && (
+        <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            {t('common.back')}
+          </button>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          {t('common.back')}
-        </button>
-
-        <button
-          onClick={onNext}
-          className="flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-        >
-          {t('common.next')}
-          <ArrowRight className="w-5 h-5" />
-        </button>
-      </div>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+          >
+            {t('common.next')}
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </motion.div>
+  )
+
+  // Main return - wrap in fullscreen modal if needed
+  return (
+    <>
+      {/* Normal View */}
+      {!isFullscreen && renderContent()}
+
+      {/* Fullscreen Modal */}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-white dark:bg-gray-900"
+          >
+            <div className="h-full flex flex-col">
+              {/* Fullscreen Header with Close Button */}
+              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 sticky top-0 z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">
+                      {t('preview.title')}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {isComparisonMode ? 'So sánh 3 platforms' : t('preview.subtitle')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <FullscreenToggle
+                      isFullscreen={isFullscreen}
+                      isComparisonMode={isComparisonMode}
+                      onToggleFullscreen={toggleFullscreen}
+                      onToggleComparison={toggleComparison}
+                    />
+                    <button
+                      onClick={toggleFullscreen}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      title="Đóng"
+                    >
+                      <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fullscreen Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-6">
+                {renderContent()}
+              </div>
+
+              {/* Fullscreen Footer with Navigation */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={onBack}
+                    className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                    {t('common.back')}
+                  </button>
+
+                  <button
+                    onClick={onNext}
+                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                  >
+                    {t('common.next')}
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
