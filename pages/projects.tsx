@@ -314,9 +314,9 @@ const ProjectsContent: React.FC = () => {
     switch (project.status) {
       case 'completed':
         setProject(id)
-        router.push(`/dashboard?project=${id}`)
+        router.push(`/projects/${id}/dashboard`)
         break
-        
+
       case 'draft':
         Swal.fire({
           title: t('projects.draft.title'),
@@ -327,12 +327,12 @@ const ProjectsContent: React.FC = () => {
           color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
         })
         break
-        
+
       case 'process':
         setProject(id)
-        router.push(`/dashboard?project=${id}`)
+        router.push(`/projects/${id}/dashboard`)
         break
-        
+
       default:
         Swal.fire({
           title: t('projects.error.invalidStatus'),
