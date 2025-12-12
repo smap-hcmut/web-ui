@@ -32,9 +32,9 @@ const platformConfig = {
   tiktok: {
     icon: Music2,
     label: 'TikTok',
-    color: 'bg-black dark:bg-white',
-    borderColor: 'border-black dark:border-white',
-    textColor: 'text-black dark:text-white'
+    color: 'bg-black',
+    borderColor: 'border-black',
+    textColor: 'text-black'
   },
   youtube: {
     icon: Youtube,
@@ -151,48 +151,9 @@ export default function PlatformComparisonView({
             >
               {/* Platform Header */}
               <div className={`${config.color} text-white p-4`}>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3">
                   <Icon className="w-6 h-6" />
                   <h3 className="text-xl font-bold">{config.label}</h3>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Eye className="w-3 h-3" />
-                      <span className="opacity-80">Lượt xem</span>
-                    </div>
-                    <p className="font-bold text-sm">{formatNumber(stats.totalViews)}</p>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
-                    <div className="flex items-center gap-1 mb-1">
-                      <Heart className="w-3 h-3" />
-                      <span className="opacity-80">Lượt thích</span>
-                    </div>
-                    <p className="font-bold text-sm">{formatNumber(stats.totalLikes)}</p>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
-                    <div className="flex items-center gap-1 mb-1">
-                      <MessageCircle className="w-3 h-3" />
-                      <span className="opacity-80">Bình luận</span>
-                    </div>
-                    <p className="font-bold text-sm">{formatNumber(stats.totalComments)}</p>
-                  </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
-                    <div className="flex items-center gap-1 mb-1">
-                      <TrendingUp className="w-3 h-3" />
-                      <span className="opacity-80">Tương tác TB</span>
-                    </div>
-                    <p className="font-bold text-sm">{(stats.avgEngagement * 100).toFixed(1)}%</p>
-                  </div>
-                </div>
-
-                {/* Post Count */}
-                <div className="mt-3 text-center bg-white/20 backdrop-blur-sm rounded-lg py-2">
-                  <p className="text-sm">
-                    <span className="font-bold text-lg">{stats.totalPosts}</span> bài đăng
-                  </p>
                 </div>
               </div>
 
