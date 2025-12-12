@@ -280,10 +280,10 @@ export default function ProjectPreviewStep({
 
       {/* Navigation - Hide in fullscreen mode */}
       {!isFullscreen && (
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between pt-6 border-t border-amber-300/60 dark:border-white/20">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             {t('common.back')}
@@ -291,7 +291,7 @@ export default function ProjectPreviewStep({
 
           <button
             onClick={onNext}
-            className="flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
           >
             {t('common.next')}
             <ArrowRight className="w-5 h-5" />
@@ -318,7 +318,7 @@ export default function ProjectPreviewStep({
           >
             <div className="h-full flex flex-col">
               {/* Fullscreen Header with Close Button */}
-              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 sticky top-0 z-10">
+              <div className="flex-shrink-0 px-6 py-4 border-b border-amber-300/60 dark:border-white/20 bg-white dark:bg-gray-900 sticky top-0 z-10">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-black text-gray-900 dark:text-white">
@@ -337,10 +337,10 @@ export default function ProjectPreviewStep({
                     />
                     <button
                       onClick={toggleFullscreen}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
                       title="Đóng"
                     >
-                      <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                      <X className="w-6 h-6 text-muted-foreground" />
                     </button>
                   </div>
                 </div>
@@ -352,11 +352,11 @@ export default function ProjectPreviewStep({
               </div>
 
               {/* Fullscreen Footer with Navigation */}
-              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+              <div className="flex-shrink-0 px-6 py-4 border-t border-amber-300/60 dark:border-white/20 bg-white dark:bg-gray-900">
                 <div className="flex items-center justify-between">
                   <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
                   >
                     <ArrowLeft className="w-5 h-5" />
                     {t('common.back')}
@@ -364,7 +364,7 @@ export default function ProjectPreviewStep({
 
                   <button
                     onClick={onNext}
-                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                    className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
                   >
                     {t('common.next')}
                     <ArrowRight className="w-5 h-5" />

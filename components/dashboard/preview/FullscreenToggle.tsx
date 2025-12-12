@@ -25,8 +25,8 @@ export default function FullscreenToggle({
           onClick={onToggleComparison}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
             isComparisonMode
-              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+              ? 'bg-primary text-primary-foreground shadow-lg hover:bg-primary/90'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
           }`}
           title={isComparisonMode ? 'Tắt chế độ so sánh' : 'Bật chế độ so sánh 3 platforms'}
         >
@@ -42,8 +42,8 @@ export default function FullscreenToggle({
         onClick={onToggleFullscreen}
         className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
           isFullscreen
-            ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700'
-            : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+            ? 'bg-primary text-primary-foreground shadow-lg hover:bg-primary/90'
+            : 'bg-muted text-muted-foreground hover:bg-muted/80'
         }`}
         title={isFullscreen ? 'Thu nhỏ' : 'Phóng to toàn màn hình'}
       >

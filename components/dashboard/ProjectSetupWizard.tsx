@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
+import { useTheme } from 'next-themes'
 import {
   ArrowLeft,
   ArrowRight,
@@ -51,9 +52,16 @@ const steps = [
 
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
+  const { theme } = useTheme()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
+
+  // Helper function to get theme-aware Swal options
+  const getSwalThemeOptions = () => ({
+    background: theme === 'dark' ? '#1f2937' : '#ffffff',
+    color: theme === 'dark' ? '#ffffff' : '#000000',
+  })
 
   const [projectData, setProjectData] = useState<ProjectData>({
     name: '',
@@ -233,7 +241,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       title: 'Xác nhận tạo project',
       html: `
         <p>Bạn có chắc chắn muốn tạo project <strong>${projectData.name}</strong>?</p>
-        <p class="text-sm text-gray-600 mt-2">
+        <p class="text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-2">
           Project sẽ được tạo và khởi chạy ngay lập tức.
         </p>
       `,
@@ -243,6 +251,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       cancelButtonText: 'Hủy',
       confirmButtonColor: '#10b981',
       cancelButtonColor: '#6b7280',
+      ...getSwalThemeOptions(),
     })
 
     // User cancelled - return early without API calls
@@ -257,6 +266,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       allowOutsideClick: false,
       allowEscapeKey: false,
       showConfirmButton: false,
+      ...getSwalThemeOptions(),
       didOpen: () => {
         Swal.showLoading()
       },
@@ -290,6 +300,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         icon: 'success',
         confirmButtonText: 'OK',
         confirmButtonColor: '#10b981',
+        ...getSwalThemeOptions(),
       })
 
       // Step 7: Call onComplete() and onClose() after user clicks OK
@@ -344,11 +355,12 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         title: 'Lỗi!',
         html: `
           <p class="text-base mb-2">${errorMessage}</p>
-          ${errorDetails ? `<p class="text-sm text-gray-600">${errorDetails}</p>` : ''}
+          ${errorDetails ? `<p class="text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}">${errorDetails}</p>` : ''}
         `,
         icon: 'error',
         confirmButtonText: 'Đóng',
         confirmButtonColor: '#ef4444',
+        ...getSwalThemeOptions(),
       })
 
       // Log error for debugging
@@ -440,7 +452,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
 
             {/* Date Range Selection */}
-            <div className="bg-muted/30 rounded-lg p-4 border border-border">
+            <div className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h4 className="font-medium">Khoảng thời gian phân tích</h4>
@@ -556,6 +568,22 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           value={keywordInputs[`brand_${brand.id}`] ?? brand.keywords.join(', ')}
                           onChange={(e) => {
                             const value = e.target.value
+                            // Validate: only lowercase, no accents, no spaces, no special chars except comma
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              // Set error if invalid characters detected
+                              setErrors(prev => ({
+                                ...prev,
+                                [`brand_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                            } else {
+                              // Clear error if valid
+                              setErrors(prev => {
+                                const newErrors = { ...prev }
+                                delete newErrors[`brand_keywords_${index}`]
+                                return newErrors
+                              })
+                            }
                             // Store raw input without splitting
                             setKeywordInputs(prev => ({
                               ...prev,
@@ -564,6 +592,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           }}
                           onBlur={(e) => {
                             const value = e.target.value
+                            // Validate format before saving
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              setErrors(prev => ({
+                                ...prev,
+                                [`brand_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                              return
+                            }
                             // Split and save keywords on blur
                             const keywords = value.split(',').map(k => k.trim()).filter(k => k)
                             updateBrand(brand.id, 'keywords', keywords)
@@ -577,7 +614,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
                             errors[`brand_keywords_${index}`] ? 'border-red-500' : 'border-border'
                           }`}
-                          placeholder="highlands, highlands coffee, hc"
+                          placeholder="highlands,highlandscoffee,hc"
                         />
                         {errors[`brand_keywords_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
@@ -678,6 +715,22 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           value={keywordInputs[`competitor_${competitor.id}`] ?? competitor.keywords.join(', ')}
                           onChange={(e) => {
                             const value = e.target.value
+                            // Validate: only lowercase, no accents, no spaces, no special chars except comma
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              // Set error if invalid characters detected
+                              setErrors(prev => ({
+                                ...prev,
+                                [`competitor_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                            } else {
+                              // Clear error if valid
+                              setErrors(prev => {
+                                const newErrors = { ...prev }
+                                delete newErrors[`competitor_keywords_${index}`]
+                                return newErrors
+                              })
+                            }
                             // Store raw input without splitting
                             setKeywordInputs(prev => ({
                               ...prev,
@@ -686,6 +739,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           }}
                           onBlur={(e) => {
                             const value = e.target.value
+                            // Validate format before saving
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              setErrors(prev => ({
+                                ...prev,
+                                [`competitor_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                              return
+                            }
                             // Split and save keywords on blur
                             const keywords = value.split(',').map(k => k.trim()).filter(k => k)
                             updateBrand(competitor.id, 'keywords', keywords)
@@ -699,7 +761,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
                             errors[`competitor_keywords_${index}`] ? 'border-red-500' : 'border-border'
                           }`}
-                          placeholder="starbucks, sbux, starbucks vietnam"
+                          placeholder="starbucks,sbux,starbucksvietnam"
                         />
                         {errors[`competitor_keywords_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
@@ -864,7 +926,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           } max-h-[90vh] overflow-hidden`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border">
+          <div className="flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20">
             <div>
               <h2 className="text-xl font-semibold">Tạo Project Mới</h2>
               <p className="text-sm text-muted-foreground">
@@ -880,7 +942,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           </div>
 
           {}
-          <div className="px-6 py-4 border-b border-border">
+          <div className="px-6 py-4 border-b border-amber-300/60 dark:border-white/20">
             <div className="flex items-center gap-2">
               {steps.map((step, index) => (
                 <React.Fragment key={step.id}>
@@ -916,7 +978,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
           {/* Hide navigation for step 4 (preview) as it has its own navigation */}
           {currentStep !== 4 && (
-            <div className="flex items-center justify-between p-6 border-t border-border">
+            <div className="flex items-center justify-between p-6 border-t border-amber-300/60 dark:border-white/20">
               <button
                 onClick={handlePrevious}
                 disabled={currentStep === 1}
