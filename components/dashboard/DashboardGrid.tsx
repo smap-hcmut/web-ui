@@ -5,10 +5,14 @@ import TrendChart from './charts/TrendChart'
 import SentimentChart from './charts/SentimentChart'
 import CompetitorChart from './charts/CompetitorChart'
 import TopicCloud from './charts/TopicCloud'
+import CrisisRadar from './charts/CrisisRadar'
+import TopViralPosts from './charts/TopViralPosts'
+import SalesFunnel from './charts/SalesFunnel'
 import DataTable from './DataTable'
 import TopicDetailModal from './TopicDetailModal'
 import { useDashboard } from '../../contexts/DashboardContext'
 import { useTranslation } from 'next-i18next'
+import { Users, MessageCircle, ShoppingCart, DollarSign } from 'lucide-react'
 
 export default function DashboardGrid() {
   const { filteredData, isLoading, state, setSelectedTopic } = useDashboard()
@@ -45,6 +49,37 @@ export default function DashboardGrid() {
     const currentLang = i18n.language || 'vi'
     return tooltips[key as keyof typeof tooltips]?.[currentLang as keyof typeof tooltips[keyof typeof tooltips]] || tooltips[key as keyof typeof tooltips]?.vi
   }
+
+  // Hardcoded data for new charts
+  const hardcodedCrisisData = [
+    { id: 'c1', timestamp: new Date('2024-01-01').getTime(), date: '2024-01-01 10:30', impact_score: 85, risk: 'CRITICAL' as const, title: 'Negative review went viral', platform: 'Facebook', mentions: 1200 },
+    { id: 'c2', timestamp: new Date('2024-01-02').getTime(), date: '2024-01-02 14:20', impact_score: 72, risk: 'HIGH' as const, title: 'Product complaint trending', platform: 'TikTok', mentions: 980 },
+    { id: 'c3', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 09:15', impact_score: 45, risk: 'MEDIUM' as const, title: 'Service delay discussion', platform: 'Facebook', mentions: 450 },
+    { id: 'c4', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 16:45', impact_score: 91, risk: 'CRITICAL' as const, title: 'PR crisis escalating', platform: 'YouTube', mentions: 2100 },
+    { id: 'c5', timestamp: new Date('2024-01-04').getTime(), date: '2024-01-04 11:00', impact_score: 58, risk: 'HIGH' as const, title: 'Customer complaint spike', platform: 'Instagram', mentions: 680 },
+    { id: 'c6', timestamp: new Date('2024-01-05').getTime(), date: '2024-01-05 08:30', impact_score: 32, risk: 'LOW' as const, title: 'Minor feedback issue', platform: 'Facebook', mentions: 220 },
+    { id: 'c7', timestamp: new Date('2024-01-06').getTime(), date: '2024-01-06 13:20', impact_score: 65, risk: 'HIGH' as const, title: 'Competitor attack post', platform: 'TikTok', mentions: 850 },
+    { id: 'c8', timestamp: new Date('2024-01-07').getTime(), date: '2024-01-07 10:10', impact_score: 28, risk: 'LOW' as const, title: 'General inquiry thread', platform: 'YouTube', mentions: 180 },
+  ]
+
+  const hardcodedViralPosts = [
+    { id: 1, title: 'New Coffee Blend Launch', platform: 'Facebook', engagement: 1250, reach: 15000, impact_score: 85, risk: 'HIGH' as const, virality_index: 78, timestamp: '2024-01-01 10:30' },
+    { id: 2, title: 'Customer Complaint Goes Viral', platform: 'TikTok', engagement: 3200, reach: 45000, impact_score: 92, risk: 'CRITICAL' as const, virality_index: 88, timestamp: '2024-01-02 14:20' },
+    { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000, impact_score: 72, risk: 'MEDIUM' as const, virality_index: 65, timestamp: '2024-01-03 09:15' },
+    { id: 4, title: 'Product Quality Issues Thread', platform: 'Facebook', engagement: 1890, reach: 22000, impact_score: 88, risk: 'CRITICAL' as const, virality_index: 82, timestamp: '2024-01-03 16:45' },
+    { id: 5, title: 'Customer Story Feature', platform: 'Instagram', engagement: 980, reach: 12000, impact_score: 58, risk: 'LOW' as const, virality_index: 45, timestamp: '2024-01-04 11:00' },
+    { id: 6, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000, impact_score: 42, risk: 'LOW' as const, virality_index: 38, timestamp: '2024-01-05 08:30' },
+    { id: 7, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000, impact_score: 35, risk: 'LOW' as const, virality_index: 32, timestamp: '2024-01-06 13:20' },
+    { id: 8, title: 'Influencer Partnership Announcement', platform: 'YouTube', engagement: 2850, reach: 38000, impact_score: 79, risk: 'MEDIUM' as const, virality_index: 71, timestamp: '2024-01-07 10:10' },
+  ]
+
+  const hardcodedSalesFunnel = [
+    { stage: 'Awareness', count: 50000, percentage: 100, change: 12.5, color: '#3b82f6', icon: Users },
+    { stage: 'Interest', count: 25000, percentage: 50, change: 8.3, color: '#8b5cf6', icon: MessageCircle },
+    { stage: 'Consideration', count: 12500, percentage: 25, change: -2.1, color: '#f59e0b', icon: ShoppingCart },
+    { stage: 'Intent (LEAD)', count: 5000, percentage: 10, change: 5.7, color: '#10b981', icon: DollarSign },
+    { stage: 'Purchase', count: 2500, percentage: 5, change: 3.2, color: '#ef4444', icon: DollarSign },
+  ]
 
   const data = filteredData || {
     metrics: {
@@ -156,6 +191,33 @@ export default function DashboardGrid() {
       { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000 },
       { id: 4, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000 },
       { id: 5, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000 },
+    ],
+    crisisData: [
+      { id: 'c1', timestamp: new Date('2024-01-01').getTime(), date: '2024-01-01 10:30', impact_score: 85, risk: 'CRITICAL' as const, title: 'Negative review went viral', platform: 'Facebook', mentions: 1200 },
+      { id: 'c2', timestamp: new Date('2024-01-02').getTime(), date: '2024-01-02 14:20', impact_score: 72, risk: 'HIGH' as const, title: 'Product complaint trending', platform: 'TikTok', mentions: 980 },
+      { id: 'c3', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 09:15', impact_score: 45, risk: 'MEDIUM' as const, title: 'Service delay discussion', platform: 'Facebook', mentions: 450 },
+      { id: 'c4', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 16:45', impact_score: 91, risk: 'CRITICAL' as const, title: 'PR crisis escalating', platform: 'YouTube', mentions: 2100 },
+      { id: 'c5', timestamp: new Date('2024-01-04').getTime(), date: '2024-01-04 11:00', impact_score: 58, risk: 'HIGH' as const, title: 'Customer complaint spike', platform: 'Instagram', mentions: 680 },
+      { id: 'c6', timestamp: new Date('2024-01-05').getTime(), date: '2024-01-05 08:30', impact_score: 32, risk: 'LOW' as const, title: 'Minor feedback issue', platform: 'Facebook', mentions: 220 },
+      { id: 'c7', timestamp: new Date('2024-01-06').getTime(), date: '2024-01-06 13:20', impact_score: 65, risk: 'HIGH' as const, title: 'Competitor attack post', platform: 'TikTok', mentions: 850 },
+      { id: 'c8', timestamp: new Date('2024-01-07').getTime(), date: '2024-01-07 10:10', impact_score: 28, risk: 'LOW' as const, title: 'General inquiry thread', platform: 'YouTube', mentions: 180 },
+    ],
+    viralPosts: [
+      { id: 1, title: 'New Coffee Blend Launch', platform: 'Facebook', engagement: 1250, reach: 15000, impact_score: 85, risk: 'HIGH' as const, virality_index: 78, timestamp: '2024-01-01 10:30' },
+      { id: 2, title: 'Customer Complaint Goes Viral', platform: 'TikTok', engagement: 3200, reach: 45000, impact_score: 92, risk: 'CRITICAL' as const, virality_index: 88, timestamp: '2024-01-02 14:20' },
+      { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000, impact_score: 72, risk: 'MEDIUM' as const, virality_index: 65, timestamp: '2024-01-03 09:15' },
+      { id: 4, title: 'Product Quality Issues Thread', platform: 'Facebook', engagement: 1890, reach: 22000, impact_score: 88, risk: 'CRITICAL' as const, virality_index: 82, timestamp: '2024-01-03 16:45' },
+      { id: 5, title: 'Customer Story Feature', platform: 'Instagram', engagement: 980, reach: 12000, impact_score: 58, risk: 'LOW' as const, virality_index: 45, timestamp: '2024-01-04 11:00' },
+      { id: 6, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000, impact_score: 42, risk: 'LOW' as const, virality_index: 38, timestamp: '2024-01-05 08:30' },
+      { id: 7, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000, impact_score: 35, risk: 'LOW' as const, virality_index: 32, timestamp: '2024-01-06 13:20' },
+      { id: 8, title: 'Influencer Partnership Announcement', platform: 'YouTube', engagement: 2850, reach: 38000, impact_score: 79, risk: 'MEDIUM' as const, virality_index: 71, timestamp: '2024-01-07 10:10' },
+    ],
+    salesFunnel: [
+      { stage: 'Awareness', count: 50000, percentage: 100, change: 12.5, color: '#3b82f6', icon: Users },
+      { stage: 'Interest', count: 25000, percentage: 50, change: 8.3, color: '#8b5cf6', icon: MessageCircle },
+      { stage: 'Consideration', count: 12500, percentage: 25, change: -2.1, color: '#f59e0b', icon: ShoppingCart },
+      { stage: 'Intent (LEAD)', count: 5000, percentage: 10, change: 5.7, color: '#10b981', icon: DollarSign },
+      { stage: 'Purchase', count: 2500, percentage: 5, change: 3.2, color: '#ef4444', icon: DollarSign },
     ]
   }
 
@@ -270,12 +332,26 @@ export default function DashboardGrid() {
         </motion.div>
       </div>
 
+      {/* Crisis Radar - Full Width */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6, duration: 0.6 }}
+      >
+        <CrisisRadar
+          title="Crisis Radar"
+          data={data.crisisData}
+          animation="fade-in"
+          interaction="hover-only"
+        />
+      </motion.div>
+
       {}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.6 }}
+          transition={{ delay: 0.7, duration: 0.6 }}
         >
           {data.competitors && data.competitors.length > 0 ? (
             <CompetitorChart
@@ -299,7 +375,7 @@ export default function DashboardGrid() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.6 }}
+          transition={{ delay: 0.8, duration: 0.6 }}
         >
           <TopicCloud
             title="Trending Topics"
@@ -311,15 +387,29 @@ export default function DashboardGrid() {
         </motion.div>
       </div>
 
+      {/* Sales Funnel - Full Width */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.6 }}
+      >
+        <SalesFunnel
+          title="Sales Funnel (INTENT Tracking)"
+          data={data.salesFunnel}
+          animation="bar-grow"
+          interaction="hover-details"
+        />
+      </motion.div>
+
       {}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8, duration: 0.6 }}
+        transition={{ delay: 1.0, duration: 0.6 }}
       >
-        <DataTable
-          title="Top Performing Content"
-          data={data.content}
+        <TopViralPosts
+          title="Top Viral Posts (by Impact Score)"
+          data={data.viralPosts}
           animation="row-reveal"
           interaction="sort-filter"
         />

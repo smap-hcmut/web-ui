@@ -3,21 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
-  Users,
-  AlertTriangle,
-  Bookmark,
-  BarChart3,
-  PieChart,
-  Activity,
-  Zap
+  AlertTriangle
 } from 'lucide-react'
 import { useDashboard } from '@/contexts/DashboardContext'
 
 export default function DashboardSidebar() {
   const { state, toggleSidebar } = useDashboard()
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['quick-actions', 'data-sources'])
+    new Set(['data-sources'])
   )
 
   const toggleSection = (section: string) => {
@@ -32,30 +25,16 @@ export default function DashboardSidebar() {
     })
   }
 
-  const quickActions = [
-    { id: 'trends', label: 'Trend Analysis', icon: TrendingUp, color: 'text-blue-500' },
-    { id: 'audience', label: 'Audience Insights', icon: Users, color: 'text-green-500' },
-    { id: 'competitors', label: 'Competitor Analysis', icon: BarChart3, color: 'text-purple-500' },
-    { id: 'sentiment', label: 'Sentiment Analysis', icon: PieChart, color: 'text-orange-500' },
-  ]
-
   const dataSources = [
     { id: 'facebook', name: 'Facebook', status: 'connected', color: 'bg-blue-500' },
     { id: 'tiktok', name: 'TikTok', status: 'connected', color: 'bg-black' },
     { id: 'youtube', name: 'YouTube', status: 'connected', color: 'bg-red-500' },
-    { id: 'instagram', name: 'Instagram', status: 'disconnected', color: 'bg-pink-500' },
   ]
 
   const recentAlerts = [
     { id: 1, type: 'negative', message: 'Sentiment drop detected', time: '2m ago' },
     { id: 2, type: 'trending', message: 'New trending topic', time: '5m ago' },
     { id: 3, type: 'competitor', message: 'Competitor activity spike', time: '10m ago' },
-  ]
-
-  const savedViews = [
-    { id: 1, name: 'Daily Overview', type: 'dashboard' },
-    { id: 2, name: 'Weekly Report', type: 'report' },
-    { id: 3, name: 'Competitor Watch', type: 'dashboard' },
   ]
 
   return (
@@ -82,21 +61,6 @@ export default function DashboardSidebar() {
               >
                 <ChevronRight className="h-4 w-4" />
               </motion.button>
-
-            {quickActions.map((action, index) => (
-              <motion.button
-                key={action.id}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="p-2 rounded-md hover:bg-accent transition-colors"
-                title={action.label}
-              >
-                <action.icon className={`h-5 w-5 ${action.color}`} />
-              </motion.button>
-            ))}
           </motion.div>
         ) : (
           <motion.div
@@ -121,50 +85,6 @@ export default function DashboardSidebar() {
 
             {}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
-              {}
-              <div>
-                <motion.button
-                  onClick={() => toggleSection('quick-actions')}
-                  className="flex items-center justify-between w-full p-2 rounded-md hover:bg-accent/50 transition-colors group"
-                >
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Quick Actions
-                  </span>
-                  <motion.div
-                    animate={{ rotate: expandedSections.has('quick-actions') ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                  </motion.div>
-                </motion.button>
-
-                <AnimatePresence>
-                  {expandedSections.has('quick-actions') && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="mt-2 space-y-2"
-                    >
-                      {quickActions.map((action, index) => (
-                        <motion.button
-                          key={action.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          whileHover={{ x: 4 }}
-                          className="flex items-center gap-3 w-full p-2 rounded-md hover:bg-accent transition-colors text-left"
-                        >
-                          <action.icon className={`h-4 w-4 ${action.color}`} />
-                          <span className="text-sm">{action.label}</span>
-                        </motion.button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
               {}
               <div>
                 <motion.button
@@ -236,31 +156,6 @@ export default function DashboardSidebar() {
                 </div>
               </div>
 
-              {}
-              <div>
-                <div className="flex items-center gap-2 p-2">
-                  <Bookmark className="h-4 w-4 text-blue-500" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Saved Views
-                  </span>
-                </div>
-
-                <div className="mt-2 space-y-2">
-                  {savedViews.map((view, index) => (
-                    <motion.button
-                      key={view.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      whileHover={{ x: 4 }}
-                      className="flex items-center gap-2 w-full p-2 rounded-md hover:bg-accent transition-colors text-left"
-                    >
-                      <Activity className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-sm">{view.name}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
             </div>
           </motion.div>
         )}
