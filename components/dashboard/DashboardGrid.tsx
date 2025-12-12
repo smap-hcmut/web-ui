@@ -340,7 +340,7 @@ export default function DashboardGrid() {
       >
         <CrisisRadar
           title="Crisis Radar"
-          data={data.crisisData}
+          data={hardcodedCrisisData}
           animation="fade-in"
           interaction="hover-only"
         />
@@ -395,7 +395,7 @@ export default function DashboardGrid() {
       >
         <SalesFunnel
           title="Sales Funnel (INTENT Tracking)"
-          data={data.salesFunnel}
+          data={hardcodedSalesFunnel}
           animation="bar-grow"
           interaction="hover-details"
         />
@@ -409,7 +409,7 @@ export default function DashboardGrid() {
       >
         <TopViralPosts
           title="Top Viral Posts (by Impact Score)"
-          data={data.viralPosts}
+          data={hardcodedViralPosts}
           animation="row-reveal"
           interaction="sort-filter"
         />
