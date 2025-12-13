@@ -132,6 +132,8 @@ pnpm-lock.yaml
 
 # Claude Code
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # JetBrains IDEs
 .idea/
@@ -179,7 +181,7 @@ $RECYCLE.BIN/
 
 # Gatsby
 .cache/
-public/
+# public/
 
 # vuepress
 .vuepress/dist/
@@ -197,6 +199,12 @@ public/
 .replit
 .replit.md
 replit.md
+
+# Kiro
+.kiro/
+
+# OpenSpec
+openspec/
 
 # ============================================
 # Project Specific

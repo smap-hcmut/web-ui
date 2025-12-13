@@ -1,19 +1,23 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Swal from 'sweetalert2'
+import { useTheme } from 'next-themes'
 import {
   ArrowLeft,
   ArrowRight,
   Plus,
   X,
-  Upload,
   Check,
   AlertCircle,
   Target,
   Users,
-  BarChart3,
   Sparkles,
   Calendar
 } from 'lucide-react'
+import { projectService } from '@/lib/api/services/project.service'
+import ProjectPreviewStep from './ProjectPreviewStep'
+import { DryRunOuterPayload } from '@/lib/types/dryrun'
+import { dashboardWebSocket } from '@/services/websocketService'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -42,14 +46,22 @@ const steps = [
   { id: 1, title: 'Thông tin cơ bản', description: 'Đặt tên và mô tả project' },
   { id: 2, title: 'Thương hiệu của bạn', description: 'Thêm thương hiệu cần theo dõi' },
   { id: 3, title: 'Đối thủ cạnh tranh', description: 'Thêm các đối thủ để so sánh' },
-  { id: 4, title: 'Xác nhận', description: 'Kiểm tra và tạo project' }
+  { id: 4, title: 'Xem trước dữ liệu', description: 'Kiểm tra mẫu dữ liệu thu thập được' },
+  { id: 5, title: 'Xác nhận', description: 'Kiểm tra và tạo project' }
 ]
 
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
+  const { theme } = useTheme()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
+
+  // Helper function to get theme-aware Swal options
+  const getSwalThemeOptions = () => ({
+    background: theme === 'dark' ? '#1f2937' : '#ffffff',
+    color: theme === 'dark' ? '#ffffff' : '#000000',
+  })
 
   const [projectData, setProjectData] = useState<ProjectData>({
     name: '',
@@ -64,6 +76,35 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
   // Store raw keyword input to preserve commas while typing
   const [keywordInputs, setKeywordInputs] = useState<Record<string, string>>({})
+
+  // Dry-run preview state
+  const [dryRunData, setDryRunData] = useState<DryRunOuterPayload | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
+
+  // WebSocket listener for dry-run results
+  useEffect(() => {
+    const handleDryRunResult = (data: any) => {
+      // Data is already the payload from WebSocket
+      const payload = data as DryRunOuterPayload
+
+      // Only process if it's for our current job
+      if (dryRunJobId && payload.job_id === dryRunJobId) {
+        console.log('Received dry-run result:', payload)
+        setDryRunData(payload)
+        setIsLoadingPreview(false)
+        setPreviewError(null)
+      }
+    }
+
+    // Subscribe to WebSocket message event
+    dashboardWebSocket.on('dryrun_result', handleDryRunResult)
+
+    return () => {
+      dashboardWebSocket.off('dryrun_result', handleDryRunResult)
+    }
+  }, [dryRunJobId])
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -126,8 +167,10 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     return Object.keys(newErrors).length === 0
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (validateStep(currentStep)) {
+      // No longer auto-trigger dry-run when moving from step 3 to 4
+      // User will trigger it manually via button in preview step
       setCurrentStep(prev => Math.min(prev + 1, steps.length))
     }
   }
@@ -136,16 +179,192 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     setCurrentStep(prev => Math.max(prev - 1, 1))
   }
 
+  const triggerDryRun = async () => {
+    setIsLoadingPreview(true)
+    setPreviewError(null)
+    setDryRunData(null)
+
+    try {
+      // Collect all keywords from brands and competitors
+      const keywords = [
+        ...projectData.brands.flatMap(b => b.keywords),
+        ...projectData.competitors.flatMap(c => c.keywords)
+      ]
+
+      console.log('Triggering dry-run with keywords:', keywords)
+
+      // Call dry-run API
+      const response = await projectService.createDryRun(keywords)
+      setDryRunJobId(response.job_id)
+
+      console.log('Dry-run job created:', response.job_id)
+
+      // Wait for WebSocket message (handled by useEffect)
+      // Set timeout for 30 seconds
+      setTimeout(() => {
+        if (!dryRunData) {
+          setIsLoadingPreview(false)
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 30 giây')
+        }
+      }, 30000)
+
+    } catch (error: any) {
+      console.error('Dry-run trigger error:', error)
+
+      // Format error message
+      let errorMessage = 'Không thể khởi chạy preview'
+      if (error.message) {
+        errorMessage = error.message
+      }
+      if (error.error_code) {
+        errorMessage = `[Error ${error.error_code}] ${error.message || 'Something went wrong'}`
+      }
+
+      setPreviewError(errorMessage)
+      setIsLoadingPreview(false)
+    }
+  }
+
+  const handleRetryPreview = () => {
+    triggerDryRun()
+  }
+
+  const handleTriggerRealPreview = () => {
+    triggerDryRun()
+  }
+
   const handleComplete = async () => {
     if (!validateStep(currentStep)) return
 
+    // Step 1: Show confirmation modal
+    const result = await Swal.fire({
+      title: 'Xác nhận tạo project',
+      html: `
+        <p>Bạn có chắc chắn muốn tạo project <strong>${projectData.name}</strong>?</p>
+        <p class="text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mt-2">
+          Project sẽ được tạo và khởi chạy ngay lập tức.
+        </p>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#6b7280',
+      ...getSwalThemeOptions(),
+    })
+
+    // User cancelled - return early without API calls
+    if (!result.isConfirmed) {
+      return
+    }
+
+    // Step 2: Show loading modal after user confirms
+    Swal.fire({
+      title: 'Đang tạo project...',
+      html: 'Vui lòng đợi trong giây lát',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      ...getSwalThemeOptions(),
+      didOpen: () => {
+        Swal.showLoading()
+      },
+    })
+
     setIsLoading(true)
     try {
-      // Pass data as-is, the API service will handle date formatting
+      // Step 3: Call createProject API with project data
+      const createdProject = await projectService.createProject({
+        name: projectData.name,
+        description: projectData.description,
+        brands: projectData.brands,
+        competitors: projectData.competitors,
+        fromDate: projectData.fromDate,
+        toDate: projectData.toDate,
+      })
+
+      // Step 4: Extract project ID from response
+      if (!createdProject.id) {
+        throw new Error('Project ID not returned from API')
+      }
+
+      // Step 5: Call executeProject API with extracted ID
+      // Execute only runs if create succeeds
+      await projectService.executeProject(createdProject.id)
+
+      // Step 6: Show success modal after both APIs succeed
+      await Swal.fire({
+        title: 'Thành công!',
+        html: 'Project đã được tạo và khởi chạy thành công',
+        icon: 'success',
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#10b981',
+        ...getSwalThemeOptions(),
+      })
+
+      // Step 7: Call onComplete() and onClose() after user clicks OK
       onComplete(projectData)
       onClose()
-    } catch (error) {
-      console.error('Error creating project:', error)
+    } catch (error: any) {
+      // Extract error message from API response or use fallback
+      let errorMessage = 'Có lỗi xảy ra khi tạo project'
+      let errorDetails = ''
+
+      // Handle different error types
+      if (error.message) {
+        // Network errors or custom errors
+        if (error.message.includes('Network error')) {
+          errorMessage = 'Lỗi kết nối mạng'
+          errorDetails = 'Vui lòng kiểm tra kết nối internet của bạn và thử lại.'
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Yêu cầu hết thời gian chờ'
+          errorDetails = 'Máy chủ không phản hồi. Vui lòng thử lại sau.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+
+      // Handle API response errors with status codes
+      if (error.status) {
+        if (error.status >= 400 && error.status < 500) {
+          // Client errors (validation, bad request, etc.)
+          errorMessage = error.message || 'Dữ liệu không hợp lệ'
+          if (error.status === 400) {
+            errorDetails = 'Vui lòng kiểm tra lại thông tin và thử lại.'
+          } else if (error.status === 401) {
+            errorMessage = 'Phiên đăng nhập đã hết hạn'
+            errorDetails = 'Vui lòng đăng nhập lại.'
+          } else if (error.status === 403) {
+            errorMessage = 'Bạn không có quyền thực hiện thao tác này'
+          } else if (error.status === 404) {
+            errorMessage = 'Không tìm thấy tài nguyên'
+          } else if (error.status === 409) {
+            errorMessage = 'Project đã tồn tại'
+            errorDetails = 'Vui lòng sử dụng tên khác.'
+          }
+        } else if (error.status >= 500) {
+          // Server errors
+          errorMessage = 'Lỗi máy chủ'
+          errorDetails = 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.'
+        }
+      }
+
+      // Show error modal with appropriate message
+      await Swal.fire({
+        title: 'Lỗi!',
+        html: `
+          <p class="text-base mb-2">${errorMessage}</p>
+          ${errorDetails ? `<p class="text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}">${errorDetails}</p>` : ''}
+        `,
+        icon: 'error',
+        confirmButtonText: 'Đóng',
+        confirmButtonColor: '#ef4444',
+        ...getSwalThemeOptions(),
+      })
+
+      // Log error for debugging
+      console.error('Error creating/executing project:', error)
     } finally {
       setIsLoading(false)
     }
@@ -233,7 +452,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
 
             {/* Date Range Selection */}
-            <div className="bg-muted/30 rounded-lg p-4 border border-border">
+            <div className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h4 className="font-medium">Khoảng thời gian phân tích</h4>
@@ -349,6 +568,22 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           value={keywordInputs[`brand_${brand.id}`] ?? brand.keywords.join(', ')}
                           onChange={(e) => {
                             const value = e.target.value
+                            // Validate: only lowercase, no accents, no spaces, no special chars except comma
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              // Set error if invalid characters detected
+                              setErrors(prev => ({
+                                ...prev,
+                                [`brand_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                            } else {
+                              // Clear error if valid
+                              setErrors(prev => {
+                                const newErrors = { ...prev }
+                                delete newErrors[`brand_keywords_${index}`]
+                                return newErrors
+                              })
+                            }
                             // Store raw input without splitting
                             setKeywordInputs(prev => ({
                               ...prev,
@@ -357,6 +592,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           }}
                           onBlur={(e) => {
                             const value = e.target.value
+                            // Validate format before saving
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              setErrors(prev => ({
+                                ...prev,
+                                [`brand_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                              return
+                            }
                             // Split and save keywords on blur
                             const keywords = value.split(',').map(k => k.trim()).filter(k => k)
                             updateBrand(brand.id, 'keywords', keywords)
@@ -370,7 +614,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
                             errors[`brand_keywords_${index}`] ? 'border-red-500' : 'border-border'
                           }`}
-                          placeholder="highlands, highlands coffee, hc"
+                          placeholder="highlands,highlandscoffee,hc"
                         />
                         {errors[`brand_keywords_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
@@ -471,6 +715,22 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           value={keywordInputs[`competitor_${competitor.id}`] ?? competitor.keywords.join(', ')}
                           onChange={(e) => {
                             const value = e.target.value
+                            // Validate: only lowercase, no accents, no spaces, no special chars except comma
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              // Set error if invalid characters detected
+                              setErrors(prev => ({
+                                ...prev,
+                                [`competitor_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                            } else {
+                              // Clear error if valid
+                              setErrors(prev => {
+                                const newErrors = { ...prev }
+                                delete newErrors[`competitor_keywords_${index}`]
+                                return newErrors
+                              })
+                            }
                             // Store raw input without splitting
                             setKeywordInputs(prev => ({
                               ...prev,
@@ -479,6 +739,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           }}
                           onBlur={(e) => {
                             const value = e.target.value
+                            // Validate format before saving
+                            const isValid = /^[a-z0-9,]*$/.test(value)
+                            if (!isValid && value !== '') {
+                              setErrors(prev => ({
+                                ...prev,
+                                [`competitor_keywords_${index}`]: 'Chỉ được phép nhập chữ thường không dấu, số và dấu phẩy'
+                              }))
+                              return
+                            }
                             // Split and save keywords on blur
                             const keywords = value.split(',').map(k => k.trim()).filter(k => k)
                             updateBrand(competitor.id, 'keywords', keywords)
@@ -492,7 +761,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                           className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
                             errors[`competitor_keywords_${index}`] ? 'border-red-500' : 'border-border'
                           }`}
-                          placeholder="starbucks, sbux, starbucks vietnam"
+                          placeholder="starbucks,sbux,starbucksvietnam"
                         />
                         {errors[`competitor_keywords_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
@@ -529,6 +798,20 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         )
 
       case 4:
+        return (
+          <ProjectPreviewStep
+            projectData={projectData}
+            dryRunData={dryRunData}
+            isLoading={isLoadingPreview}
+            error={previewError}
+            onBack={handlePrevious}
+            onNext={handleNext}
+            onRetry={handleRetryPreview}
+            onTriggerRealPreview={handleTriggerRealPreview}
+          />
+        )
+
+      case 5:
         return (
           <div className="space-y-6">
             <div className="text-center mb-6">
@@ -638,10 +921,12 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
+          className={`bg-background rounded-lg shadow-xl w-full ${
+            currentStep === 4 ? 'max-w-6xl' : 'max-w-2xl'
+          } max-h-[90vh] overflow-hidden`}
         >
-          {}
-          <div className="flex items-center justify-between p-6 border-b border-border">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20">
             <div>
               <h2 className="text-xl font-semibold">Tạo Project Mới</h2>
               <p className="text-sm text-muted-foreground">
@@ -657,7 +942,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           </div>
 
           {}
-          <div className="px-6 py-4 border-b border-border">
+          <div className="px-6 py-4 border-b border-amber-300/60 dark:border-white/20">
             <div className="flex items-center gap-2">
               {steps.map((step, index) => (
                 <React.Fragment key={step.id}>
@@ -686,37 +971,38 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
           </div>
 
-          {}
+          {/* Step Content */}
           <div className="p-6 max-h-96 overflow-y-auto">
             {renderStepContent()}
           </div>
 
-          {}
-          <div className="flex items-center justify-between p-6 border-t border-border">
-            <button
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Quay lại
-            </button>
+          {/* Hide navigation for step 4 (preview) as it has its own navigation */}
+          {currentStep !== 4 && (
+            <div className="flex items-center justify-between p-6 border-t border-amber-300/60 dark:border-white/20">
+              <button
+                onClick={handlePrevious}
+                disabled={currentStep === 1}
+                className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Quay lại
+              </button>
 
-            <div className="flex items-center gap-3">
-              {currentStep < steps.length ? (
-                <button
-                  onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  Tiếp theo
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={handleComplete}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
+              <div className="flex items-center gap-3">
+                {currentStep < steps.length ? (
+                  <button
+                    onClick={handleNext}
+                    className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Tiếp theo
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleComplete}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
                   {isLoading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -729,9 +1015,10 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     </>
                   )}
                 </button>
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

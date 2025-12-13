@@ -2,9 +2,11 @@ import { useTranslation } from 'next-i18next'
 import { motion } from 'framer-motion'
 import { TrendingUp, ArrowRight, Sparkles } from 'lucide-react'
 import Image from 'next/image'
+import { useRouter } from 'next/router'
 
 export default function HeroSection() {
   const { t } = useTranslation('common')
+  const router = useRouter()
 
   return (
     <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
@@ -58,7 +60,10 @@ export default function HeroSection() {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
-              <button className="group px-8 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold text-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg flex items-center justify-center gap-2">
+              <button
+                onClick={() => router.push('/projects')}
+                className="group px-8 py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold text-lg hover:bg-gray-800 dark:hover:bg-gray-100 transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
+              >
                 {t('landing.hero.cta')}
                 <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </button>

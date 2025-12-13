@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react'
 import { useRealTimeData, RealTimeData } from '@/hooks/useRealTimeData'
+import { useProjectWebSocket } from '@/hooks/useProjectWebSocket'
 
 export interface Project {
   id: string
@@ -8,7 +9,7 @@ export interface Project {
   brands: Brand[]
   competitors: Brand[]
   createdAt: Date
-  status: 'active' | 'inactive' | 'processing'
+  status: 'completed' | 'draft' | 'process'
 }
 
 export interface Brand {
@@ -73,7 +74,7 @@ const mockProjects: Project[] = [
       { id: 'comp_2', name: 'Competitor B', type: 'competitor', keywords: ['innovation', 'tech'], urls: ['https://competitor-b.com'] }
     ],
     createdAt: new Date('2024-01-15'),
-    status: 'active'
+    status: 'completed'
   },
   {
     id: 'project_2',
@@ -87,7 +88,7 @@ const mockProjects: Project[] = [
       { id: 'comp_4', name: 'Online Market', type: 'competitor', keywords: ['shopping', 'online'], urls: ['https://onlinemarket.com'] }
     ],
     createdAt: new Date('2024-02-01'),
-    status: 'active'
+    status: 'completed'
   }
 ]
 
@@ -223,6 +224,24 @@ interface DashboardProviderProps {
 
 export function DashboardProvider({ children }: DashboardProviderProps) {
   const [state, dispatch] = useReducer(dashboardReducer, initialState)
+
+  // Project-specific WebSocket connection (only when ?project={id} exists)
+  const { isConnected: wsConnected, error: wsError } = useProjectWebSocket({
+    onMessage: (message) => {
+      console.log('[Dashboard] Received WebSocket message:', message)
+      // Handle project-specific WebSocket messages here
+      // You can dispatch actions based on message type
+    },
+    onConnect: () => {
+      console.log('[Dashboard] WebSocket connected to project')
+    },
+    onDisconnect: () => {
+      console.log('[Dashboard] WebSocket disconnected from project')
+    },
+    onError: (error) => {
+      console.error('[Dashboard] WebSocket error:', error)
+    }
+  })
 
   const {
     data: realTimeData,

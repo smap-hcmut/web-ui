@@ -93,7 +93,21 @@ Copy `.env.example` to `.env` and configure:
 NODE_ENV=development
 PORT=5000
 HOSTNAME=0.0.0.0
+
+# API Configuration
+NEXT_PUBLIC_HOSTNAME=https://smap-api.tantai.dev
+
+# WebSocket Configuration
+NEXT_PUBLIC_WS_URL=wss://smap-api.tantai.dev/ws
 ```
+
+### Key Environment Variables
+
+- `NEXT_PUBLIC_HOSTNAME` - Base URL for API endpoints
+- `NEXT_PUBLIC_WS_URL` - WebSocket URL for real-time project status updates
+  - Production: `wss://smap-api.tantai.dev/ws`
+  - Development: `ws://localhost:8080/ws`
+- `PORT` - Port for the Next.js development server (default: 5000)
 
 ## Documentation
 

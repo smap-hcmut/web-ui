@@ -57,7 +57,7 @@ const mockProjects: Project[] = [
       },
     ],
     createdAt: new Date('2024-01-15'),
-    status: 'active',
+    status: 'completed',
   },
   {
     id: '2',
@@ -96,7 +96,7 @@ const mockProjects: Project[] = [
       },
     ],
     createdAt: new Date('2024-02-20'),
-    status: 'active',
+    status: 'completed',
   },
   {
     id: '3',
@@ -128,7 +128,7 @@ const mockProjects: Project[] = [
       },
     ],
     createdAt: new Date('2024-03-10'),
-    status: 'processing',
+    status: 'process',
   },
 ]
 
@@ -149,7 +149,7 @@ const ProjectsContent: React.FC = () => {
   // Pagination and filters state
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'inactive'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'process' | 'draft'>('all')
   const [totalProjects, setTotalProjects] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
@@ -172,7 +172,7 @@ const ProjectsContent: React.FC = () => {
       try {
         const result = await projectService.getProjects({
           search_name: searchQuery || undefined,
-          statuses: statusFilter !== 'all' ? [statusFilter] : undefined,
+          statuses: statusFilter !== 'all' ? [statusFilter as any] : ['completed', 'process', 'draft'],
           page: currentPage,
           limit: pageSize
         })
@@ -211,7 +211,7 @@ const ProjectsContent: React.FC = () => {
         competitors: projectData.competitors,
         fromDate: projectData.fromDate,
         toDate: projectData.toDate,
-        status: 'active',
+        status: 'active', // API expects 'active', not 'completed'
       })
 
       // Add to context and local state
@@ -296,19 +296,62 @@ const ProjectsContent: React.FC = () => {
   }
 
   const handleViewProject = (id: string) => {
-    // Set project in context before navigating
-    setProject(id)
-    // Navigate to dashboard with project ID
-    router.push(`/dashboard?project=${id}`)
+    const project = projects.find(p => p.id === id)
+    
+    if (!project) {
+      Swal.fire({
+        title: t('projects.error.notFound'),
+        text: t('projects.error.notFoundText'),
+        icon: 'error',
+        confirmButtonColor: '#dc2626',
+        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
+      })
+      return
+    }
+    
+    // Handle based on status
+    switch (project.status) {
+      case 'completed':
+        setProject(id)
+        router.push(`/projects/${id}/dashboard`)
+        break
+
+      case 'draft':
+        Swal.fire({
+          title: t('projects.draft.title'),
+          text: t('projects.draft.message'),
+          icon: 'warning',
+          confirmButtonColor: '#6b7280',
+          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
+        })
+        break
+
+      case 'process':
+        setProject(id)
+        router.push(`/projects/${id}/dashboard`)
+        break
+
+      default:
+        Swal.fire({
+          title: t('projects.error.invalidStatus'),
+          text: t('projects.error.invalidStatusText'),
+          icon: 'error',
+          confirmButtonColor: '#dc2626',
+          background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
+          color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
+        })
+    }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
+      case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-      case 'inactive':
+      case 'draft':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300'
-      case 'processing':
+      case 'process':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800/40 dark:text-gray-300'
@@ -406,9 +449,9 @@ const ProjectsContent: React.FC = () => {
                   className="px-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
                 >
                   <option value="all">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="paused">Paused</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="completed">Completed</option>
+                  <option value="process">Processing</option>
+                  <option value="draft">Draft</option>
                 </select>
               </div>
             </div>
@@ -509,49 +552,86 @@ const ProjectsContent: React.FC = () => {
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
               <AnimatePresence>
-                {filteredProjects.map((project, index) => (
-                  <motion.div
-                    key={project.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    whileHover={{ y: -5 }}
-                    className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-                    onClick={() => handleViewProject(project.id)}
-                  >
-                    {/* Project Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-yellow-400 dark:bg-white rounded-xl flex items-center justify-center">
-                          <FolderOpen className="w-6 h-6 text-gray-900" />
+                {filteredProjects.map((project, index) => {
+                  const isInactive = project.status === 'draft'
+                  const isProcessing = project.status === 'process'
+                  
+                  return (
+                    <motion.div
+                      key={project.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      whileHover={!isInactive ? { y: -5 } : {}}
+                      className={`bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-2xl p-6 shadow-lg transition-all group relative ${
+                        isInactive 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : 'hover:shadow-xl cursor-pointer'
+                      }`}
+                      onClick={() => handleViewProject(project.id)}
+                    >
+                      {/* Processing Animated Indicator */}
+                      {isProcessing && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping" />
+                          <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500" />
                         </div>
-                        <div>
-                          <h3 className="text-lg font-black text-gray-900 dark:text-white group-hover:text-gray-700 dark:group-hover:text-gray-200 transition-colors">
-                            {project.name}
-                          </h3>
-                          <span
-                            className={`text-xs px-2 py-1 rounded-full font-semibold ${getStatusColor(
-                              project.status
-                            )}`}
-                          >
-                            {t(`projects.status.${project.status}`)}
-                          </span>
+                      )}
+                      
+                      {/* Project Header */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            isInactive 
+                              ? 'bg-gray-300 dark:bg-gray-700' 
+                              : 'bg-yellow-400 dark:bg-white'
+                          }`}>
+                            <FolderOpen className={`w-6 h-6 ${
+                              isInactive ? 'text-gray-500 dark:text-gray-600' : 'text-gray-900'
+                            }`} />
+                          </div>
+                          <div>
+                            <h3 className={`text-lg font-black transition-colors ${
+                              isInactive 
+                                ? 'text-gray-500 dark:text-gray-600' 
+                                : 'text-gray-900 dark:text-white group-hover:text-gray-700 dark:group-hover:text-gray-200'
+                            }`}>
+                              {project.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className={`text-xs px-2 py-1 rounded-full font-semibold ${getStatusColor(
+                                  project.status
+                                )}`}
+                              >
+                                {t(`projects.status.${project.status}`)}
+                              </span>
+                              {isProcessing && (
+                                <span className="text-xs text-blue-600 dark:text-blue-400 animate-pulse">
+                                  ●
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Actions Menu */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedProjectId(
-                            selectedProjectId === project.id ? null : project.id
-                          )
-                        }}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                      >
-                        <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                      </button>
+                        {/* Actions Menu */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedProjectId(
+                              selectedProjectId === project.id ? null : project.id
+                            )
+                          }}
+                          className={`p-2 rounded-lg transition-colors ${
+                            isInactive 
+                              ? 'text-gray-400 dark:text-gray-600' 
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400'
+                          }`}
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
 
                       {/* Actions Dropdown */}
                       <AnimatePresence>
@@ -582,52 +662,93 @@ const ProjectsContent: React.FC = () => {
                       </AnimatePresence>
                     </div>
 
-                    {/* Project Description */}
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2">
-                      {project.description || t('projects.noDescription')}
-                    </p>
+                      {/* Project Description */}
+                      <p className={`text-sm mb-4 line-clamp-2 ${
+                        isInactive 
+                          ? 'text-gray-400 dark:text-gray-600' 
+                          : 'text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {project.description || t('projects.noDescription')}
+                      </p>
 
-                    {/* Project Stats */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                          <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      {/* Project Stats */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-2 rounded-lg ${
+                            isInactive 
+                              ? 'bg-gray-200 dark:bg-gray-800' 
+                              : 'bg-blue-100 dark:bg-blue-900/40'
+                          }`}>
+                            <Target className={`w-4 h-4 ${
+                              isInactive 
+                                ? 'text-gray-400 dark:text-gray-600' 
+                                : 'text-blue-600 dark:text-blue-400'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className={`text-xs ${
+                              isInactive 
+                                ? 'text-gray-400 dark:text-gray-600' 
+                                : 'text-gray-600 dark:text-gray-400'
+                            }`}>
+                              {t('projects.brands')}
+                            </p>
+                            <p className={`text-sm font-bold ${
+                              isInactive 
+                                ? 'text-gray-500 dark:text-gray-600' 
+                                : 'text-gray-900 dark:text-white'
+                            }`}>
+                              {project.brands.length}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            {t('projects.brands')}
-                          </p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-white">
-                            {project.brands.length}
-                          </p>
+
+                        <div className="flex items-center gap-2">
+                          <div className={`p-2 rounded-lg ${
+                            isInactive 
+                              ? 'bg-gray-200 dark:bg-gray-800' 
+                              : 'bg-purple-100 dark:bg-purple-900/40'
+                          }`}>
+                            <Users className={`w-4 h-4 ${
+                              isInactive 
+                                ? 'text-gray-400 dark:text-gray-600' 
+                                : 'text-purple-600 dark:text-purple-400'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className={`text-xs ${
+                              isInactive 
+                                ? 'text-gray-400 dark:text-gray-600' 
+                                : 'text-gray-600 dark:text-gray-400'
+                            }`}>
+                              {t('projects.competitors')}
+                            </p>
+                            <p className={`text-sm font-bold ${
+                              isInactive 
+                                ? 'text-gray-500 dark:text-gray-600' 
+                                : 'text-gray-900 dark:text-white'
+                            }`}>
+                              {project.competitors.length}
+                            </p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
-                          <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            {t('projects.competitors')}
-                          </p>
-                          <p className="text-sm font-bold text-gray-900 dark:text-white">
-                            {project.competitors.length}
-                          </p>
+                      {/* Created Date */}
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div className={`flex items-center gap-2 text-xs ${
+                          isInactive 
+                            ? 'text-gray-400 dark:text-gray-600' 
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}>
+                          <Calendar className="w-4 h-4" />
+                          {t('projects.created')}{' '}
+                          {new Date(project.createdAt).toLocaleDateString()}
                         </div>
                       </div>
-                    </div>
-
-                    {/* Created Date */}
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <Calendar className="w-4 h-4" />
-                        {t('projects.created')}{' '}
-                        {new Date(project.createdAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  )
+                })}
               </AnimatePresence>
             </motion.div>
           )}

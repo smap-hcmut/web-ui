@@ -21,6 +21,7 @@ export class WebSocketService extends EventEmitter {
   private heartbeatInterval: NodeJS.Timeout | null = null
   private isConnecting = false
   private isConnected = false
+  private shouldReconnect = true
 
   constructor(config: WebSocketConfig) {
     super()
@@ -40,6 +41,7 @@ export class WebSocketService extends EventEmitter {
       }
 
       this.isConnecting = true
+      this.shouldReconnect = true
 
       try {
         this.ws = new WebSocket(this.config.url)
@@ -69,7 +71,8 @@ export class WebSocketService extends EventEmitter {
           this.stopHeartbeat()
           this.emit('disconnected', event.code, event.reason)
 
-          if (!event.wasClean && this.reconnectAttempts < this.config.maxReconnectAttempts!) {
+          // Only reconnect if shouldReconnect is true and connection wasn't clean
+          if (this.shouldReconnect && !event.wasClean && this.reconnectAttempts < this.config.maxReconnectAttempts!) {
             this.scheduleReconnect()
           }
         }
@@ -88,6 +91,10 @@ export class WebSocketService extends EventEmitter {
   }
 
   disconnect(): void {
+    // Prevent any reconnection attempts
+    this.shouldReconnect = false
+    this.reconnectAttempts = 0
+
     this.stopHeartbeat()
     this.clearReconnectTimeout()
 
@@ -128,13 +135,23 @@ export class WebSocketService extends EventEmitter {
   }
 
   private scheduleReconnect(): void {
+    // Don't schedule reconnect if shouldReconnect is false
+    if (!this.shouldReconnect) {
+      return
+    }
+
     this.reconnectAttempts++
     const delay = this.config.reconnectInterval! * Math.pow(2, this.reconnectAttempts - 1)
 
     this.reconnectTimeout = setTimeout(() => {
+      // Double check before reconnecting
+      if (!this.shouldReconnect) {
+        return
+      }
+
       this.emit('reconnecting', this.reconnectAttempts)
       this.connect().catch(() => {
-
+        // Reconnect failed
       })
     }, delay)
   }
@@ -159,9 +176,27 @@ export class WebSocketService extends EventEmitter {
   }
 }
 
+// Global dashboard WebSocket (for non-project specific updates)
 export const dashboardWebSocket = new WebSocketService({
   url: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws/dashboard',
   reconnectInterval: 3000,
   maxReconnectAttempts: 10,
   heartbeatInterval: 30000
 })
+
+/**
+ * Create a project-specific WebSocket connection
+ * @param projectId - The project ID to connect to
+ * @returns WebSocketService instance configured for the project
+ */
+export function createProjectWebSocket(projectId: string): WebSocketService {
+  const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'
+  const projectUrl = `${baseUrl}/project/${projectId}`
+
+  return new WebSocketService({
+    url: projectUrl,
+    reconnectInterval: 3000,
+    maxReconnectAttempts: 10,
+    heartbeatInterval: 30000
+  })
+}
