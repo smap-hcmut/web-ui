@@ -1,3 +1,8 @@
+// COMMENTED OUT - PricingSection component
+// This component displays the pricing plans section on the landing page
+// Features: 3 pricing tiers (Starter, Professional, Enterprise) with internationalization support
+
+/*
 'use client'
 
 import { useTranslation } from 'next-i18next'
@@ -30,6 +35,7 @@ const plans = [
     bgColor: 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm',
   },
 ]
+*/
 
 export default function PricingSection() {
   const { t } = useTranslation('common')

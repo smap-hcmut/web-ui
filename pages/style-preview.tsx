@@ -67,6 +67,8 @@ const StylePreview: NextPage = () => {
               }`}>
                 Features
               </a>
+              {/* COMMENTED OUT - Pricing navigation link */}
+              {/*
               <a href="#" className={`text-sm font-medium transition-colors ${
                 isDark
                   ? 'text-gray-300 hover:text-white'
@@ -74,6 +76,7 @@ const StylePreview: NextPage = () => {
               }`}>
                 Pricing
               </a>
+              */}
               <a href="#" className={`text-sm font-medium transition-colors ${
                 isDark
                   ? 'text-gray-300 hover:text-white'
@@ -263,7 +266,9 @@ const StylePreview: NextPage = () => {
         </div>
       </section>
 
-      {/* Pricing Section - Nebula Cards */}
+      {/* COMMENTED OUT - Pricing Section - Nebula Cards */}
+      {/* This section displays alternative pricing design with glassmorphism effects */}
+      {/*
       <section className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24">
         <div className="mb-16 text-center">
           <h2 className={`text-4xl font-bold mb-4 ${
@@ -382,6 +387,7 @@ const StylePreview: NextPage = () => {
           ))}
         </div>
       </section>
+      */}
 
       {/* CTA Section */}
       <section className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24">
@@ -454,7 +460,8 @@ const StylePreview: NextPage = () => {
               </p>
             </div>
             {[
-              { title: 'Product', links: ['Features', 'Pricing', 'Security', 'Roadmap'] },
+              // COMMENTED OUT - Pricing link in footer
+              { title: 'Product', links: ['Features', /* 'Pricing', */ 'Security', 'Roadmap'] },
               { title: 'Company', links: ['About', 'Blog', 'Careers', 'Press'] },
               { title: 'Legal', links: ['Privacy', 'Terms', 'Cookies', 'Licenses'] },
             ].map((column, index) => (
