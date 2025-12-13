@@ -6,7 +6,7 @@ import HeroSection from '@/components/landing/HeroSection'
 import FeaturesSection from '@/components/landing/FeaturesSection'
 import SolutionsSection from '@/components/landing/SolutionsSection'
 import FeedbackSection from '@/components/landing/FeedbackSection'
-import PricingSection from '@/components/landing/PricingSection'
+// import PricingSection from '@/components/landing/PricingSection'
 import AboutSection from '@/components/landing/AboutSection'
 import ContactSection from '@/components/landing/ContactSection'
 
@@ -49,7 +49,8 @@ const Home: NextPage = () => {
         <SolutionsSection />
         <FeedbackSection />
         <AboutSection />
-        <PricingSection />
+        {/* COMMENTED OUT - PricingSection component */}
+        {/* <PricingSection /> */}
         <ContactSection />
       </main>
       <LandingFooter />
