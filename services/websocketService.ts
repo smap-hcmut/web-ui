@@ -1,10 +1,27 @@
 import { EventEmitter } from 'events'
+import type {
+  ProjectNotificationMessage,
+  JobNotificationMessage,
+} from '@/lib/types/websocket'
 
+/**
+ * Legacy WebSocket message format (deprecated)
+ * Old format: { type: string, data: any, timestamp: number }
+ * @deprecated Use ProjectNotificationMessage or JobNotificationMessage instead
+ */
 export interface WebSocketMessage {
   type: string
   data: any
   timestamp: number
 }
+
+/**
+ * New WebSocket message format
+ * Messages are now flat structures without type wrapper:
+ * - Project: { status, progress? }
+ * - Job: { platform, status, batch?, progress? }
+ */
+export type NewWebSocketMessage = ProjectNotificationMessage | JobNotificationMessage
 
 export interface WebSocketConfig {
   url: string
@@ -57,9 +74,30 @@ export class WebSocketService extends EventEmitter {
 
         this.ws.onmessage = (event) => {
           try {
-            const message: WebSocketMessage = JSON.parse(event.data)
-            this.emit('message', message)
-            this.emit(message.type, message.data)
+            const rawMessage = JSON.parse(event.data)
+            
+            // Emit raw message for all listeners
+            this.emit('message', rawMessage)
+            
+            // Check if this is the new flat message format (no type wrapper)
+            // New format has 'status' at root level
+            if ('status' in rawMessage && !('type' in rawMessage)) {
+              // New format: emit based on message content
+              if ('platform' in rawMessage) {
+                // Job notification
+                this.emit('job_notification', rawMessage)
+                this.emit(`job_${rawMessage.status.toLowerCase()}`, rawMessage)
+              } else {
+                // Project notification
+                this.emit('project_notification', rawMessage)
+                this.emit(`project_${rawMessage.status.toLowerCase()}`, rawMessage)
+              }
+            } else if ('type' in rawMessage) {
+              // Legacy format: { type, data, timestamp }
+              // Keep backward compatibility
+              const legacyMessage = rawMessage as WebSocketMessage
+              this.emit(legacyMessage.type, legacyMessage.data)
+            }
           } catch (error) {
             this.emit('error', new Error('Failed to parse message'))
           }
@@ -115,14 +153,32 @@ export class WebSocketService extends EventEmitter {
     }
   }
 
+  /**
+   * Start heartbeat mechanism
+   * 
+   * Note: Per new specification, ping/pong is handled automatically by the browser.
+   * This heartbeat is kept for connection health monitoring but can be disabled
+   * by setting heartbeatInterval to 0 in config.
+   */
   private startHeartbeat(): void {
+    // Skip heartbeat if interval is 0 or not set
+    if (!this.config.heartbeatInterval) {
+      return
+    }
+    
     this.heartbeatInterval = setInterval(() => {
       if (this.isConnected) {
-        this.send({
-          type: 'ping',
-          data: { timestamp: Date.now() },
-          timestamp: Date.now()
-        })
+        // Send ping message for connection health check
+        // Server may or may not respond to this
+        try {
+          this.send({
+            type: 'ping',
+            data: { timestamp: Date.now() },
+            timestamp: Date.now()
+          })
+        } catch {
+          // Ignore send errors during heartbeat
+        }
       }
     }, this.config.heartbeatInterval)
   }
@@ -176,9 +232,15 @@ export class WebSocketService extends EventEmitter {
   }
 }
 
+/**
+ * Default WebSocket base URL
+ * Port changed from 8080 to 8081 per new specification
+ */
+const DEFAULT_WS_URL = 'ws://localhost:8081/ws'
+
 // Global dashboard WebSocket (for non-project specific updates)
 export const dashboardWebSocket = new WebSocketService({
-  url: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws/dashboard',
+  url: process.env.NEXT_PUBLIC_WS_URL || DEFAULT_WS_URL,
   reconnectInterval: 3000,
   maxReconnectAttempts: 10,
   heartbeatInterval: 30000
@@ -186,15 +248,47 @@ export const dashboardWebSocket = new WebSocketService({
 
 /**
  * Create a project-specific WebSocket connection
+ * 
+ * URL pattern changed from path params to query params:
+ * - Old: /ws/project/{projectId}
+ * - New: /ws?projectId={projectId}
+ * 
+ * Authentication: HttpOnly Cookie (automatic)
+ * 
  * @param projectId - The project ID to connect to
  * @returns WebSocketService instance configured for the project
  */
 export function createProjectWebSocket(projectId: string): WebSocketService {
-  const baseUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws'
-  const projectUrl = `${baseUrl}/project/${projectId}`
+  const baseUrl = process.env.NEXT_PUBLIC_WS_URL || DEFAULT_WS_URL
+  // Changed from path params to query params per new specification
+  const projectUrl = `${baseUrl}?projectId=${projectId}`
 
   return new WebSocketService({
     url: projectUrl,
+    reconnectInterval: 3000,
+    maxReconnectAttempts: 10,
+    heartbeatInterval: 30000
+  })
+}
+
+/**
+ * Create a job-specific WebSocket connection
+ * 
+ * URL pattern: /ws?jobId={jobId}
+ * Authentication: HttpOnly Cookie (automatic)
+ * 
+ * Used for real-time job progress and content streaming.
+ * Replaces the old dry-run WebSocket flow.
+ * 
+ * @param jobId - The job ID to connect to
+ * @returns WebSocketService instance configured for the job
+ */
+export function createJobWebSocket(jobId: string): WebSocketService {
+  const baseUrl = process.env.NEXT_PUBLIC_WS_URL || DEFAULT_WS_URL
+  const jobUrl = `${baseUrl}?jobId=${jobId}`
+
+  return new WebSocketService({
+    url: jobUrl,
     reconnectInterval: 3000,
     maxReconnectAttempts: 10,
     heartbeatInterval: 30000
