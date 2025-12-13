@@ -80,9 +80,7 @@ export default function ProjectProcessingState({
     },
     onFailed: (errors) => {
       console.log('❌ Project failed:', projectId, errors)
-      if (project) {
-        updateProject({ ...project, status: 'failed' })
-      }
+      // Note: Project status remains 'process' - UI shows failed state via WebSocket status
     },
     onPaused: () => {
       console.log('⏸️ Project paused:', projectId)
