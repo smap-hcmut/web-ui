@@ -104,11 +104,11 @@ export default function JobProgressState({
     error,
   } = useJobWebSocket({
     onCompleted: () => {
-      console.log('✅ Job completed:', jobId)
+      console.log('Job completed:', jobId)
       onComplete?.()
     },
     onFailed: (errors) => {
-      console.log('❌ Job failed:', jobId, errors)
+      console.log('Job failed:', jobId, errors)
       onFailed?.(errors)
     },
   })

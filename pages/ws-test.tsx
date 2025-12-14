@@ -63,7 +63,7 @@ export default function WebSocketTest() {
       }
 
       if (response.data || response.token) {
-        console.log('✅ Đăng nhập thành công - sử dụng HttpOnly Cookie');
+        console.log('Đăng nhập thành công - sử dụng HttpOnly Cookie');
         setIsLoggedIn(true);
         setShowLoginForm(false);
         setLoginError('');
@@ -77,7 +77,7 @@ export default function WebSocketTest() {
       }
 
     } catch (err: any) {
-      console.error('❌ Login error:', err);
+      console.error('Login error:', err);
       setLoginError(err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setIsLoggingIn(false);
@@ -120,7 +120,7 @@ export default function WebSocketTest() {
       wsRef.current = ws as any; // Type assertion to avoid TypeScript issues
       
       ws.onopen = () => {
-        console.log('✅ Đã kết nối WebSocket thành công!');
+        console.log('Đã kết nối WebSocket thành công!');
         setConnected(true);
         setConnectionStatus('Connected');
       };
@@ -144,12 +144,12 @@ export default function WebSocketTest() {
           setMessages(prev => [message, ...prev].slice(0, 50));
           handleMessage(message);
         } catch (err) {
-          console.error('❌ Lỗi parse tin nhắn:', err);
+          console.error('Lỗi parse tin nhắn:', err);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
+        console.error('WebSocket error:', error);
         setConnectionStatus('Error');
       };
 
@@ -176,7 +176,7 @@ export default function WebSocketTest() {
       };
 
     } catch (err) {
-      console.error('❌ Lỗi kết nối:', err);
+      console.error('Lỗi kết nối:', err);
       setConnectionStatus('Error');
     }
   };
@@ -197,7 +197,7 @@ export default function WebSocketTest() {
           console.log(`📊 [Legacy] Tiến độ dự án:`, legacyMsg.payload);
           break;
         case 'project_completed':
-          console.log(`✅ [Legacy] Dự án hoàn thành:`, legacyMsg.payload);
+          console.log(`[Legacy] Dự án hoàn thành:`, legacyMsg.payload);
           break;
         case 'dryrun_result':
           console.log(`🧪 [Legacy] Kết quả Dry Run:`, legacyMsg.payload);
