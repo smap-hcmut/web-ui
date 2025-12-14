@@ -202,44 +202,18 @@ const ProjectsContent: React.FC = () => {
   const filteredProjects = projects
 
   const handleCreateProject = async (projectData: any) => {
+    // Note: API calls (createProject + executeProject) are already done in ProjectSetupWizard
+    // This callback only updates local state after successful creation
+    
+    // Refresh projects list from server to get the newly created project
     try {
-      // Call API to create project
-      const newProject = await projectService.createProject({
-        name: projectData.name,
-        description: projectData.description,
-        brands: projectData.brands,
-        competitors: projectData.competitors,
-        fromDate: projectData.fromDate,
-        toDate: projectData.toDate,
-        status: 'active', // API expects 'active', not 'completed'
-      })
-
-      // Add to context and local state
-      addProjectToContext(newProject)
-      setProjects([...projects, newProject])
+      const response = await projectService.getProjects()
+      setProjects(response.projects || [])
       setIsWizardOpen(false)
-
-      // Show success message
-      await Swal.fire({
-        title: t('projects.createSuccess.title'),
-        text: t('projects.createSuccess.text'),
-        icon: 'success',
-        confirmButtonColor: '#10b981',
-        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
-      })
     } catch (err: any) {
-      console.error('Create project error:', err)
-
-      // Show error message
-      await Swal.fire({
-        title: t('projects.createError.title'),
-        text: err?.message || t('projects.createError.text'),
-        icon: 'error',
-        confirmButtonColor: '#dc2626',
-        background: document.documentElement.classList.contains('dark') ? '#1f2937' : '#ffffff',
-        color: document.documentElement.classList.contains('dark') ? '#ffffff' : '#000000',
-      })
+      console.error('Failed to refresh projects list:', err)
+      // Still close wizard even if refresh fails
+      setIsWizardOpen(false)
     }
   }
 
