@@ -88,6 +88,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   
   // Timeout ref for clearing timeout when data arrives or component unmounts
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Ref to track if we've received any data (to avoid race condition with onCompleted)
+  const hasReceivedDataRef = useRef<boolean>(false)
 
   // Job WebSocket for real-time dry-run results
   // Disable auto-connect from URL - only connect manually via API response
@@ -107,6 +110,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       console.log('Received batch data:', batch.keyword, batch.content_list.length)
       // Convert new format to legacy format for compatibility
       if (batch.content_list.length > 0) {
+        // Mark that we've received data
+        hasReceivedDataRef.current = true
+        
         // Clear timeout since we received data
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
@@ -137,8 +143,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       }
       
       setIsLoadingPreview(false)
-      if (contentList.length === 0) {
+      
+      // Use ref to check if we've received data (synchronous check)
+      // This avoids race condition when onCompleted is called immediately after onBatch
+      // but state updates are async
+      if (!hasReceivedDataRef.current) {
         setPreviewError('Không tìm thấy dữ liệu cho các từ khóa đã chọn')
+      } else {
+        // Clear any error if we have data
+        setPreviewError(null)
       }
     },
     onFailed: (errors) => {
@@ -328,6 +341,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     
     // Disconnect existing WebSocket if any
     disconnectFromJob()
+    
+    // Reset data received flag
+    hasReceivedDataRef.current = false
     
     setIsLoadingPreview(true)
     setPreviewError(null)
