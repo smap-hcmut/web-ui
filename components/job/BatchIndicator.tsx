@@ -1,11 +1,3 @@
-/**
- * Batch Indicator Component
- *
- * Shows current keyword being processed and batch progress.
- *
- * @see documents/websocket_frontend_integration.md
- */
-
 import React from 'react'
 import { motion } from 'framer-motion'
 import { Hash, Loader2, CheckCircle, PauseCircle } from 'lucide-react'

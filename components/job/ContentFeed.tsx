@@ -1,16 +1,3 @@
-/**
- * Content Feed Component
- *
- * Displays real-time content list from job crawling.
- * Features:
- * - Animated content items
- * - Author info and engagement metrics
- * - Media thumbnails
- * - Permalink to original content
- *
- * @see documents/websocket_frontend_integration.md
- */
-
 import React, { useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {

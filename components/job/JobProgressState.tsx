@@ -1,19 +1,3 @@
-/**
- * Job Progress State Component
- *
- * Displays real-time job processing status with WebSocket updates.
- * Replaces the old dry-run flow with real-time content streaming.
- *
- * Features:
- * - Platform indicator (TikTok/YouTube/Instagram)
- * - Real-time batch progress
- * - Current keyword display
- * - ETA display
- * - Content streaming via ContentFeed
- *
- * @see documents/websocket_frontend_integration.md
- */
-
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {

@@ -1,19 +1,3 @@
-/**
- * Project Processing State Component
- *
- * Displays real-time project processing status with WebSocket updates.
- *
- * Updated for new WebSocket specification:
- * - Status: PROCESSING, COMPLETED, FAILED, PAUSED (no more INITIALIZING/CRAWLING/DONE)
- * - Progress: { current, total, percentage, eta, errors[] }
- * - ETA display in minutes
- * - Error list instead of error count
- * - Auto-redirect on COMPLETED
- * - Partial results handling on FAILED
- *
- * @see documents/websocket_frontend_integration.md
- */
-
 import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -68,7 +52,7 @@ export default function ProjectProcessingState({
   // WebSocket connection with new hook
   const { isConnected, status, progress, error } = useProjectWebSocket({
     onCompleted: () => {
-      console.log('✅ Project completed:', projectId)
+      console.log('Project completed:', projectId)
       // Update project status
       if (project) {
         updateProject({ ...project, status: 'completed' })
@@ -79,11 +63,11 @@ export default function ProjectProcessingState({
       }
     },
     onFailed: (errors) => {
-      console.log('❌ Project failed:', projectId, errors)
+      console.log('Project failed:', projectId, errors)
       // Note: Project status remains 'process' - UI shows failed state via WebSocket status
     },
     onPaused: () => {
-      console.log('⏸️ Project paused:', projectId)
+      console.log('Project paused:', projectId)
     },
   })
 
