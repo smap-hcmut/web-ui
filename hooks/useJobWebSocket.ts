@@ -52,6 +52,8 @@ interface UseJobWebSocketOptions {
   onPaused?: () => void
   /** Maximum number of content items to keep in state (default: 500) */
   maxContentItems?: number
+  /** Disable auto-connect from URL query param (default: false) */
+  disableAutoConnect?: boolean
 }
 
 /**
@@ -115,6 +117,9 @@ export function useJobWebSocket(
 
   // Default max content items
   const maxContentItems = options.maxContentItems ?? 500
+  
+  // Check if auto-connect is disabled
+  const disableAutoConnect = options.disableAutoConnect ?? false
 
   // State
   const [isConnected, setIsConnected] = useState(false)
@@ -126,8 +131,8 @@ export function useJobWebSocket(
   const [contentList, setContentList] = useState<ContentItem[]>([])
   const [totalContentCount, setTotalContentCount] = useState(0)
 
-  // Extract job ID from URL
-  const jobId = (router.query.job as string) || null
+  // Extract job ID from URL (only if auto-connect is enabled)
+  const jobId = disableAutoConnect ? null : ((router.query.job as string) || null)
 
   /**
    * Add content items with deduplication
@@ -382,9 +387,15 @@ export function useJobWebSocket(
     contentIdsRef.current.clear()
   }, [])
 
-  // Main effect: Connect/disconnect based on URL param
+  // Main effect: Connect/disconnect based on URL param (only if auto-connect is enabled)
   useEffect(() => {
-    const hasJobParam = jobId !== null && jobId !== undefined
+    // Skip if auto-connect is disabled
+    if (disableAutoConnect) {
+      return
+    }
+
+    // Skip if job param is empty string or invalid
+    const hasJobParam = jobId !== null && jobId !== undefined && jobId !== ''
 
     if (hasJobParam) {
       // Connect to WebSocket for this job
@@ -404,7 +415,7 @@ export function useJobWebSocket(
     return () => {
       disconnect()
     }
-  }, [jobId, connectToJob, disconnect])
+  }, [jobId, connectToJob, disconnect, disableAutoConnect])
 
   // Cleanup on component unmount
   useEffect(() => {

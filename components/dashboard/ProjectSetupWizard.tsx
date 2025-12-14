@@ -87,6 +87,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
 
   // Job WebSocket for real-time dry-run results
+  // Disable auto-connect from URL - only connect manually via API response
   const {
     isConnected: isJobConnected,
     status: jobStatus,
@@ -95,6 +96,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     connect: connectToJob,
     disconnect: disconnectFromJob,
   } = useJobWebSocket({
+    disableAutoConnect: true, // Only use manual connect from API response
     onMessage: (message: JobNotificationMessage) => {
       console.log('Received job notification:', message)
     },
@@ -300,14 +302,11 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
       // Call dry-run API
       const response = await projectService.createDryRun(keywords)
-      setDryRunJobId(response.job_id)
-
+      
       console.log('Dry-run job created:', response.job_id)
-
-      // Update URL to include job parameter for WebSocket connection
-      const currentUrl = new URL(window.location.href)
-      currentUrl.searchParams.set('job', response.job_id)
-      router.replace(currentUrl.pathname + currentUrl.search, undefined, { shallow: true })
+      
+      // Set job ID - this will trigger WebSocket connection via useEffect
+      setDryRunJobId(response.job_id)
 
       // Set timeout for 60 seconds (increased from 30)
       setTimeout(() => {
