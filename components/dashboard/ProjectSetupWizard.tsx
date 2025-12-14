@@ -243,8 +243,12 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     if (dryRunJobId && !isJobConnected) {
       console.log('Connecting to job WebSocket:', dryRunJobId)
       connectToJob(dryRunJobId)
+    } else if (!dryRunJobId && isJobConnected) {
+      // If job ID is cleared (e.g., on timeout), disconnect
+      console.log('Job ID cleared, disconnecting WebSocket...')
+      disconnectFromJob()
     }
-  }, [dryRunJobId, isJobConnected, connectToJob])
+  }, [dryRunJobId, isJobConnected, connectToJob, disconnectFromJob])
 
   // Cleanup WebSocket and timeout on unmount
   useEffect(() => {
@@ -372,11 +376,24 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         // Check if timeout ref still exists (not cleared by data arrival)
         // Only show timeout error if no data was received
         if (timeoutRef.current) {
-          setIsLoadingPreview(false)
-          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây. Vui lòng thử lại.')
+          console.log('[Timeout] No data received after 60 seconds, disconnecting WebSocket...')
+          
+          // Clear job ID first to prevent auto-reconnect
+          setDryRunJobId(null)
+          
           // Disconnect WebSocket on timeout
           disconnectFromJob()
+          
+          // Reset data received flag
+          hasReceivedDataRef.current = false
+          
+          // Update UI state
+          setIsLoadingPreview(false)
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây. Vui lòng thử lại.')
+          
           timeoutRef.current = null
+          
+          console.log('[Timeout] WebSocket disconnected and state reset')
         }
       }, 60000)
 
