@@ -91,6 +91,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   
   // Ref to track if we've received any data (to avoid race condition with onCompleted)
   const hasReceivedDataRef = useRef<boolean>(false)
+  
+  // Ref to track current platform from messages
+  const currentPlatformRef = useRef<string>('tiktok')
 
   // Job WebSocket for real-time dry-run results
   // Disable auto-connect from URL - only connect manually via API response
@@ -105,9 +108,13 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     disableAutoConnect: true, // Only use manual connect from API response
     onMessage: (message: JobNotificationMessage) => {
       console.log('Received job notification:', message)
+      // Track platform from message (TIKTOK -> tiktok, YOUTUBE -> youtube)
+      if (message.platform) {
+        currentPlatformRef.current = message.platform.toLowerCase()
+      }
     },
     onBatch: (batch) => {
-      console.log('Received batch data:', batch.keyword, batch.content_list.length)
+      console.log('Received batch data:', batch.keyword, batch.content_list.length, 'platform:', currentPlatformRef.current)
       // Convert new format to legacy format for compatibility
       if (batch.content_list.length > 0) {
         // Mark that we've received data
@@ -119,17 +126,45 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           timeoutRef.current = null
         }
         
-        const legacyData: DryRunOuterPayload = {
-          type: 'dryrun_result',
-          job_id: dryRunJobId || '',
-          platform: 'tiktok', // Default platform for now
-          status: 'success',
-          payload: {
-            content: convertContentItemsToDryRunContent(batch.content_list),
-            errors: []
+        // Convert platform: TIKTOK -> tiktok, YOUTUBE -> youtube
+        const platform = currentPlatformRef.current
+        
+        // Convert new content items to legacy format with correct platform
+        const newContent = convertContentItemsToDryRunContent(batch.content_list, platform)
+        
+        // Append to existing data instead of replacing (with deduplication)
+        setDryRunData((prevData) => {
+          if (prevData) {
+            // Get existing content IDs for deduplication
+            const existingIds = new Set(prevData.payload.content.map(item => item.meta.id))
+            
+            // Filter out duplicates from new content
+            const uniqueNewContent = newContent.filter(item => !existingIds.has(item.meta.id))
+            
+            // Merge with existing data (only add unique items)
+            return {
+              ...prevData,
+              payload: {
+                ...prevData.payload,
+                content: [...prevData.payload.content, ...uniqueNewContent],
+                errors: prevData.payload.errors || []
+              }
+            }
+          } else {
+            // First batch - create new data
+            return {
+              type: 'dryrun_result',
+              job_id: dryRunJobId || '',
+              platform: platform as 'tiktok' | 'youtube' | 'facebook',
+              status: 'success',
+              payload: {
+                content: newContent,
+                errors: []
+              }
+            }
           }
-        }
-        setDryRunData(legacyData)
+        })
+        
         setIsLoadingPreview(false)
         setPreviewError(null)
       }
@@ -179,11 +214,11 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   })
 
   // Helper function to convert new ContentItem format to legacy DryRunContent format
-  const convertContentItemsToDryRunContent = (items: ContentItem[]): any[] => {
+  const convertContentItemsToDryRunContent = (items: ContentItem[], platform: string = 'tiktok'): any[] => {
     return items.map(item => ({
       meta: {
         id: item.id,
-        platform: 'tiktok', // Default platform
+        platform: platform, // Use platform from message (tiktok, youtube, facebook)
         job_id: dryRunJobId || '',
         crawled_at: new Date().toISOString(),
         published_at: item.published_at,
@@ -230,7 +265,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
         is_verified: item.author.is_verified,
         bio: '',
         avatar_url: item.author.avatar_url,
-        profile_url: `https://tiktok.com/@${item.author.username}`,
+        profile_url: platform === 'youtube' 
+          ? `https://www.youtube.com/@${item.author.username.replace('@', '')}`
+          : `https://tiktok.com/@${item.author.username}`,
         country: null,
         total_view_count: null
       },
@@ -346,8 +383,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     // Disconnect existing WebSocket if any
     disconnectFromJob()
     
-    // Reset data received flag
+    // Reset data received flag and platform
     hasReceivedDataRef.current = false
+    currentPlatformRef.current = 'tiktok' // Reset to default
     
     setIsLoadingPreview(true)
     setPreviewError(null)
