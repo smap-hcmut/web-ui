@@ -1,37 +1,32 @@
 import { useEffect, useState, useRef } from 'react';
 import { authService } from '@/lib/api/services/auth.service';
+import { 
+  ProjectNotificationMessage, 
+  JobNotificationMessage, 
+  ProjectStatus, 
+  JobStatus,
+  Platform 
+} from '@/lib/types/websocket';
 
-interface WSMessage<T = any> {
+// Legacy message format for backward compatibility testing
+interface LegacyWSMessage<T = any> {
   type: string;
   payload: T;
   timestamp: string;
 }
 
-interface ProgressPayload {
-  project_id: string;
-  status: 'INITIALIZING' | 'CRAWLING' | 'PROCESSING' | 'DONE' | 'FAILED';
-  total: number;
-  done: number;
-  errors: number;
-  progress_percent?: number;
-}
-
-interface DryRunPayload {
-  job_id: string;
-  status: 'success' | 'failed';
-  platform: string;
-  content?: any[];
-  errors?: any[];
-}
-
-const WS_URL = 'wss://smap-api.tantai.dev/ws';
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://smap-api.tantai.dev:8081/ws';
 
 export default function WebSocketTest() {
   const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState<WSMessage[]>([]);
-  const [token, setToken] = useState('');
+  const [messages, setMessages] = useState<(ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage)[]>([]);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<any>(null);
+  
+  // Connection type
+  const [connectionType, setConnectionType] = useState<'project' | 'job'>('project');
+  const [projectId, setProjectId] = useState('');
+  const [jobId, setJobId] = useState('');
   
   // Login form states
   const [showLoginForm, setShowLoginForm] = useState(false);
@@ -40,13 +35,6 @@ export default function WebSocketTest() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  const getCookie = (name: string): string | null => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-    return null;
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,92 +62,94 @@ export default function WebSocketTest() {
         return;
       }
 
-      // Try to get token from multiple sources
-      let accessToken = null;
-      
-      // 1. Try from response.token
-      if (response.token) {
-        accessToken = response.token;
-        console.log('🔑 Token từ response.token');
-      }
-      // 2. Try from response.data.token
-      else if (response.data?.token) {
-        accessToken = response.data.token;
-        console.log('🔑 Token từ response.data.token');
-      }
-      // 3. Try from cookie (fallback)
-      else {
-        setTimeout(() => {
-          const cookieToken = getCookie('access_token');
-          if (cookieToken) {
-            accessToken = cookieToken;
-            console.log('🔑 Token từ cookie');
-            setToken(cookieToken);
-            setIsLoggedIn(true);
-            setShowLoginForm(false);
-            connectWithToken(cookieToken);
-          } else {
-            setLoginError('Không tìm thấy token. Server có thể chưa trả về token.');
-            console.error('❌ Không tìm thấy token trong response hoặc cookie');
-            console.error('Response structure:', JSON.stringify(response, null, 2));
-          }
-        }, 500);
-        setIsLoggingIn(false);
-        return;
-      }
-
-      if (accessToken) {
-        console.log('✅ Đã lấy token thành công');
-        setToken(accessToken);
+      if (response.data || response.token) {
+        console.log('Đăng nhập thành công - sử dụng HttpOnly Cookie');
         setIsLoggedIn(true);
         setShowLoginForm(false);
         setLoginError('');
         
-        // Tự động kết nối với token
+        // Auto-connect after login (uses HttpOnly Cookie)
         setTimeout(() => {
-          connectWithToken(accessToken);
+          connect();
         }, 300);
+      } else {
+        setLoginError('Đăng nhập thất bại. Vui lòng kiểm tra thông tin.');
       }
 
     } catch (err: any) {
-      console.error('❌ Login error:', err);
+      console.error('Login error:', err);
       setLoginError(err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setIsLoggingIn(false);
     }
   };
 
-  const connectWithToken = (tokenToUse: string) => {
+  const connect = () => {
+    if (!isLoggedIn) {
+      alert('Vui lòng đăng nhập trước khi kết nối!');
+      return;
+    }
+
+    if (connectionType === 'project' && !projectId) {
+      alert('Vui lòng nhập Project ID!');
+      return;
+    }
+
+    if (connectionType === 'job' && !jobId) {
+      alert('Vui lòng nhập Job ID!');
+      return;
+    }
+
     try {
       setConnectionStatus('Connecting...');
       
-      // Kết nối với token qua query parameter
-      const wsUrl = `${WS_URL}?token=${tokenToUse}`;
-      console.log('🔗 Đang kết nối tới:', wsUrl.replace(tokenToUse, '***TOKEN***'));
+      // Build WebSocket URL with query params (new format)
+      const baseUrl = WS_BASE_URL;
+      let wsUrl: string;
       
+      if (connectionType === 'project') {
+        wsUrl = `${baseUrl}?project_id=${projectId}`;
+        console.log('🔗 Đang kết nối Project WebSocket:', projectId);
+      } else {
+        wsUrl = `${baseUrl}?job_id=${jobId}`;
+        console.log('🔗 Đang kết nối Job WebSocket:', jobId);
+      }
+      
+      // Create native WebSocket connection (uses HttpOnly Cookie for auth)
       const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
+      wsRef.current = ws as any; // Type assertion to avoid TypeScript issues
+      
       ws.onopen = () => {
-        console.log('✅ Đã kết nối WebSocket thành công!');
+        console.log('Đã kết nối WebSocket thành công!');
         setConnected(true);
         setConnectionStatus('Connected');
       };
 
       ws.onmessage = (event) => {
         try {
-          const msg: WSMessage = JSON.parse(event.data);
-          console.log('📨 Nhận tin nhắn:', msg);
+          const data = JSON.parse(event.data);
+          console.log('📨 Nhận tin nhắn:', data);
           
-          setMessages(prev => [msg, ...prev].slice(0, 50));
-          handleMessage(msg);
+          // Handle both new flat format and legacy wrapped format
+          let message: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage;
+          
+          if (data.type && data.payload) {
+            // Legacy format
+            message = data as LegacyWSMessage;
+          } else {
+            // New flat format
+            message = data as ProjectNotificationMessage | JobNotificationMessage;
+          }
+          
+          setMessages(prev => [message, ...prev].slice(0, 50));
+          handleMessage(message);
         } catch (err) {
-          console.error('❌ Lỗi parse tin nhắn:', err);
+          console.error('Lỗi parse tin nhắn:', err);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
+        console.error('WebSocket error:', error);
         setConnectionStatus('Error');
       };
 
@@ -173,9 +163,9 @@ export default function WebSocketTest() {
         setConnectionStatus(`Disconnected (${event.code})`);
         
         if (event.code === 1006) {
-          setConnectionStatus('Error: Token không hợp lệ hoặc CORS issue (1006)');
+          setConnectionStatus('Error: Authentication failed hoặc CORS issue (1006)');
           console.error('⚠️ Lỗi 1006 - Có thể do:');
-          console.error('   1. Token không hợp lệ hoặc hết hạn');
+          console.error('   1. HttpOnly Cookie không hợp lệ hoặc hết hạn');
           console.error('   2. CORS: Origin không được whitelist');
           console.error('   3. Server từ chối kết nối');
         } else if (event.code === 1008) {
@@ -186,46 +176,61 @@ export default function WebSocketTest() {
       };
 
     } catch (err) {
-      console.error('❌ Lỗi kết nối:', err);
+      console.error('Lỗi kết nối:', err);
       setConnectionStatus('Error');
     }
   };
 
-  const connect = () => {
-    if (!token) {
-      alert('Vui lòng đăng nhập hoặc nhập token!');
-      return;
-    }
-
-    connectWithToken(token);
-  };
-
   const disconnect = () => {
     if (wsRef.current) {
-      wsRef.current.close();
+      (wsRef.current as any).close();
       wsRef.current = null;
     }
   };
 
-  const handleMessage = (msg: WSMessage) => {
-    switch (msg.type) {
-      case 'project_progress':
-        const progress = msg.payload as ProgressPayload;
-        console.log(`📊 Tiến độ dự án ${progress.project_id}: ${progress.progress_percent}%`);
-        break;
-        
-      case 'project_completed':
-        const completed = msg.payload as ProgressPayload;
-        console.log(`✅ Dự án hoàn thành: ${completed.project_id}`);
-        break;
-        
-      case 'dryrun_result':
-        const dryrun = msg.payload as DryRunPayload;
-        console.log(`🧪 Kết quả Dry Run (${dryrun.platform}):`, dryrun);
-        break;
-        
-      default:
-        console.warn('⚠️ Loại tin nhắn không xác định:', msg.type);
+  const handleMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage) => {
+    // Handle legacy format
+    if ('type' in msg && 'payload' in msg) {
+      const legacyMsg = msg as LegacyWSMessage;
+      switch (legacyMsg.type) {
+        case 'project_progress':
+          console.log(`📊 [Legacy] Tiến độ dự án:`, legacyMsg.payload);
+          break;
+        case 'project_completed':
+          console.log(`[Legacy] Dự án hoàn thành:`, legacyMsg.payload);
+          break;
+        case 'dryrun_result':
+          console.log(`🧪 [Legacy] Kết quả Dry Run:`, legacyMsg.payload);
+          break;
+        default:
+          console.warn('⚠️ [Legacy] Loại tin nhắn không xác định:', legacyMsg.type);
+      }
+      return;
+    }
+
+    // Handle new flat format
+    const newMsg = msg as ProjectNotificationMessage | JobNotificationMessage;
+    
+    if ('platform' in newMsg) {
+      // Job message (has platform field)
+      const jobMsg = newMsg as JobNotificationMessage;
+      console.log(`� Job (c${jobMsg.platform}) - Status: ${jobMsg.status}`);
+      if (jobMsg.progress) {
+        console.log(`   Progress: ${jobMsg.progress.current}/${jobMsg.progress.total} (${jobMsg.progress.percentage}%)`);
+      }
+      if (jobMsg.batch) {
+        console.log(`   Batch: ${jobMsg.batch.keyword} - ${jobMsg.batch.content_list.length} items`);
+      }
+    } else {
+      // Project message (no platform field)
+      const projectMsg = newMsg as ProjectNotificationMessage;
+      console.log(`� Proj$ect - Status: ${projectMsg.status}`);
+      if (projectMsg.progress) {
+        console.log(`   Progress: ${projectMsg.progress.current}/${projectMsg.progress.total} (${projectMsg.progress.percentage}%)`);
+        if (projectMsg.progress.eta) {
+          console.log(`   ETA: ${projectMsg.progress.eta} minutes`);
+        }
+      }
     }
   };
 
@@ -242,8 +247,31 @@ export default function WebSocketTest() {
     return 'text-gray-500';
   };
 
-  const formatPayload = (payload: any) => {
-    return JSON.stringify(payload, null, 2);
+  const formatMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage) => {
+    if ('type' in msg && 'payload' in msg) {
+      // Legacy format
+      return {
+        type: `[Legacy] ${msg.type}`,
+        content: JSON.stringify(msg.payload, null, 2),
+        timestamp: msg.timestamp
+      };
+    } else {
+      // New flat format
+      const newMsg = msg as ProjectNotificationMessage | JobNotificationMessage;
+      if ('platform' in newMsg) {
+        return {
+          type: `Job (${newMsg.status})`,
+          content: JSON.stringify(newMsg, null, 2),
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        return {
+          type: `Project (${newMsg.status})`,
+          content: JSON.stringify(newMsg, null, 2),
+          timestamp: new Date().toISOString()
+        };
+      }
+    }
   };
 
   return (
@@ -263,9 +291,9 @@ export default function WebSocketTest() {
                     onClick={() => setShowLoginForm(true)}
                     className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
                   >
-                    Đăng nhập để lấy Token
+                    Đăng nhập để lấy HttpOnly Cookie
                   </button>
-                  <span className="text-gray-500 self-center">hoặc nhập token thủ công bên dưới</span>
+                  <span className="text-gray-500 self-center">Cần đăng nhập để sử dụng WebSocket</span>
                 </div>
               ) : (
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -348,32 +376,60 @@ export default function WebSocketTest() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Kết nối WebSocket</h2>
           
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Loại kết nối</label>
+              <select
+                value={connectionType}
+                onChange={(e) => setConnectionType(e.target.value as 'project' | 'job')}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={connected}
+              >
+                <option value="project">Project WebSocket</option>
+                <option value="job">Job WebSocket</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                {connectionType === 'project' ? 'Project ID' : 'Job ID'}
+              </label>
+              <input
+                type="text"
+                value={connectionType === 'project' ? projectId : jobId}
+                onChange={(e) => {
+                  if (connectionType === 'project') {
+                    setProjectId(e.target.value);
+                  } else {
+                    setJobId(e.target.value);
+                  }
+                }}
+                placeholder={connectionType === 'project' ? "Nhập Project ID..." : "Nhập Job ID..."}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={connected}
+              />
+            </div>
+          </div>
+
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">
-              Access Token (JWT) {isLoggedIn && '(Tự động lấy từ cookie)'}
-            </label>
-            <input
-              type="text"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder={isLoggedIn ? "Token đã được lấy từ cookie..." : "Nhập JWT token thủ công..."}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              disabled={connected || isLoggedIn}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Endpoint: {WS_URL}
+            <p className="text-xs text-gray-500">
+              <strong>Endpoint:</strong> {WS_BASE_URL}
             </p>
-            {token && (
-              <p className="text-xs text-green-600 mt-1">
-                ✓ Token có sẵn ({token.substring(0, 20)}...)
-              </p>
-            )}
+            <p className="text-xs text-gray-500">
+              <strong>Authentication:</strong> HttpOnly Cookie (tự động sau khi đăng nhập)
+            </p>
+            <p className="text-xs text-gray-500">
+              <strong>Connection URL:</strong> {connectionType === 'project' 
+                ? `${WS_BASE_URL}?project_id=${projectId || '{project_id}'}`
+                : `${WS_BASE_URL}?job_id=${jobId || '{job_id}'}`
+              }
+            </p>
           </div>
 
           <div className="flex items-center gap-4">
             <button
               onClick={connect}
-              disabled={connected || !token}
+              disabled={connected || !isLoggedIn || (connectionType === 'project' ? !projectId : !jobId)}
               className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Kết nối
@@ -416,44 +472,59 @@ export default function WebSocketTest() {
                 Chưa có tin nhắn nào. Kết nối để nhận tin nhắn từ server.
               </div>
             ) : (
-              messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
-                        {msg.type}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(msg.timestamp).toLocaleString('vi-VN')}
-                      </span>
+              messages.map((msg, index) => {
+                const formatted = formatMessage(msg);
+                return (
+                  <div
+                    key={index}
+                    className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded">
+                          {formatted.type}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(formatted.timestamp).toLocaleString('vi-VN')}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white p-3 rounded border">
+                      <pre className="text-xs overflow-x-auto">
+                        {formatted.content}
+                      </pre>
                     </div>
                   </div>
-                  
-                  <div className="bg-white p-3 rounded border">
-                    <pre className="text-xs overflow-x-auto">
-                      {formatPayload(msg.payload)}
-                    </pre>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         {/* Info Panel */}
         <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-900 mb-2">📝 Hướng dẫn:</h3>
+          <h3 className="font-semibold text-blue-900 mb-2">📝 Hướng dẫn sử dụng:</h3>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>1. <strong>Đăng nhập</strong> để lấy JWT token tự động (khuyến nghị) hoặc nhập token thủ công</li>
-            <li>2. Click <strong>&quot;Kết nối&quot;</strong> để thiết lập WebSocket connection</li>
-            <li>3. Các tin nhắn từ server sẽ hiển thị tự động bên dưới</li>
-            <li>4. Hỗ trợ các loại tin nhắn: <code>project_progress</code>, <code>project_completed</code>, <code>dryrun_result</code></li>
-            <li>5. Ping/Pong được xử lý tự động bởi trình duyệt</li>
-            <li>6. Cookie <code>access_token</code> được sử dụng để xác thực khi đăng nhập</li>
+            <li>1. <strong>Đăng nhập</strong> để thiết lập HttpOnly Cookie authentication</li>
+            <li>2. Chọn loại kết nối: <strong>Project</strong> (theo dõi tiến độ dự án) hoặc <strong>Job</strong> (theo dõi job xử lý)</li>
+            <li>3. Nhập <strong>Project ID</strong> hoặc <strong>Job ID</strong> tương ứng</li>
+            <li>4. Click <strong>"Kết nối"</strong> để thiết lập WebSocket connection</li>
+            <li>5. Tin nhắn real-time sẽ hiển thị tự động bên dưới</li>
           </ul>
+          
+          <div className="mt-4 pt-4 border-t border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2">🔧 Thông tin kỹ thuật:</h4>
+            <ul className="text-xs text-blue-700 space-y-1">
+              <li><strong>Port:</strong> 8081 (thay đổi từ 8080)</li>
+              <li><strong>Authentication:</strong> HttpOnly Cookie (không còn JWT token trong URL)</li>
+              <li><strong>URL Pattern:</strong> Query params thay vì path params</li>
+              <li><strong>Message Format:</strong> Flat structure (không còn type wrapper)</li>
+              <li><strong>Project Status:</strong> PROCESSING, COMPLETED, FAILED, PAUSED</li>
+              <li><strong>Job Status:</strong> PROCESSING, COMPLETED, FAILED, PAUSED</li>
+              <li><strong>Backward Compatibility:</strong> Hỗ trợ cả format cũ và mới</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

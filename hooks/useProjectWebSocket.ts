@@ -1,31 +1,130 @@
 /**
  * Hook to manage project-specific WebSocket connections
- * Connects to /projects/{project_id} only when URL has ?project={project_id}
- * Disconnects immediately when leaving the page or project param is removed
+ * 
+ * Updated for new WebSocket specification:
+ * - URL pattern: /ws?projectId={projectId} (query params instead of path params)
+ * - Authentication: HttpOnly Cookie (automatic, no token needed)
+ * - Message format: { status, progress? } (flat structure, no type wrapper)
+ * 
+ * @see documents/websocket_frontend_integration.md
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { WebSocketService, createProjectWebSocket } from '@/services/websocketService'
+import type {
+  ProjectNotificationMessage,
+  ProjectStatus,
+  Progress,
+} from '@/lib/types/websocket'
 
+/**
+ * Options for useProjectWebSocket hook
+ */
 interface UseProjectWebSocketOptions {
-  onMessage?: (data: any) => void
+  /** Called when any message is received (raw message) */
+  onMessage?: (message: ProjectNotificationMessage) => void
+  /** Called when connection is established */
   onConnect?: () => void
+  /** Called when connection is closed */
   onDisconnect?: () => void
-  onError?: (error: any) => void
+  /** Called when an error occurs */
+  onError?: (error: Error) => void
+  /** Called when project status changes to PROCESSING */
+  onProcessing?: (progress?: Progress) => void
+  /** Called when project status changes to COMPLETED */
+  onCompleted?: () => void
+  /** Called when project status changes to FAILED */
+  onFailed?: (errors?: string[]) => void
+  /** Called when project status changes to PAUSED */
+  onPaused?: () => void
 }
 
-export function useProjectWebSocket(options: UseProjectWebSocketOptions = {}) {
+/**
+ * Return type for useProjectWebSocket hook
+ */
+interface UseProjectWebSocketReturn {
+  /** Whether WebSocket is currently connected */
+  isConnected: boolean
+  /** Current error message if any */
+  error: string | null
+  /** Current project ID being monitored */
+  projectId: string | null
+  /** Current project status */
+  status: ProjectStatus | null
+  /** Current progress data */
+  progress: Progress | null
+  /** Manually disconnect from WebSocket */
+  disconnect: () => void
+  /** Manually connect to a specific project */
+  connect: (projectId: string) => Promise<void>
+}
+
+/**
+ * Hook to manage project-specific WebSocket connections
+ * 
+ * Automatically connects when URL has ?project={projectId} parameter.
+ * Disconnects when leaving the page or project param is removed.
+ * 
+ * @example
+ * ```tsx
+ * const { isConnected, status, progress } = useProjectWebSocket({
+ *   onCompleted: () => router.push('/results'),
+ *   onFailed: (errors) => console.error('Failed:', errors),
+ * })
+ * ```
+ */
+export function useProjectWebSocket(
+  options: UseProjectWebSocketOptions = {}
+): UseProjectWebSocketReturn {
   const router = useRouter()
   const wsRef = useRef<WebSocketService | null>(null)
   const currentProjectIdRef = useRef<string | null>(null)
+  const optionsRef = useRef(options)
+  
+  // Keep options ref updated
+  optionsRef.current = options
+
+  // State
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<ProjectStatus | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
 
   // Extract project ID from URL
   const projectId = (router.query.project as string) || null
 
-  // Connect to WebSocket for specific project
+  /**
+   * Handle incoming project notification message
+   */
+  const handleMessage = useCallback((message: ProjectNotificationMessage) => {
+    // Update state
+    setStatus(message.status)
+    setProgress(message.progress || null)
+
+    // Call general message handler
+    optionsRef.current.onMessage?.(message)
+
+    // Call status-specific handlers
+    switch (message.status) {
+      case 'PROCESSING':
+        optionsRef.current.onProcessing?.(message.progress)
+        break
+      case 'COMPLETED':
+        optionsRef.current.onCompleted?.()
+        break
+      case 'FAILED':
+        optionsRef.current.onFailed?.(message.progress?.errors)
+        break
+      case 'PAUSED':
+        optionsRef.current.onPaused?.()
+        break
+    }
+  }, [])
+
+  /**
+   * Connect to WebSocket for specific project
+   */
   const connectToProject = useCallback(async (projectId: string) => {
     // Disconnect existing connection if any
     if (wsRef.current) {
@@ -33,8 +132,15 @@ export function useProjectWebSocket(options: UseProjectWebSocketOptions = {}) {
       wsRef.current = null
     }
 
+    // Reset state
+    setStatus(null)
+    setProgress(null)
+    setError(null)
+
     try {
       // Create new WebSocket connection for this project
+      // URL is now: /ws?projectId={projectId}
+      // Authentication via HttpOnly Cookie (automatic)
       const ws = createProjectWebSocket(projectId)
 
       // Setup event listeners
@@ -43,26 +149,30 @@ export function useProjectWebSocket(options: UseProjectWebSocketOptions = {}) {
         setIsConnected(true)
         setError(null)
         currentProjectIdRef.current = projectId
-        options.onConnect?.()
+        optionsRef.current.onConnect?.()
       })
 
       ws.on('disconnected', (code: number, reason: string) => {
         console.log(`[WebSocket] Disconnected from project: ${projectId}`, { code, reason })
         setIsConnected(false)
         currentProjectIdRef.current = null
-        options.onDisconnect?.()
+        optionsRef.current.onDisconnect?.()
       })
 
-      ws.on('error', (err: any) => {
+      ws.on('error', (err: Error) => {
         console.error(`[WebSocket] Error for project: ${projectId}`, err)
         setError(err?.message || 'WebSocket error')
-        options.onError?.(err)
+        optionsRef.current.onError?.(err)
       })
 
-      ws.on('message', (message: any) => {
-        console.log(`[WebSocket] Message from project: ${projectId}`, message)
-        options.onMessage?.(message)
-      })
+      // Listen for new format messages (flat structure)
+      ws.on('project_notification', handleMessage)
+
+      // Also listen for status-specific events
+      ws.on('project_processing', handleMessage)
+      ws.on('project_completed', handleMessage)
+      ws.on('project_failed', handleMessage)
+      ws.on('project_paused', handleMessage)
 
       // Store reference and connect
       wsRef.current = ws
@@ -73,15 +183,19 @@ export function useProjectWebSocket(options: UseProjectWebSocketOptions = {}) {
       setError(err instanceof Error ? err.message : 'Connection failed')
       setIsConnected(false)
     }
-  }, [options])
+  }, [handleMessage])
 
-  // Disconnect from current WebSocket
+  /**
+   * Disconnect from current WebSocket
+   */
   const disconnect = useCallback(() => {
     if (wsRef.current) {
       console.log(`[WebSocket] Disconnecting from project: ${currentProjectIdRef.current}`)
       wsRef.current.disconnect()
       wsRef.current = null
       setIsConnected(false)
+      setStatus(null)
+      setProgress(null)
       currentProjectIdRef.current = null
     }
   }, [])
@@ -124,6 +238,9 @@ export function useProjectWebSocket(options: UseProjectWebSocketOptions = {}) {
     isConnected,
     error,
     projectId: currentProjectIdRef.current,
-    disconnect
+    status,
+    progress,
+    disconnect,
+    connect: connectToProject,
   }
 }

@@ -22,3 +22,9 @@ data:
   # These are kept here for documentation only:
   # NEXT_PUBLIC_HOSTNAME: "https://smap-api.tantai.dev"
   # NEXT_PUBLIC_WS_URL: "wss://smap-api.tantai.dev/ws"
+  #
+  # WebSocket Configuration Notes:
+  # - New port: 8081 (changed from 8080)
+  # - Authentication: HttpOnly Cookie (no JWT token in URL)
+  # - Connection patterns: ?projectId={id} or ?jobId={id}
+  # - Supports both Project and Job notifications

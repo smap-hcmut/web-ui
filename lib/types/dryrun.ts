@@ -1,6 +1,19 @@
 /**
  * TypeScript interfaces for Dry-Run WebSocket data
  * Based on: docs/DRY-RUN-DATA-FLOW.md (Section 3.3 - WebSocket Message Structure)
+ * 
+ * @deprecated This file is deprecated and will be removed in a future version.
+ * Use `lib/types/websocket.ts` instead for the new Job notification types.
+ * 
+ * Migration guide:
+ * - DryRunWebSocketMessage → JobNotificationMessage
+ * - DryRunContent → ContentItem
+ * - DryRunAuthor → AuthorInfo
+ * - DryRunInteraction → EngagementMetrics
+ * - Platform type → Platform enum (UPPERCASE values)
+ * 
+ * @see documents/websocket_frontend_integration.md for new specification
+ * @see lib/types/websocket.ts for new types
  */
 
 // ============================================================================
@@ -9,6 +22,7 @@
 
 /**
  * WebSocket message wrapper received from the WebSocket server
+ * @deprecated Use JobNotificationMessage from lib/types/websocket.ts instead
  */
 export interface DryRunWebSocketMessage {
   type: 'dryrun_result'
@@ -18,6 +32,7 @@ export interface DryRunWebSocketMessage {
 
 /**
  * Outer payload containing job metadata and nested content payload
+ * @deprecated Use JobNotificationMessage from lib/types/websocket.ts instead
  */
 export interface DryRunOuterPayload {
   type: 'dryrun_result'
@@ -41,6 +56,7 @@ export interface DryRunInnerPayload {
 
 /**
  * Single content item (post/video) with all associated data
+ * @deprecated Use ContentItem from lib/types/websocket.ts instead
  */
 export interface DryRunContent {
   meta: DryRunContentMeta
@@ -94,6 +110,7 @@ export interface DryRunContentMedia {
 
 /**
  * Interaction/engagement metrics
+ * @deprecated Use EngagementMetrics from lib/types/websocket.ts instead
  */
 export interface DryRunInteraction {
   views: number
@@ -107,6 +124,7 @@ export interface DryRunInteraction {
 
 /**
  * Author/creator information
+ * @deprecated Use AuthorInfo from lib/types/websocket.ts instead
  */
 export interface DryRunAuthor {
   id: string
@@ -194,11 +212,14 @@ export interface PlatformCount {
 
 /**
  * Platform type
+ * @deprecated Use Platform enum from lib/types/websocket.ts instead
+ * Note: 'facebook' is no longer supported, use UPPERCASE values
  */
 export type Platform = 'facebook' | 'tiktok' | 'youtube'
 
 /**
  * Status type
+ * @deprecated Use JobStatus enum from lib/types/websocket.ts instead
  */
 export type DryRunStatus = 'success' | 'failed'
 

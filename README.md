@@ -104,9 +104,10 @@ NEXT_PUBLIC_WS_URL=wss://smap-api.tantai.dev/ws
 ### Key Environment Variables
 
 - `NEXT_PUBLIC_HOSTNAME` - Base URL for API endpoints
-- `NEXT_PUBLIC_WS_URL` - WebSocket URL for real-time project status updates
+- `NEXT_PUBLIC_WS_URL` - WebSocket URL for real-time project and job status updates
   - Production: `wss://smap-api.tantai.dev/ws`
-  - Development: `ws://localhost:8080/ws`
+  - Development: `ws://localhost:8081/ws`
+  - Connection patterns: `?projectId={id}` or `?jobId={id}`
 - `PORT` - Port for the Next.js development server (default: 5000)
 
 ## Documentation
@@ -118,12 +119,14 @@ NEXT_PUBLIC_WS_URL=wss://smap-api.tantai.dev/ws
 ## Key Features
 
 ### Real-time Dashboard
+
 - Live metrics updates via WebSocket
 - Customizable metric cards
 - Interactive charts and visualizations
 - Project selector and time range filters
 
 ### Trend Analysis
+
 - Trending topics discovery
 - Hashtag tracking
 - Post analysis
@@ -131,12 +134,14 @@ NEXT_PUBLIC_WS_URL=wss://smap-api.tantai.dev/ws
 - Competitor monitoring
 
 ### Report Generation
+
 - Custom report builder
 - Multiple templates
 - Data source selection
 - Export functionality
 
 ### Workflow Automation
+
 - Visual workflow designer
 - Node-based interface
 - Pre-built templates
@@ -168,6 +173,7 @@ Private - All rights reserved
 ## Support
 
 For issues and questions:
+
 - Check [SETUP.md](SETUP.md) documentation
 - Review existing GitHub issues
 - Contact the development team

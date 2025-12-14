@@ -42,6 +42,8 @@ host: smap.tantai.dev # Domain của bạn
 
 ```yaml
 NEXT_PUBLIC_HOSTNAME: "https://smap-api.tantai.dev/identity" # API endpoint
+# Note: NEXT_PUBLIC_WS_URL is set at build time, default: wss://smap-api.tantai.dev/ws
+# WebSocket now uses port 8081 and HttpOnly Cookie authentication
 ```
 
 **secret.yaml:**
@@ -100,6 +102,10 @@ kubectl describe ingress smap-web-ingress -n smap
 ### NGINX Ingress
 
 - **WebSocket support** cho real-time features
+  - **New specification**: Port 8081 (changed from 8080)
+  - **Authentication**: HttpOnly Cookie (automatic, no JWT token in URL)
+  - **Connection patterns**: `/ws?projectId={id}` or `/ws?jobId={id}`
+  - **Message format**: Flat structure without type wrapper
 - **Security headers**: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
 - **Rate limiting**: 100 requests/second per IP
 - **Proxy timeouts**: 60s cho connect/send/read

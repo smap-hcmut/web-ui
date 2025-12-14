@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
 import { useTheme } from 'next-themes'
+import { useRouter } from 'next/router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,7 +18,8 @@ import {
 import { projectService } from '@/lib/api/services/project.service'
 import ProjectPreviewStep from './ProjectPreviewStep'
 import { DryRunOuterPayload } from '@/lib/types/dryrun'
-import { dashboardWebSocket } from '@/services/websocketService'
+import { useJobWebSocket } from '@/hooks/useJobWebSocket'
+import type { JobNotificationMessage, ContentItem } from '@/lib/types/websocket'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -53,6 +55,7 @@ const steps = [
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const { theme } = useTheme()
+  const router = useRouter()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
@@ -82,29 +85,220 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
+  
+  // Timeout ref for clearing timeout when data arrives or component unmounts
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Ref to track if we've received any data (to avoid race condition with onCompleted)
+  const hasReceivedDataRef = useRef<boolean>(false)
+  
+  // Ref to track current platform from messages
+  const currentPlatformRef = useRef<string>('tiktok')
 
-  // WebSocket listener for dry-run results
-  useEffect(() => {
-    const handleDryRunResult = (data: any) => {
-      // Data is already the payload from WebSocket
-      const payload = data as DryRunOuterPayload
-
-      // Only process if it's for our current job
-      if (dryRunJobId && payload.job_id === dryRunJobId) {
-        console.log('Received dry-run result:', payload)
-        setDryRunData(payload)
+  // Job WebSocket for real-time dry-run results
+  // Disable auto-connect from URL - only connect manually via API response
+  const {
+    isConnected: isJobConnected,
+    status: jobStatus,
+    contentList,
+    totalContentCount,
+    connect: connectToJob,
+    disconnect: disconnectFromJob,
+  } = useJobWebSocket({
+    disableAutoConnect: true, // Only use manual connect from API response
+    onMessage: (message: JobNotificationMessage) => {
+      console.log('Received job notification:', message)
+      // Track platform from message (TIKTOK -> tiktok, YOUTUBE -> youtube)
+      if (message.platform) {
+        currentPlatformRef.current = message.platform.toLowerCase()
+      }
+    },
+    onBatch: (batch) => {
+      console.log('Received batch data:', batch.keyword, batch.content_list.length, 'platform:', currentPlatformRef.current)
+      // Convert new format to legacy format for compatibility
+      if (batch.content_list.length > 0) {
+        // Mark that we've received data
+        hasReceivedDataRef.current = true
+        
+        // Clear timeout since we received data
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+          timeoutRef.current = null
+        }
+        
+        // Convert platform: TIKTOK -> tiktok, YOUTUBE -> youtube
+        const platform = currentPlatformRef.current
+        
+        // Convert new content items to legacy format with correct platform
+        const newContent = convertContentItemsToDryRunContent(batch.content_list, platform)
+        
+        // Append to existing data instead of replacing (with deduplication)
+        setDryRunData((prevData) => {
+          if (prevData) {
+            // Get existing content IDs for deduplication
+            const existingIds = new Set(prevData.payload.content.map(item => item.meta.id))
+            
+            // Filter out duplicates from new content
+            const uniqueNewContent = newContent.filter(item => !existingIds.has(item.meta.id))
+            
+            // Merge with existing data (only add unique items)
+            return {
+              ...prevData,
+              payload: {
+                ...prevData.payload,
+                content: [...prevData.payload.content, ...uniqueNewContent],
+                errors: prevData.payload.errors || []
+              }
+            }
+          } else {
+            // First batch - create new data
+            return {
+              type: 'dryrun_result',
+              job_id: dryRunJobId || '',
+              platform: platform as 'tiktok' | 'youtube' | 'facebook',
+              status: 'success',
+              payload: {
+                content: newContent,
+                errors: []
+              }
+            }
+          }
+        })
+        
         setIsLoadingPreview(false)
         setPreviewError(null)
       }
+    },
+    onCompleted: () => {
+      console.log('Job completed')
+      // Clear timeout since job completed
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
+      setIsLoadingPreview(false)
+      
+      // Use ref to check if we've received data (synchronous check)
+      // This avoids race condition when onCompleted is called immediately after onBatch
+      // but state updates are async
+      if (!hasReceivedDataRef.current) {
+        setPreviewError('Không tìm thấy dữ liệu cho các từ khóa đã chọn')
+      } else {
+        // Clear any error if we have data
+        setPreviewError(null)
+      }
+    },
+    onFailed: (errors) => {
+      console.log('Job failed:', errors)
+      // Clear timeout since job failed
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
+      setIsLoadingPreview(false)
+      setPreviewError(errors?.join(', ') || 'Job processing failed')
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error)
+      // Clear timeout on WebSocket error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
+      setPreviewError(`WebSocket error: ${error.message}`)
+      setIsLoadingPreview(false)
     }
+  })
 
-    // Subscribe to WebSocket message event
-    dashboardWebSocket.on('dryrun_result', handleDryRunResult)
+  // Helper function to convert new ContentItem format to legacy DryRunContent format
+  const convertContentItemsToDryRunContent = (items: ContentItem[], platform: string = 'tiktok'): any[] => {
+    return items.map(item => ({
+      meta: {
+        id: item.id,
+        platform: platform, // Use platform from message (tiktok, youtube, facebook)
+        job_id: dryRunJobId || '',
+        crawled_at: new Date().toISOString(),
+        published_at: item.published_at,
+        permalink: item.permalink,
+        keyword_source: 'unknown',
+        lang: 'vi',
+        region: 'VN',
+        pipeline_version: 'v1',
+        fetch_status: 'success',
+        fetch_error: null
+      },
+      content: {
+        text: item.text,
+        duration: item.media?.duration,
+        hashtags: [],
+        sound_name: null,
+        category: null,
+        title: null,
+        media: item.media ? {
+          type: item.media.type,
+          video_path: item.media.url,
+          audio_path: null,
+          downloaded_at: new Date().toISOString()
+        } : null,
+        transcription: null
+      },
+      interaction: {
+        views: item.metrics.views,
+        likes: item.metrics.likes,
+        comments_count: item.metrics.comments,
+        shares: item.metrics.shares,
+        saves: 0,
+        engagement_rate: item.metrics.rate / 100,
+        updated_at: new Date().toISOString()
+      },
+      author: {
+        id: item.author.id,
+        name: item.author.name,
+        username: item.author.username,
+        followers: item.author.followers,
+        following: 0,
+        likes: 0,
+        videos: 0,
+        is_verified: item.author.is_verified,
+        bio: '',
+        avatar_url: item.author.avatar_url,
+        profile_url: platform === 'youtube' 
+          ? `https://www.youtube.com/@${item.author.username.replace('@', '')}`
+          : `https://tiktok.com/@${item.author.username}`,
+        country: null,
+        total_view_count: null
+      },
+      comments: []
+    }))
+  }
 
+  // Connect to job WebSocket when job ID is available
+  useEffect(() => {
+    if (dryRunJobId && !isJobConnected) {
+      console.log('Connecting to job WebSocket:', dryRunJobId)
+      connectToJob(dryRunJobId)
+    } else if (!dryRunJobId && isJobConnected) {
+      // If job ID is cleared (e.g., on timeout), disconnect
+      console.log('Job ID cleared, disconnecting WebSocket...')
+      disconnectFromJob()
+    }
+  }, [dryRunJobId, isJobConnected, connectToJob, disconnectFromJob])
+
+  // Cleanup WebSocket and timeout on unmount
+  useEffect(() => {
     return () => {
-      dashboardWebSocket.off('dryrun_result', handleDryRunResult)
+      // Clear timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      // Disconnect WebSocket
+      disconnectFromJob()
     }
-  }, [dryRunJobId])
+  }, [disconnectFromJob])
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -180,9 +374,23 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   }
 
   const triggerDryRun = async () => {
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    
+    // Disconnect existing WebSocket if any
+    disconnectFromJob()
+    
+    // Reset data received flag and platform
+    hasReceivedDataRef.current = false
+    currentPlatformRef.current = 'tiktok' // Reset to default
+    
     setIsLoadingPreview(true)
     setPreviewError(null)
     setDryRunData(null)
+    setDryRunJobId(null)
 
     try {
       // Collect all keywords from brands and competitors
@@ -195,21 +403,46 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
       // Call dry-run API
       const response = await projectService.createDryRun(keywords)
+      
+      console.log('Dry-run job created:', response.job_id)
+      
+      // Set job ID - this will trigger WebSocket connection via useEffect
       setDryRunJobId(response.job_id)
 
-      console.log('Dry-run job created:', response.job_id)
-
-      // Wait for WebSocket message (handled by useEffect)
-      // Set timeout for 30 seconds
-      setTimeout(() => {
-        if (!dryRunData) {
+      // Set timeout for 60 seconds - show error if no data received
+      timeoutRef.current = setTimeout(() => {
+        // Check if timeout ref still exists (not cleared by data arrival)
+        // Only show timeout error if no data was received
+        if (timeoutRef.current) {
+          console.log('[Timeout] No data received after 60 seconds, disconnecting WebSocket...')
+          
+          // Clear job ID first to prevent auto-reconnect
+          setDryRunJobId(null)
+          
+          // Disconnect WebSocket on timeout
+          disconnectFromJob()
+          
+          // Reset data received flag
+          hasReceivedDataRef.current = false
+          
+          // Update UI state
           setIsLoadingPreview(false)
-          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 30 giây')
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây. Vui lòng thử lại.')
+          
+          timeoutRef.current = null
+          
+          console.log('[Timeout] WebSocket disconnected and state reset')
         }
-      }, 30000)
+      }, 60000)
 
     } catch (error: any) {
       console.error('Dry-run trigger error:', error)
+      
+      // Clear timeout on API error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
 
       // Format error message
       let errorMessage = 'Không thể khởi chạy preview'

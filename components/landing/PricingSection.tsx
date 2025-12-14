@@ -3,6 +3,8 @@
 // Features: 3 pricing tiers (Starter, Professional, Enterprise) with internationalization support
 
 /*
+ORIGINAL PRICING SECTION - COMMENTED OUT FOR REMOVAL
+
 'use client'
 
 import { useTranslation } from 'next-i18next'
@@ -35,19 +37,16 @@ const plans = [
     bgColor: 'bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm',
   },
 ]
-*/
 
 export default function PricingSection() {
   const { t } = useTranslation('common')
 
   return (
     <section id="pricing" className="relative py-24 overflow-hidden">
-      {/* Decorative glows */}
       <div className="absolute top-20 left-10 w-[500px] h-[500px] bg-yellow-200/35 dark:bg-white/5 rounded-full blur-[128px] -z-0" />
       <div className="absolute bottom-32 right-16 w-[550px] h-[550px] bg-amber-200/30 dark:bg-white/5 rounded-full blur-[128px] -z-0" />
 
       <div className="container mx-auto px-4 relative z-10">
-        {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -62,7 +61,6 @@ export default function PricingSection() {
           </p>
         </motion.div>
 
-        {/* Pricing Cards */}
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {plans.map((plan, index) => (
@@ -74,7 +72,6 @@ export default function PricingSection() {
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 className={`relative ${plan.popular ? 'md:-mt-4 md:mb-4' : ''}`}
               >
-                {/* Popular Badge */}
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg shadow-lg font-semibold text-sm">
@@ -89,12 +86,10 @@ export default function PricingSection() {
                     plan.popular ? 'ring-2 ring-gray-900 dark:ring-white ring-offset-2 ring-offset-amber-50 dark:ring-offset-gray-950' : ''
                   }`}
                 >
-                  {/* Plan Name */}
                   <h3 className="text-2xl font-black mb-2 text-gray-900 dark:text-white">
                     {t(`landing.pricing.plans.${plan.nameKey}.name`)}
                   </h3>
 
-                  {/* Price */}
                   <div className="mb-4">
                     <span className="text-4xl md:text-5xl font-black text-gray-900 dark:text-white">
                       {t(`landing.pricing.plans.${plan.nameKey}.price`)}
@@ -104,12 +99,10 @@ export default function PricingSection() {
                     </span>
                   </div>
 
-                  {/* Description */}
                   <p className="text-gray-700 dark:text-gray-300 mb-6">
                     {t(`landing.pricing.plans.${plan.nameKey}.description`)}
                   </p>
 
-                  {/* Features */}
                   <ul className="space-y-3 mb-8">
                     {plan.features.map((feature, featureIndex) => (
                       <li key={featureIndex} className="flex items-start gap-3">
@@ -123,7 +116,6 @@ export default function PricingSection() {
                     ))}
                   </ul>
 
-                  {/* CTA Button */}
                   <button
                     className={`w-full py-4 rounded-lg font-semibold text-lg transition-all duration-200 shadow-lg ${
                       plan.popular
@@ -139,7 +131,6 @@ export default function PricingSection() {
           </div>
         </div>
 
-        {/* Bottom Note */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -151,5 +142,17 @@ export default function PricingSection() {
         </motion.p>
       </div>
     </section>
+  )
+}
+
+END OF COMMENTED PRICING SECTION
+*/
+
+// Temporary placeholder component to prevent build errors
+export default function PricingSection() {
+  return (
+    <div className="py-24 text-center">
+      <p className="text-gray-500">Pricing section temporarily disabled</p>
+    </div>
   )
 }

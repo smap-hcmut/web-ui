@@ -19,6 +19,10 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 
     # WebSocket support
+    # Updated for new WebSocket specification:
+    # - Port: 8081 (changed from 8080)
+    # - Authentication: HttpOnly Cookie (automatic)
+    # - Connection patterns: /ws?projectId={id} or /ws?jobId={id}
     nginx.ingress.kubernetes.io/websocket-services: "smap-web-service"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 
