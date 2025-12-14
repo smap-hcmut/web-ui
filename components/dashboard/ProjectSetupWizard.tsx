@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
 import { useTheme } from 'next-themes'
@@ -85,6 +85,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
+  
+  // Timeout ref for clearing timeout when data arrives or component unmounts
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Job WebSocket for real-time dry-run results
   // Disable auto-connect from URL - only connect manually via API response
@@ -104,6 +107,12 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       console.log('Received batch data:', batch.keyword, batch.content_list.length)
       // Convert new format to legacy format for compatibility
       if (batch.content_list.length > 0) {
+        // Clear timeout since we received data
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+          timeoutRef.current = null
+        }
+        
         const legacyData: DryRunOuterPayload = {
           type: 'dryrun_result',
           job_id: dryRunJobId || '',
@@ -121,6 +130,12 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     },
     onCompleted: () => {
       console.log('Job completed')
+      // Clear timeout since job completed
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
       setIsLoadingPreview(false)
       if (contentList.length === 0) {
         setPreviewError('Không tìm thấy dữ liệu cho các từ khóa đã chọn')
@@ -128,11 +143,23 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     },
     onFailed: (errors) => {
       console.log('Job failed:', errors)
+      // Clear timeout since job failed
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
       setIsLoadingPreview(false)
       setPreviewError(errors?.join(', ') || 'Job processing failed')
     },
     onError: (error) => {
       console.error('WebSocket error:', error)
+      // Clear timeout on WebSocket error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      
       setPreviewError(`WebSocket error: ${error.message}`)
       setIsLoadingPreview(false)
     }
@@ -206,9 +233,15 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     }
   }, [dryRunJobId, isJobConnected, connectToJob])
 
-  // Cleanup WebSocket on unmount
+  // Cleanup WebSocket and timeout on unmount
   useEffect(() => {
     return () => {
+      // Clear timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      // Disconnect WebSocket
       disconnectFromJob()
     }
   }, [disconnectFromJob])
@@ -287,9 +320,19 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   }
 
   const triggerDryRun = async () => {
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    
+    // Disconnect existing WebSocket if any
+    disconnectFromJob()
+    
     setIsLoadingPreview(true)
     setPreviewError(null)
     setDryRunData(null)
+    setDryRunJobId(null)
 
     try {
       // Collect all keywords from brands and competitors
@@ -308,16 +351,27 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       // Set job ID - this will trigger WebSocket connection via useEffect
       setDryRunJobId(response.job_id)
 
-      // Set timeout for 60 seconds (increased from 30)
-      setTimeout(() => {
-        if (!dryRunData) {
+      // Set timeout for 60 seconds - show error if no data received
+      timeoutRef.current = setTimeout(() => {
+        // Check if timeout ref still exists (not cleared by data arrival)
+        // Only show timeout error if no data was received
+        if (timeoutRef.current) {
           setIsLoadingPreview(false)
-          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây')
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây. Vui lòng thử lại.')
+          // Disconnect WebSocket on timeout
+          disconnectFromJob()
+          timeoutRef.current = null
         }
       }, 60000)
 
     } catch (error: any) {
       console.error('Dry-run trigger error:', error)
+      
+      // Clear timeout on API error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
 
       // Format error message
       let errorMessage = 'Không thể khởi chạy preview'
