@@ -51,12 +51,23 @@ export default function ProjectProcessingState({
 
   // WebSocket connection with new hook
   const { isConnected, status, progress, error } = useProjectWebSocket({
-    onCompleted: () => {
+    onCompleted: async () => {
       console.log('Project completed:', projectId)
       // Update project status
       if (project) {
         updateProject({ ...project, status: 'completed' })
       }
+
+      // Placeholder: Fetch full project data when API is ready
+      // TODO: Implement when backend API is available
+      try {
+        // const fullData = await projectService.getProjectFullData(projectId)
+        // updateProjectData(fullData)
+        console.log('[Placeholder] Fetch full project data API - projectId:', projectId)
+      } catch (err) {
+        console.error('Failed to fetch full project data:', err)
+      }
+
       // Start countdown for redirect
       if (redirectDelay > 0) {
         setCountdown(redirectDelay)
