@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
 import { useTheme } from 'next-themes'
+import { useRouter } from 'next/router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,7 +18,8 @@ import {
 import { projectService } from '@/lib/api/services/project.service'
 import ProjectPreviewStep from './ProjectPreviewStep'
 import { DryRunOuterPayload } from '@/lib/types/dryrun'
-import { dashboardWebSocket } from '@/services/websocketService'
+import { useJobWebSocket } from '@/hooks/useJobWebSocket'
+import type { JobNotificationMessage, ContentItem } from '@/lib/types/websocket'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -53,6 +55,7 @@ const steps = [
 export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: ProjectSetupWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const { theme } = useTheme()
+  const router = useRouter()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
@@ -83,28 +86,130 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [dryRunJobId, setDryRunJobId] = useState<string | null>(null)
 
-  // WebSocket listener for dry-run results
-  useEffect(() => {
-    const handleDryRunResult = (data: any) => {
-      // Data is already the payload from WebSocket
-      const payload = data as DryRunOuterPayload
-
-      // Only process if it's for our current job
-      if (dryRunJobId && payload.job_id === dryRunJobId) {
-        console.log('Received dry-run result:', payload)
-        setDryRunData(payload)
+  // Job WebSocket for real-time dry-run results
+  const {
+    isConnected: isJobConnected,
+    status: jobStatus,
+    contentList,
+    totalContentCount,
+    connect: connectToJob,
+    disconnect: disconnectFromJob,
+  } = useJobWebSocket({
+    onMessage: (message: JobNotificationMessage) => {
+      console.log('Received job notification:', message)
+    },
+    onBatch: (batch) => {
+      console.log('Received batch data:', batch.keyword, batch.content_list.length)
+      // Convert new format to legacy format for compatibility
+      if (batch.content_list.length > 0) {
+        const legacyData: DryRunOuterPayload = {
+          type: 'dryrun_result',
+          job_id: dryRunJobId || '',
+          platform: 'tiktok', // Default platform for now
+          status: 'success',
+          payload: {
+            content: convertContentItemsToDryRunContent(batch.content_list),
+            errors: []
+          }
+        }
+        setDryRunData(legacyData)
         setIsLoadingPreview(false)
         setPreviewError(null)
       }
+    },
+    onCompleted: () => {
+      console.log('Job completed')
+      setIsLoadingPreview(false)
+      if (contentList.length === 0) {
+        setPreviewError('Không tìm thấy dữ liệu cho các từ khóa đã chọn')
+      }
+    },
+    onFailed: (errors) => {
+      console.log('Job failed:', errors)
+      setIsLoadingPreview(false)
+      setPreviewError(errors?.join(', ') || 'Job processing failed')
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error)
+      setPreviewError(`WebSocket error: ${error.message}`)
+      setIsLoadingPreview(false)
     }
+  })
 
-    // Subscribe to WebSocket message event
-    dashboardWebSocket.on('dryrun_result', handleDryRunResult)
+  // Helper function to convert new ContentItem format to legacy DryRunContent format
+  const convertContentItemsToDryRunContent = (items: ContentItem[]): any[] => {
+    return items.map(item => ({
+      meta: {
+        id: item.id,
+        platform: 'tiktok', // Default platform
+        job_id: dryRunJobId || '',
+        crawled_at: new Date().toISOString(),
+        published_at: item.published_at,
+        permalink: item.permalink,
+        keyword_source: 'unknown',
+        lang: 'vi',
+        region: 'VN',
+        pipeline_version: 'v1',
+        fetch_status: 'success',
+        fetch_error: null
+      },
+      content: {
+        text: item.text,
+        duration: item.media?.duration,
+        hashtags: [],
+        sound_name: null,
+        category: null,
+        title: null,
+        media: item.media ? {
+          type: item.media.type,
+          video_path: item.media.url,
+          audio_path: null,
+          downloaded_at: new Date().toISOString()
+        } : null,
+        transcription: null
+      },
+      interaction: {
+        views: item.metrics.views,
+        likes: item.metrics.likes,
+        comments_count: item.metrics.comments,
+        shares: item.metrics.shares,
+        saves: 0,
+        engagement_rate: item.metrics.rate / 100,
+        updated_at: new Date().toISOString()
+      },
+      author: {
+        id: item.author.id,
+        name: item.author.name,
+        username: item.author.username,
+        followers: item.author.followers,
+        following: 0,
+        likes: 0,
+        videos: 0,
+        is_verified: item.author.is_verified,
+        bio: '',
+        avatar_url: item.author.avatar_url,
+        profile_url: `https://tiktok.com/@${item.author.username}`,
+        country: null,
+        total_view_count: null
+      },
+      comments: []
+    }))
+  }
 
+  // Connect to job WebSocket when job ID is available
+  useEffect(() => {
+    if (dryRunJobId && !isJobConnected) {
+      console.log('Connecting to job WebSocket:', dryRunJobId)
+      connectToJob(dryRunJobId)
+    }
+  }, [dryRunJobId, isJobConnected, connectToJob])
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
     return () => {
-      dashboardWebSocket.off('dryrun_result', handleDryRunResult)
+      disconnectFromJob()
     }
-  }, [dryRunJobId])
+  }, [disconnectFromJob])
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {}
@@ -199,14 +304,18 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
       console.log('Dry-run job created:', response.job_id)
 
-      // Wait for WebSocket message (handled by useEffect)
-      // Set timeout for 30 seconds
+      // Update URL to include job parameter for WebSocket connection
+      const currentUrl = new URL(window.location.href)
+      currentUrl.searchParams.set('job', response.job_id)
+      router.replace(currentUrl.pathname + currentUrl.search, undefined, { shallow: true })
+
+      // Set timeout for 60 seconds (increased from 30)
       setTimeout(() => {
         if (!dryRunData) {
           setIsLoadingPreview(false)
-          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 30 giây')
+          setPreviewError('Timeout: Không nhận được dữ liệu preview sau 60 giây')
         }
-      }, 30000)
+      }, 60000)
 
     } catch (error: any) {
       console.error('Dry-run trigger error:', error)
