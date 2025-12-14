@@ -28,6 +28,7 @@ export interface WebSocketConfig {
   reconnectInterval?: number
   maxReconnectAttempts?: number
   heartbeatInterval?: number
+  connectionTimeout?: number
 }
 
 export class WebSocketService extends EventEmitter {
@@ -46,6 +47,7 @@ export class WebSocketService extends EventEmitter {
       reconnectInterval: 5000,
       maxReconnectAttempts: 5,
       heartbeatInterval: 30000,
+      connectionTimeout: 10000, // 10 seconds
       ...config
     }
   }
@@ -60,10 +62,24 @@ export class WebSocketService extends EventEmitter {
       this.isConnecting = true
       this.shouldReconnect = true
 
+      // Setup connection timeout
+      const timeoutId = setTimeout(() => {
+        if (!this.isConnected && this.ws) {
+          console.error('[WebSocket] Connection timeout:', {
+            url: this.config.url,
+            timeout: this.config.connectionTimeout
+          })
+          this.isConnecting = false
+          this.ws.close()
+          reject(new Error('Connection timeout'))
+        }
+      }, this.config.connectionTimeout!)
+
       try {
         this.ws = new WebSocket(this.config.url)
 
         this.ws.onopen = () => {
+          clearTimeout(timeoutId) // Clear timeout on successful connection
           this.isConnected = true
           this.isConnecting = false
           this.reconnectAttempts = 0
@@ -104,6 +120,7 @@ export class WebSocketService extends EventEmitter {
         }
 
         this.ws.onclose = (event) => {
+          clearTimeout(timeoutId) // Clear timeout on close
           this.isConnected = false
           this.isConnecting = false
           this.stopHeartbeat()
@@ -116,12 +133,19 @@ export class WebSocketService extends EventEmitter {
         }
 
         this.ws.onerror = (error) => {
+          clearTimeout(timeoutId) // Clear timeout on error
           this.isConnecting = false
+          console.error('[WebSocket] Connection error:', {
+            url: this.config.url,
+            error,
+            readyState: this.ws?.readyState
+          })
           this.emit('error', error)
           reject(error)
         }
 
       } catch (error) {
+        clearTimeout(timeoutId) // Clear timeout on exception
         this.isConnecting = false
         reject(error)
       }

@@ -4,6 +4,8 @@
 
 Tài liệu này mô tả chi tiết behavior của WebSocket trong flow dry-run, từ việc trigger API đến nhận real-time data và hiển thị UI.
 
+**Updated**: Đã fix race condition issue - client không còn disconnect connection cũ trước khi connection mới được establish.
+
 ## 1. Flow Tổng Quan
 
 ```mermaid
@@ -79,10 +81,11 @@ router.replace(currentUrl.pathname + currentUrl.search, undefined, {
 
 ### Connection Details
 
-- **URL Pattern**: `ws://localhost:8081/ws?jobId={job_id}`
+- **URL Pattern**: `wss://smap-api.tantai.dev/ws?jobId={job_id}` (production)
 - **Authentication**: HttpOnly Cookie (automatic, no manual token)
-- **Protocol**: WebSocket với auto-reconnect
+- **Protocol**: WebSocket với race condition protection
 - **Timeout**: 60 seconds cho dry-run completion
+- **Race Condition Fix**: New connection established BEFORE disconnecting old one
 
 ### URL Parameter Trigger
 
@@ -118,6 +121,34 @@ const {
     /* Handle errors */
   },
 });
+```
+
+### Race Condition Protection
+
+Hook `useJobWebSocket` đã được cập nhật để tránh race condition:
+
+```typescript
+// ✅ FIXED: Wait for new connection BEFORE disconnecting old one
+const connectToJob = async (jobId: string) => {
+  // Keep old connection alive
+  const oldWs = wsRef.current;
+  const oldJobId = currentJobIdRef.current;
+
+  // Create new connection
+  const newWs = createJobWebSocket(jobId);
+
+  // Wait for new connection to open
+  newWs.on("connected", () => {
+    // NOW disconnect old connection (after new one is established)
+    if (oldWs && oldJobId !== jobId) {
+      oldWs.disconnect();
+    }
+    // Update to new connection
+    wsRef.current = newWs;
+  });
+
+  await newWs.connect();
+};
 ```
 
 ## 4. Message Format

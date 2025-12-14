@@ -105,6 +105,8 @@ export function useJobWebSocket(
   const router = useRouter()
   const wsRef = useRef<WebSocketService | null>(null)
   const currentJobIdRef = useRef<string | null>(null)
+  const pendingConnectionRef = useRef<WebSocketService | null>(null)
+  const connectingJobIdRef = useRef<string | null>(null)
   const optionsRef = useRef(options)
   const contentIdsRef = useRef<Set<string>>(new Set())
 
@@ -204,16 +206,35 @@ export function useJobWebSocket(
 
   /**
    * Connect to WebSocket for specific job
+   * 
+   * Fixes applied:
+   * 1. Race condition: Wait for new connection to open BEFORE disconnecting old one
+   * 2. Rapid switching: Cancel pending connections before creating new ones
+   * 3. Memory leaks: Clean up event listeners from old connections
+   * 4. Timeout: Connection timeout handled by WebSocketService
    */
   const connectToJob = useCallback(
     async (jobId: string) => {
-      // Disconnect existing connection if any
-      if (wsRef.current) {
-        wsRef.current.disconnect()
-        wsRef.current = null
+      // If already connected to this job, don't reconnect
+      if (currentJobIdRef.current === jobId && isConnected) {
+        console.log(`[WebSocket] Already connected to job: ${jobId}`)
+        return
       }
 
-      // Reset state
+      // RAPID SWITCHING PROTECTION: Cancel any pending connection
+      if (pendingConnectionRef.current && connectingJobIdRef.current !== jobId) {
+        console.log(`[WebSocket] Canceling pending connection to job: ${connectingJobIdRef.current}`)
+        pendingConnectionRef.current.disconnect()
+        pendingConnectionRef.current.removeAllListeners()
+        pendingConnectionRef.current = null
+        connectingJobIdRef.current = null
+      }
+
+      // Store reference to old connection (don't disconnect yet!)
+      const oldWs = wsRef.current
+      const oldJobId = currentJobIdRef.current
+
+      // Reset state for new connection
       setStatus(null)
       setPlatform(null)
       setProgress(null)
@@ -224,61 +245,127 @@ export function useJobWebSocket(
       contentIdsRef.current.clear()
 
       try {
-        // Create new WebSocket connection for this job
-        const ws = createJobWebSocket(jobId)
+        console.log(`[WebSocket] Creating new connection to job: ${jobId}`)
+        
+        // Create new WebSocket connection
+        const newWs = createJobWebSocket(jobId)
+        
+        // Track pending connection for rapid switching protection
+        pendingConnectionRef.current = newWs
+        connectingJobIdRef.current = jobId
 
-        // Setup event listeners
-        ws.on('connected', () => {
-          console.log(`[WebSocket] Connected to job: ${jobId}`)
+        // Setup event listeners for new connection
+        newWs.on('connected', () => {
+          console.log(`[WebSocket] New connection established to job: ${jobId}`)
+          
+          // Clear pending connection tracking
+          if (pendingConnectionRef.current === newWs) {
+            pendingConnectionRef.current = null
+            connectingJobIdRef.current = null
+          }
+          
+          // CLEANUP: Remove all event listeners from old connection before disconnecting
+          if (oldWs && oldJobId !== jobId) {
+            console.log(`[WebSocket] Cleaning up and disconnecting old connection from job: ${oldJobId}`)
+            oldWs.removeAllListeners()
+            oldWs.disconnect()
+          }
+          
+          // Update state
           setIsConnected(true)
           setError(null)
           currentJobIdRef.current = jobId
+          wsRef.current = newWs
           optionsRef.current.onConnect?.()
         })
 
-        ws.on('disconnected', (code: number, reason: string) => {
+        newWs.on('disconnected', (code: number, reason: string) => {
           console.log(`[WebSocket] Disconnected from job: ${jobId}`, {
             code,
             reason,
           })
-          setIsConnected(false)
-          currentJobIdRef.current = null
+          
+          // Clear pending connection tracking if this was the pending connection
+          if (pendingConnectionRef.current === newWs) {
+            pendingConnectionRef.current = null
+            connectingJobIdRef.current = null
+          }
+          
+          // Only update state if this is still the current connection
+          if (currentJobIdRef.current === jobId) {
+            setIsConnected(false)
+            currentJobIdRef.current = null
+            wsRef.current = null
+          }
+          
           optionsRef.current.onDisconnect?.()
         })
 
-        ws.on('error', (err: Error) => {
+        newWs.on('error', (err: Error) => {
           console.error(`[WebSocket] Error for job: ${jobId}`, err)
+          
+          // Clear pending connection tracking on error
+          if (pendingConnectionRef.current === newWs) {
+            pendingConnectionRef.current = null
+            connectingJobIdRef.current = null
+          }
+          
           setError(err?.message || 'WebSocket error')
           optionsRef.current.onError?.(err)
         })
 
         // Listen for job notification messages
-        ws.on('job_notification', handleMessage)
-        ws.on('job_processing', handleMessage)
-        ws.on('job_completed', handleMessage)
-        ws.on('job_failed', handleMessage)
-        ws.on('job_paused', handleMessage)
+        newWs.on('job_notification', handleMessage)
+        newWs.on('job_processing', handleMessage)
+        newWs.on('job_completed', handleMessage)
+        newWs.on('job_failed', handleMessage)
+        newWs.on('job_paused', handleMessage)
 
-        // Store reference and connect
-        wsRef.current = ws
-        await ws.connect()
+        // Connect to new WebSocket (this will trigger 'connected' event)
+        await newWs.connect()
+        
       } catch (err) {
         console.error(`[WebSocket] Failed to connect to job: ${jobId}`, err)
+        
+        // Clear pending connection tracking on failure
+        if (connectingJobIdRef.current === jobId) {
+          pendingConnectionRef.current = null
+          connectingJobIdRef.current = null
+        }
+        
         setError(err instanceof Error ? err.message : 'Connection failed')
         setIsConnected(false)
+        
+        // If new connection failed, keep old connection if it exists
+        if (oldWs && oldJobId) {
+          console.log(`[WebSocket] Keeping old connection to job: ${oldJobId}`)
+          wsRef.current = oldWs
+          currentJobIdRef.current = oldJobId
+        }
       }
     },
-    [handleMessage]
+    [handleMessage, isConnected]
   )
 
   /**
    * Disconnect from current WebSocket
    */
   const disconnect = useCallback(() => {
+    // Cancel any pending connection
+    if (pendingConnectionRef.current) {
+      console.log(`[WebSocket] Canceling pending connection to job: ${connectingJobIdRef.current}`)
+      pendingConnectionRef.current.removeAllListeners()
+      pendingConnectionRef.current.disconnect()
+      pendingConnectionRef.current = null
+      connectingJobIdRef.current = null
+    }
+    
+    // Disconnect current connection
     if (wsRef.current) {
       console.log(
         `[WebSocket] Disconnecting from job: ${currentJobIdRef.current}`
       )
+      wsRef.current.removeAllListeners()
       wsRef.current.disconnect()
       wsRef.current = null
       setIsConnected(false)
