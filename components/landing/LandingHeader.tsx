@@ -14,7 +14,7 @@ const navItems = [
   { key: 'solutions', href: '#solutions' },
   { key: 'feedback', href: '#feedback' },
   { key: 'aboutUs', href: '#about' },
-  { key: 'pricing', href: '#pricing' },
+  // { key: 'pricing', href: '#pricing' },
   { key: 'contact', href: '#contact' },
 ]
 

@@ -16,7 +16,11 @@ import type {
   ProjectNotificationMessage,
   ProjectStatus,
   Progress,
+  PhaseProgress,
+  ProjectPhaseMessage,
+  PhaseBasedStatus,
 } from '@/lib/types/websocket'
+import { isPhaseBasedMessage } from '@/lib/types/websocket'
 
 /**
  * Options for useProjectWebSocket hook
@@ -24,6 +28,8 @@ import type {
 interface UseProjectWebSocketOptions {
   /** Called when any message is received (raw message) */
   onMessage?: (message: ProjectNotificationMessage) => void
+  /** Called when phase-based message is received */
+  onPhaseMessage?: (message: ProjectPhaseMessage) => void
   /** Called when connection is established */
   onConnect?: () => void
   /** Called when connection is closed */
@@ -38,6 +44,10 @@ interface UseProjectWebSocketOptions {
   onFailed?: (errors?: string[]) => void
   /** Called when project status changes to PAUSED */
   onPaused?: () => void
+  /** Called when crawl phase progress updates (phase-based format) */
+  onCrawlProgress?: (crawl: PhaseProgress) => void
+  /** Called when analyze phase progress updates (phase-based format) */
+  onAnalyzeProgress?: (analyze: PhaseProgress) => void
 }
 
 /**
@@ -52,8 +62,14 @@ interface UseProjectWebSocketReturn {
   projectId: string | null
   /** Current project status */
   status: ProjectStatus | null
-  /** Current progress data */
+  /** Current progress data (legacy format) */
   progress: Progress | null
+  /** Crawl phase progress (phase-based format) */
+  crawlProgress: PhaseProgress | null
+  /** Analyze phase progress (phase-based format) */
+  analyzeProgress: PhaseProgress | null
+  /** Overall progress percentage (phase-based format) */
+  overallPercent: number
   /** Manually disconnect from WebSocket */
   disconnect: () => void
   /** Manually connect to a specific project */
@@ -81,7 +97,7 @@ export function useProjectWebSocket(
   const wsRef = useRef<WebSocketService | null>(null)
   const currentProjectIdRef = useRef<string | null>(null)
   const optionsRef = useRef(options)
-  
+
   // Keep options ref updated
   optionsRef.current = options
 
@@ -91,16 +107,70 @@ export function useProjectWebSocket(
   const [status, setStatus] = useState<ProjectStatus | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
 
+  // Phase-based state (new format)
+  const [crawlProgress, setCrawlProgress] = useState<PhaseProgress | null>(null)
+  const [analyzeProgress, setAnalyzeProgress] = useState<PhaseProgress | null>(null)
+  const [overallPercent, setOverallPercent] = useState(0)
+
   // Extract project ID from URL
   const projectId = (router.query.project as string) || null
 
   /**
-   * Handle incoming project notification message
+   * Handle incoming phase-based message
+   * Format: { type: "project_progress" | "project_completed", payload: {...} }
+   */
+  const handlePhaseMessage = useCallback((message: ProjectPhaseMessage) => {
+    const { payload, type } = message
+
+    // Map phase-based status to ProjectStatus
+    const mappedStatus = payload.status === 'DONE'
+      ? 'COMPLETED' as ProjectStatus
+      : payload.status === 'INITIALIZING'
+        ? 'PROCESSING' as ProjectStatus
+        : payload.status as ProjectStatus
+
+    setStatus(mappedStatus)
+    setCrawlProgress(payload.crawl || null)
+    setAnalyzeProgress(payload.analyze || null)
+    setOverallPercent(payload.overall_progress_percent)
+
+    // Call phase message handler
+    optionsRef.current.onPhaseMessage?.(message)
+
+    // Call phase-specific callbacks
+    if (payload.crawl) {
+      optionsRef.current.onCrawlProgress?.(payload.crawl)
+    }
+    if (payload.analyze) {
+      optionsRef.current.onAnalyzeProgress?.(payload.analyze)
+    }
+
+    // Call status-specific handlers
+    switch (payload.status) {
+      case 'PROCESSING':
+        optionsRef.current.onProcessing?.()
+        break
+      case 'DONE':
+        optionsRef.current.onCompleted?.()
+        break
+      case 'FAILED':
+        optionsRef.current.onFailed?.()
+        break
+    }
+  }, [])
+
+  /**
+   * Handle incoming project notification message (legacy flat format)
    */
   const handleMessage = useCallback((message: ProjectNotificationMessage) => {
     // Update state
     setStatus(message.status)
     setProgress(message.progress || null)
+
+    // Update overall percent from legacy format
+    if (message.progress?.percentage) {
+      setOverallPercent(message.progress.percentage)
+    }
 
     // Call general message handler
     optionsRef.current.onMessage?.(message)
@@ -136,6 +206,9 @@ export function useProjectWebSocket(
     setStatus(null)
     setProgress(null)
     setError(null)
+    setCrawlProgress(null)
+    setAnalyzeProgress(null)
+    setOverallPercent(0)
 
     try {
       // Create new WebSocket connection for this project
@@ -165,10 +238,13 @@ export function useProjectWebSocket(
         optionsRef.current.onError?.(err)
       })
 
-      // Listen for new format messages (flat structure)
+      // Listen for phase-based format messages (new format with type wrapper)
+      ws.on('project_phase_notification', handlePhaseMessage)
+
+      // Listen for legacy flat format messages
       ws.on('project_notification', handleMessage)
 
-      // Also listen for status-specific events
+      // Also listen for status-specific events (legacy)
       ws.on('project_processing', handleMessage)
       ws.on('project_completed', handleMessage)
       ws.on('project_failed', handleMessage)
@@ -183,7 +259,7 @@ export function useProjectWebSocket(
       setError(err instanceof Error ? err.message : 'Connection failed')
       setIsConnected(false)
     }
-  }, [handleMessage])
+  }, [handleMessage, handlePhaseMessage])
 
   /**
    * Disconnect from current WebSocket
@@ -196,6 +272,9 @@ export function useProjectWebSocket(
       setIsConnected(false)
       setStatus(null)
       setProgress(null)
+      setCrawlProgress(null)
+      setAnalyzeProgress(null)
+      setOverallPercent(0)
       currentProjectIdRef.current = null
     }
   }, [])
@@ -240,6 +319,9 @@ export function useProjectWebSocket(
     projectId: currentProjectIdRef.current,
     status,
     progress,
+    crawlProgress,
+    analyzeProgress,
+    overallPercent,
     disconnect,
     connect: connectToProject,
   }

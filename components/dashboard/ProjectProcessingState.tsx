@@ -17,12 +17,60 @@ import {
 } from 'lucide-react'
 import { useDashboard } from '@/contexts/DashboardContext'
 import { useProjectWebSocket } from '@/hooks/useProjectWebSocket'
+import type { PhaseProgress } from '@/lib/types/websocket'
 import {
   ProjectStatus,
   Progress,
   formatETA,
   mapLegacyProjectStatus,
 } from '@/lib/types/websocket'
+
+/**
+ * PhaseProgressBar - Display progress for a single phase (crawl/analyze)
+ */
+interface PhaseProgressBarProps {
+  label: string
+  phase?: PhaseProgress | null
+  colorClass?: string
+}
+
+const PhaseProgressBar: React.FC<PhaseProgressBarProps> = ({
+  label,
+  phase,
+  colorClass = 'from-blue-600 to-violet-600',
+}) => {
+  if (!phase) return null
+
+  const percent = Math.round(phase.progress_percent)
+  const hasErrors = phase.errors > 0
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between text-sm mb-1">
+        <span className="font-medium">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">
+            {phase.done}/{phase.total} ({percent}%)
+          </span>
+          {hasErrors && (
+            <span className="text-red-500 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {phase.errors} lỗi
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="w-full bg-muted rounded-full h-2">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className={`h-2 rounded-full bg-gradient-to-r ${hasErrors ? 'from-orange-500 to-red-500' : colorClass}`}
+        />
+      </div>
+    </div>
+  )
+}
 
 interface ProjectProcessingStateProps {
   projectId: string
@@ -49,14 +97,33 @@ export default function ProjectProcessingState({
     ? state.projects.find((p) => p.id === projectId)
     : currentProject
 
-  // WebSocket connection with new hook
-  const { isConnected, status, progress, error } = useProjectWebSocket({
-    onCompleted: () => {
+  // WebSocket connection with new hook (supports both legacy and phase-based format)
+  const {
+    isConnected,
+    status,
+    progress,
+    crawlProgress,
+    analyzeProgress,
+    overallPercent,
+    error
+  } = useProjectWebSocket({
+    onCompleted: async () => {
       console.log('Project completed:', projectId)
       // Update project status
       if (project) {
         updateProject({ ...project, status: 'completed' })
       }
+
+      // Placeholder: Fetch full project data when API is ready
+      // TODO: Implement when backend API is available
+      try {
+        // const fullData = await projectService.getProjectFullData(projectId)
+        // updateProjectData(fullData)
+        console.log('[Placeholder] Fetch full project data API - projectId:', projectId)
+      } catch (err) {
+        console.error('Failed to fetch full project data:', err)
+      }
+
       // Start countdown for redirect
       if (redirectDelay > 0) {
         setCountdown(redirectDelay)
@@ -144,9 +211,12 @@ export default function ProjectProcessingState({
     }
   }, [])
 
-  // Calculate progress percentage
-  const progressPercent = progress?.percentage ?? 0
+  // Calculate progress percentage (prefer phase-based, fallback to legacy)
+  const progressPercent = overallPercent > 0 ? overallPercent : (progress?.percentage ?? 0)
   const hasPartialResults = progress && progress.current > 0
+
+  // Check if we have phase-based progress data
+  const hasPhaseProgress = crawlProgress !== null || analyzeProgress !== null
 
   // Processing steps based on status
   const getProcessingSteps = useCallback(
@@ -373,22 +443,20 @@ export default function ProjectProcessingState({
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1, duration: 0.6 }}
-                className={`flex items-center gap-4 p-4 bg-card border rounded-lg ${
-                  step.status === 'paused'
-                    ? 'border-yellow-300 dark:border-yellow-700 opacity-75'
-                    : 'border-border'
-                }`}
+                className={`flex items-center gap-4 p-4 bg-card border rounded-lg ${step.status === 'paused'
+                  ? 'border-yellow-300 dark:border-yellow-700 opacity-75'
+                  : 'border-border'
+                  }`}
               >
                 <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    step.status === 'processing'
-                      ? 'bg-primary/20 text-primary'
-                      : step.status === 'completed'
-                        ? 'bg-green-100 text-green-600'
-                        : step.status === 'paused'
-                          ? 'bg-yellow-100 text-yellow-600'
-                          : 'bg-muted text-muted-foreground'
-                  }`}
+                  className={`flex items-center justify-center w-10 h-10 rounded-full ${step.status === 'processing'
+                    ? 'bg-primary/20 text-primary'
+                    : step.status === 'completed'
+                      ? 'bg-green-100 text-green-600'
+                      : step.status === 'paused'
+                        ? 'bg-yellow-100 text-yellow-600'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
                 >
                   {step.status === 'processing' ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -420,7 +488,29 @@ export default function ProjectProcessingState({
           </motion.div>
         )}
 
-        {/* Progress Bar */}
+        {/* Phase Progress Bars (new format) */}
+        {hasPhaseProgress && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, duration: 0.6 }}
+            className="mt-8 p-4 bg-card border rounded-lg"
+          >
+            <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Chi tiết tiến độ</h4>
+            <PhaseProgressBar
+              label="🔍 Thu thập dữ liệu (Crawl)"
+              phase={crawlProgress}
+              colorClass="from-cyan-600 to-blue-600"
+            />
+            <PhaseProgressBar
+              label="📊 Phân tích (Analyze)"
+              phase={analyzeProgress}
+              colorClass="from-violet-600 to-purple-600"
+            />
+          </motion.div>
+        )}
+
+        {/* Overall Progress Bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -448,15 +538,14 @@ export default function ProjectProcessingState({
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 0.5, ease: 'easeOut' }}
-              className={`h-2 rounded-full ${
-                status === 'COMPLETED'
-                  ? 'bg-gradient-to-r from-green-600 to-emerald-600'
-                  : status === 'FAILED'
-                    ? 'bg-gradient-to-r from-red-600 to-rose-600'
-                    : status === 'PAUSED'
-                      ? 'bg-gradient-to-r from-yellow-600 to-amber-600'
-                      : 'bg-gradient-to-r from-blue-600 to-violet-600'
-              }`}
+              className={`h-2 rounded-full ${status === 'COMPLETED'
+                ? 'bg-gradient-to-r from-green-600 to-emerald-600'
+                : status === 'FAILED'
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600'
+                  : status === 'PAUSED'
+                    ? 'bg-gradient-to-r from-yellow-600 to-amber-600'
+                    : 'bg-gradient-to-r from-blue-600 to-violet-600'
+                }`}
             />
           </div>
         </motion.div>
@@ -469,15 +558,14 @@ export default function ProjectProcessingState({
           className="mt-6 text-center"
         >
           <div
-            className={`inline-flex items-center gap-2 text-sm rounded-full px-4 py-2 ${
-              status === 'COMPLETED'
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                : status === 'FAILED'
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                  : status === 'PAUSED'
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
-                    : 'bg-muted/50 text-muted-foreground'
-            }`}
+            className={`inline-flex items-center gap-2 text-sm rounded-full px-4 py-2 ${status === 'COMPLETED'
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+              : status === 'FAILED'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                : status === 'PAUSED'
+                  ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                  : 'bg-muted/50 text-muted-foreground'
+              }`}
           >
             {status === 'COMPLETED' ? (
               <CheckCircle className="h-4 w-4" />
