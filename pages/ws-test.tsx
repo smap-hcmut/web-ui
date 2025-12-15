@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { authService } from '@/lib/api/services/auth.service';
-import { 
-  ProjectNotificationMessage, 
-  JobNotificationMessage, 
-  ProjectStatus, 
+import {
+  ProjectNotificationMessage,
+  JobNotificationMessage,
+  ProjectStatus,
   JobStatus,
-  Platform 
+  Platform,
+  ProjectPhaseMessage,
+  isPhaseBasedMessage,
 } from '@/lib/types/websocket';
 
 // Legacy message format for backward compatibility testing
@@ -19,15 +21,15 @@ const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://smap-api.tantai.dev
 
 export default function WebSocketTest() {
   const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState<(ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage)[]>([]);
+  const [messages, setMessages] = useState<(ProjectNotificationMessage | JobNotificationMessage | ProjectPhaseMessage | LegacyWSMessage)[]>([]);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const wsRef = useRef<any>(null);
-  
+
   // Connection type
   const [connectionType, setConnectionType] = useState<'project' | 'job'>('project');
   const [projectId, setProjectId] = useState('');
   const [jobId, setJobId] = useState('');
-  
+
   // Login form states
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [email, setEmail] = useState('');
@@ -67,7 +69,7 @@ export default function WebSocketTest() {
         setIsLoggedIn(true);
         setShowLoginForm(false);
         setLoginError('');
-        
+
         // Auto-connect after login (uses HttpOnly Cookie)
         setTimeout(() => {
           connect();
@@ -102,11 +104,11 @@ export default function WebSocketTest() {
 
     try {
       setConnectionStatus('Connecting...');
-      
+
       // Build WebSocket URL with query params (new format)
       const baseUrl = WS_BASE_URL;
       let wsUrl: string;
-      
+
       if (connectionType === 'project') {
         wsUrl = `${baseUrl}?project_id=${projectId}`;
         console.log('🔗 Đang kết nối Project WebSocket:', projectId);
@@ -114,11 +116,11 @@ export default function WebSocketTest() {
         wsUrl = `${baseUrl}?job_id=${jobId}`;
         console.log('🔗 Đang kết nối Job WebSocket:', jobId);
       }
-      
+
       // Create native WebSocket connection (uses HttpOnly Cookie for auth)
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws as any; // Type assertion to avoid TypeScript issues
-      
+
       ws.onopen = () => {
         console.log('Đã kết nối WebSocket thành công!');
         setConnected(true);
@@ -129,18 +131,24 @@ export default function WebSocketTest() {
         try {
           const data = JSON.parse(event.data);
           console.log('📨 Nhận tin nhắn:', data);
-          
-          // Handle both new flat format and legacy wrapped format
-          let message: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage;
-          
-          if (data.type && data.payload) {
-            // Legacy format
+
+          // Handle different message formats
+          let message: ProjectNotificationMessage | JobNotificationMessage | ProjectPhaseMessage | LegacyWSMessage;
+
+          // Check for phase-based format first (new format with type wrapper)
+          if (isPhaseBasedMessage(data)) {
+            message = data as ProjectPhaseMessage;
+            console.log('🔄 [Phase-Based] Message detected:', data.type);
+          } else if (data.type && data.payload && data.timestamp) {
+            // Legacy format with type/payload/timestamp
             message = data as LegacyWSMessage;
+            console.log('📦 [Legacy] Message detected:', data.type);
           } else {
             // New flat format
             message = data as ProjectNotificationMessage | JobNotificationMessage;
+            console.log('📋 [Flat] Message detected');
           }
-          
+
           setMessages(prev => [message, ...prev].slice(0, 50));
           handleMessage(message);
         } catch (err) {
@@ -158,10 +166,10 @@ export default function WebSocketTest() {
         console.log('   - Code:', event.code);
         console.log('   - Reason:', event.reason || 'Không có lý do');
         console.log('   - Clean:', event.wasClean);
-        
+
         setConnected(false);
         setConnectionStatus(`Disconnected (${event.code})`);
-        
+
         if (event.code === 1006) {
           setConnectionStatus('Error: Authentication failed hoặc CORS issue (1006)');
           console.error('⚠️ Lỗi 1006 - Có thể do:');
@@ -188,16 +196,35 @@ export default function WebSocketTest() {
     }
   };
 
-  const handleMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage) => {
+  const handleMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | ProjectPhaseMessage | LegacyWSMessage) => {
+    // Handle phase-based format (new format with type wrapper for phases)
+    if (isPhaseBasedMessage(msg)) {
+      const phaseMsg = msg as ProjectPhaseMessage;
+      console.log(`🔄 [Phase-Based] ${phaseMsg.type}`);
+      console.log(`   Project ID: ${phaseMsg.payload.project_id}`);
+      console.log(`   Status: ${phaseMsg.payload.status}`);
+      console.log(`   Overall: ${phaseMsg.payload.overall_progress_percent}%`);
+
+      if (phaseMsg.payload.crawl) {
+        const c = phaseMsg.payload.crawl;
+        console.log(`   🔍 Crawl: ${c.done}/${c.total} (${c.progress_percent}%) - ${c.errors} errors`);
+      }
+      if (phaseMsg.payload.analyze) {
+        const a = phaseMsg.payload.analyze;
+        console.log(`   📊 Analyze: ${a.done}/${a.total} (${a.progress_percent}%) - ${a.errors} errors`);
+      }
+      return;
+    }
+
     // Handle legacy format
-    if ('type' in msg && 'payload' in msg) {
+    if ('type' in msg && 'payload' in msg && 'timestamp' in msg) {
       const legacyMsg = msg as LegacyWSMessage;
       switch (legacyMsg.type) {
         case 'project_progress':
           console.log(`📊 [Legacy] Tiến độ dự án:`, legacyMsg.payload);
           break;
         case 'project_completed':
-          console.log(`[Legacy] Dự án hoàn thành:`, legacyMsg.payload);
+          console.log(`✅ [Legacy] Dự án hoàn thành:`, legacyMsg.payload);
           break;
         case 'dryrun_result':
           console.log(`🧪 [Legacy] Kết quả Dry Run:`, legacyMsg.payload);
@@ -210,11 +237,11 @@ export default function WebSocketTest() {
 
     // Handle new flat format
     const newMsg = msg as ProjectNotificationMessage | JobNotificationMessage;
-    
+
     if ('platform' in newMsg) {
       // Job message (has platform field)
       const jobMsg = newMsg as JobNotificationMessage;
-      console.log(`� Job (c${jobMsg.platform}) - Status: ${jobMsg.status}`);
+      console.log(`💼 Job (${jobMsg.platform}) - Status: ${jobMsg.status}`);
       if (jobMsg.progress) {
         console.log(`   Progress: ${jobMsg.progress.current}/${jobMsg.progress.total} (${jobMsg.progress.percentage}%)`);
       }
@@ -224,7 +251,7 @@ export default function WebSocketTest() {
     } else {
       // Project message (no platform field)
       const projectMsg = newMsg as ProjectNotificationMessage;
-      console.log(`� Proj$ect - Status: ${projectMsg.status}`);
+      console.log(`📋 Project - Status: ${projectMsg.status}`);
       if (projectMsg.progress) {
         console.log(`   Progress: ${projectMsg.progress.current}/${projectMsg.progress.total} (${projectMsg.progress.percentage}%)`);
         if (projectMsg.progress.eta) {
@@ -247,30 +274,40 @@ export default function WebSocketTest() {
     return 'text-gray-500';
   };
 
-  const formatMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | LegacyWSMessage) => {
-    if ('type' in msg && 'payload' in msg) {
-      // Legacy format
+  const formatMessage = (msg: ProjectNotificationMessage | JobNotificationMessage | ProjectPhaseMessage | LegacyWSMessage) => {
+    // Handle phase-based format
+    if (isPhaseBasedMessage(msg)) {
+      const phaseMsg = msg as ProjectPhaseMessage;
+      return {
+        type: `[Phase] ${phaseMsg.type} (${phaseMsg.payload.status})`,
+        content: JSON.stringify(phaseMsg, null, 2),
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Handle legacy format
+    if ('type' in msg && 'payload' in msg && 'timestamp' in msg) {
       return {
         type: `[Legacy] ${msg.type}`,
         content: JSON.stringify(msg.payload, null, 2),
         timestamp: msg.timestamp
       };
+    }
+
+    // New flat format
+    const newMsg = msg as ProjectNotificationMessage | JobNotificationMessage;
+    if ('platform' in newMsg) {
+      return {
+        type: `Job (${newMsg.status})`,
+        content: JSON.stringify(newMsg, null, 2),
+        timestamp: new Date().toISOString()
+      };
     } else {
-      // New flat format
-      const newMsg = msg as ProjectNotificationMessage | JobNotificationMessage;
-      if ('platform' in newMsg) {
-        return {
-          type: `Job (${newMsg.status})`,
-          content: JSON.stringify(newMsg, null, 2),
-          timestamp: new Date().toISOString()
-        };
-      } else {
-        return {
-          type: `Project (${newMsg.status})`,
-          content: JSON.stringify(newMsg, null, 2),
-          timestamp: new Date().toISOString()
-        };
-      }
+      return {
+        type: `Project (${newMsg.status})`,
+        content: JSON.stringify(newMsg, null, 2),
+        timestamp: new Date().toISOString()
+      };
     }
   };
 
@@ -278,11 +315,11 @@ export default function WebSocketTest() {
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">WebSocket Test Page</h1>
-        
+
         {/* Login Panel */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Xác thực</h2>
-          
+
           {!isLoggedIn ? (
             <>
               {!showLoginForm ? (
@@ -309,7 +346,7 @@ export default function WebSocketTest() {
                       disabled={isLoggingIn}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium mb-2">Password</label>
                     <input
@@ -375,7 +412,7 @@ export default function WebSocketTest() {
         {/* Connection Panel */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Kết nối WebSocket</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-2">Loại kết nối</label>
@@ -419,7 +456,7 @@ export default function WebSocketTest() {
               <strong>Authentication:</strong> HttpOnly Cookie (tự động sau khi đăng nhập)
             </p>
             <p className="text-xs text-gray-500">
-              <strong>Connection URL:</strong> {connectionType === 'project' 
+              <strong>Connection URL:</strong> {connectionType === 'project'
                 ? `${WS_BASE_URL}?project_id=${projectId || '{project_id}'}`
                 : `${WS_BASE_URL}?job_id=${jobId || '{job_id}'}`
               }
@@ -434,7 +471,7 @@ export default function WebSocketTest() {
             >
               Kết nối
             </button>
-            
+
             <button
               onClick={disconnect}
               disabled={!connected}
@@ -489,7 +526,7 @@ export default function WebSocketTest() {
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="bg-white p-3 rounded border">
                       <pre className="text-xs overflow-x-auto">
                         {formatted.content}
@@ -512,7 +549,7 @@ export default function WebSocketTest() {
             <li>4. Click <strong>"Kết nối"</strong> để thiết lập WebSocket connection</li>
             <li>5. Tin nhắn real-time sẽ hiển thị tự động bên dưới</li>
           </ul>
-          
+
           <div className="mt-4 pt-4 border-t border-blue-200">
             <h4 className="font-semibold text-blue-900 mb-2">🔧 Thông tin kỹ thuật:</h4>
             <ul className="text-xs text-blue-700 space-y-1">

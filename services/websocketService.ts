@@ -91,26 +91,44 @@ export class WebSocketService extends EventEmitter {
         this.ws.onmessage = (event) => {
           try {
             const rawMessage = JSON.parse(event.data)
-            
+
             // Emit raw message for all listeners
             this.emit('message', rawMessage)
-            
-            // Check if this is the new flat message format (no type wrapper)
-            // New format has 'status' at root level
+
+            // Priority 1: Check for phase-based format (new format with type wrapper)
+            // Format: { type: "project_progress" | "project_completed", payload: {...} }
+            if ('type' in rawMessage && ('payload' in rawMessage)) {
+              const messageType = rawMessage.type
+              if (messageType === 'project_progress' || messageType === 'project_completed') {
+                // Phase-based project notification
+                this.emit('project_phase_notification', rawMessage)
+                this.emit(messageType, rawMessage.payload)
+
+                // Also emit status-specific events from payload
+                if (rawMessage.payload?.status) {
+                  this.emit(`project_phase_${rawMessage.payload.status.toLowerCase()}`, rawMessage)
+                }
+                return
+              }
+            }
+
+            // Priority 2: Check for flat format (status at root, no type wrapper)
+            // Format: { status, progress? } or { platform, status, batch?, progress? }
             if ('status' in rawMessage && !('type' in rawMessage)) {
-              // New format: emit based on message content
               if ('platform' in rawMessage) {
-                // Job notification
+                // Job notification (flat format)
                 this.emit('job_notification', rawMessage)
                 this.emit(`job_${rawMessage.status.toLowerCase()}`, rawMessage)
               } else {
-                // Project notification
+                // Project notification (legacy flat format)
                 this.emit('project_notification', rawMessage)
                 this.emit(`project_${rawMessage.status.toLowerCase()}`, rawMessage)
               }
-            } else if ('type' in rawMessage) {
-              // Legacy format: { type, data, timestamp }
-              // Keep backward compatibility
+              return
+            }
+
+            // Priority 3: Legacy wrapped format { type, data, timestamp }
+            if ('type' in rawMessage && 'data' in rawMessage) {
               const legacyMessage = rawMessage as WebSocketMessage
               this.emit(legacyMessage.type, legacyMessage.data)
             }
@@ -189,7 +207,7 @@ export class WebSocketService extends EventEmitter {
     if (!this.config.heartbeatInterval) {
       return
     }
-    
+
     this.heartbeatInterval = setInterval(() => {
       if (this.isConnected) {
         // Send ping message for connection health check

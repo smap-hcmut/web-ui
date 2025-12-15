@@ -69,6 +69,58 @@ export interface Progress {
   errors: string[]
 }
 
+/**
+ * Phase-based progress for individual phases (crawl/analyze)
+ * Used in the new phase-based message format
+ * 
+ * @see documents/client-phase-progress-migration.md
+ */
+export interface PhaseProgress {
+  /** Total items to process in this phase */
+  total: number
+  /** Number of completed items */
+  done: number
+  /** Number of failed items */
+  errors: number
+  /** Completion percentage (0.0 - 100.0) */
+  progress_percent: number
+}
+
+/**
+ * Phase-based project status values
+ * Extended from ProjectStatus to include INITIALIZING and DONE
+ */
+export type PhaseBasedStatus = 'INITIALIZING' | 'PROCESSING' | 'DONE' | 'FAILED'
+
+/**
+ * Payload for phase-based project notification messages
+ * Contains detailed progress for each phase (crawl, analyze)
+ */
+export interface ProjectPhasePayload {
+  /** Project unique identifier */
+  project_id: string
+  /** Current project status */
+  status: PhaseBasedStatus
+  /** Crawl phase progress (optional - may not be present at INITIALIZING) */
+  crawl?: PhaseProgress
+  /** Analyze phase progress (optional - may not be present during crawl phase) */
+  analyze?: PhaseProgress
+  /** Overall progress percentage combining all phases */
+  overall_progress_percent: number
+}
+
+/**
+ * Phase-based message format with type wrapper
+ * New format: { type: "project_progress" | "project_completed", payload: {...} }
+ */
+export interface ProjectPhaseMessage {
+  /** Message type indicating progress update or completion */
+  type: 'project_progress' | 'project_completed'
+  /** Message payload with phase-based progress data */
+  payload: ProjectPhasePayload
+}
+
+
 // ============================================================================
 // Project Notification Types
 // ============================================================================
@@ -194,8 +246,8 @@ export interface JobNotificationMessage {
 /**
  * Union type for all WebSocket notification messages
  */
-export type WebSocketNotificationMessage = 
-  | ProjectNotificationMessage 
+export type WebSocketNotificationMessage =
+  | ProjectNotificationMessage
   | JobNotificationMessage
 
 /**
@@ -217,24 +269,46 @@ export function isJobNotification(
 }
 
 /**
+ * Type guard to check if message is in phase-based format
+ * Phase-based messages have { type: "project_progress" | "project_completed", payload: {...} }
+ * 
+ * @see documents/client-phase-progress-migration.md
+ */
+export function isPhaseBasedMessage(data: unknown): data is ProjectPhaseMessage {
+  if (typeof data !== 'object' || data === null) return false
+  const msg = data as Record<string, unknown>
+  return msg.type === 'project_progress' || msg.type === 'project_completed'
+}
+
+/**
+ * Type guard to check if message is in legacy format
+ * Legacy messages have { status, progress? } without type wrapper
+ */
+export function isLegacyMessage(data: unknown): data is ProjectNotificationMessage {
+  if (typeof data !== 'object' || data === null) return false
+  const msg = data as Record<string, unknown>
+  return 'status' in msg && !('type' in msg) && !('platform' in msg)
+}
+
+/**
  * Format ETA from minutes (float64) to human-readable string
  * @param etaMinutes - ETA in minutes (e.g., 8.5)
  * @returns Formatted string (e.g., "8 phút 30 giây")
  */
 export function formatETA(etaMinutes: number): string {
   if (etaMinutes <= 0) return 'Sắp hoàn thành'
-  
+
   const minutes = Math.floor(etaMinutes)
   const seconds = Math.round((etaMinutes - minutes) * 60)
-  
+
   if (minutes === 0) {
     return `${seconds} giây`
   }
-  
+
   if (seconds === 0) {
     return `${minutes} phút`
   }
-  
+
   return `${minutes} phút ${seconds} giây`
 }
 
