@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  Download,
-  Maximize2,
-  Hash,
-  TrendingUp
-} from 'lucide-react'
+import { Download, Maximize2, TrendingUp, Hash } from 'lucide-react'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,6 +12,7 @@ import {
   Legend,
 } from 'chart.js'
 import { WordCloudController, WordElement } from 'chartjs-chart-wordcloud'
+import { useDashboard } from '@/contexts/DashboardContext'
 
 ChartJS.register(
   CategoryScale,
@@ -48,6 +44,15 @@ interface TopicCloudProps {
   onTopicClick?: (topic: TopicData) => void
 }
 
+// Aspect color mapping
+const ASPECT_COLORS = {
+  PRICE: '#f59e0b',        // Orange
+  PERFORMANCE: '#3b82f6',  // Blue
+  DESIGN: '#8b5cf6',       // Purple
+  SERVICE: '#10b981',      // Green
+  null: '#6b7280',         // Gray
+} as const
+
 export default function TopicCloud({
   title,
   data,
@@ -61,24 +66,50 @@ export default function TopicCloud({
   const [canvasKey, setCanvasKey] = useState(0)
   const [renderFallback, setRenderFallback] = useState(false)
 
-  const getColor = (sentiment: number = 0, trend: string = 'stable') => {
-    if (trend === 'rising') {
-      return sentiment > 0 ? '#10b981' : sentiment < 0 ? '#ef4444' : '#6b7280'
-    } else if (trend === 'falling') {
-      return '#9ca3af'
+  // Get keywords from API
+  const { dashboardKeywords } = useDashboard()
+
+  // Use API keywords if available, fallback to props data
+  const keywordsFromAPI = dashboardKeywords?.keywords || []
+  const shouldUseAPI = keywordsFromAPI.length > 0
+
+  // Convert API keywords to TopicData format
+  const apiTopicData: TopicData[] = keywordsFromAPI.map(kw => ({
+    text: kw.keyword,
+    value: kw.count,
+    sentiment: kw.avg_sentiment_score,
+  }))
+
+  // Use API data if available, otherwise fallback to props
+  const displayData = shouldUseAPI ? apiTopicData : data
+
+  const getColorByAspect = (keyword: string): string => {
+    if (!shouldUseAPI) {
+      // Fallback: sentiment-based colors
+      const item = data.find(d => d.text === keyword)
+      const sentiment = item?.sentiment || 0
+      if (sentiment > 0.3) return '#10b981'
+      if (sentiment > 0.1) return '#34d399'
+      if (sentiment < -0.3) return '#ef4444'
+      if (sentiment < -0.1) return '#f87171'
+      return '#6b7280'
     }
-    return sentiment > 0 ? '#3b82f6' : sentiment < 0 ? '#f59e0b' : '#6b7280'
+
+    // API mode: aspect-based colors
+    const apiKeyword = keywordsFromAPI.find(kw => kw.keyword === keyword)
+    const aspect = apiKeyword?.aspect as keyof typeof ASPECT_COLORS | undefined
+    return aspect ? ASPECT_COLORS[aspect] : ASPECT_COLORS.null
   }
 
   useEffect(() => {
-    if (!data.length) return
+    if (!displayData.length) return
 
     setRenderFallback(false)
     setCanvasKey(prev => prev + 1)
-  }, [data])
+  }, [displayData, dashboardKeywords])
 
   useEffect(() => {
-    if (!canvasRef.current || !data.length) {
+    if (!canvasRef.current || !displayData.length) {
       setRenderFallback(true)
       return
     }
@@ -88,7 +119,7 @@ export default function TopicCloud({
       chartRef.current = null
     }
 
-    const sortedData = [...data]
+    const sortedData = [...displayData]
       .filter(item => item.text && item.text.trim().length > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 50)
@@ -105,7 +136,7 @@ export default function TopicCloud({
       trend: item.trend || 'stable',
       mentions: item.mentions || 0,
       engagement: item.engagement || 0,
-      color: getColor(item.sentiment, item.trend)
+      color: getColorByAspect(item.text)
     }))
 
     if (timeoutRef.current) {
@@ -121,7 +152,18 @@ export default function TopicCloud({
           datasets: [
             {
               label: '',
-              data: words.map(d => d.weight)
+              data: words.map(d => ({
+                x: d.text,
+                y: d.weight
+              })),
+              color: words.map(d => d.color),
+              size: (ctx: any) => {
+                const value = ctx.parsed.y
+                return Math.max(12, Math.min(value * 2, 48))
+              },
+              rotation: () => Math.random() > 0.5 ? 0 : 90,
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              padding: 2,
             }
           ]
         },
@@ -151,14 +193,29 @@ export default function TopicCloud({
                   const index = context.dataIndex
                   const word = words[index]
                   if (!word) return []
-                  return [
-                    `Frequency: ${word.weight}`,
+
+                  const lines = []
+
+                  // Show aspect if using API data
+                  if (shouldUseAPI) {
+                    const apiKeyword = keywordsFromAPI.find(kw => kw.keyword === word.text)
+                    if (apiKeyword?.aspect) {
+                      lines.push(`Aspect: ${apiKeyword.aspect}`)
+                    }
+                  }
+
+                  lines.push(
+                    `Sentiment: ${word.sentiment > 0 ? '+' : ''}${word.sentiment.toFixed(2)}`,
+                    `Count: ${word.weight}`,
                     `Mentions: ${word.mentions}`,
-                    `Engagement: ${word.engagement}`,
-                    `Trend: ${word.trend}`,
-                    `Sentiment: ${word.sentiment?.toFixed(2) || '0.00'}`,
-                    interaction === 'click-filter' ? 'Click to view details' : ''
-                  ].filter(Boolean)
+                    `Engagement: ${word.engagement}`
+                  )
+
+                  if (interaction === 'click-filter') {
+                    lines.push('Click to view details')
+                  }
+
+                  return lines.filter(Boolean)
                 }
               }
             }
@@ -190,18 +247,11 @@ export default function TopicCloud({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasKey, data])
+  }, [canvasKey, displayData, dashboardKeywords, shouldUseAPI, keywordsFromAPI])
 
-  const topTrendingTopics = [...data]
-    .filter(item => item.text && item.text.trim().length > 0)
+  const topTopics = [...displayData]
     .sort((a, b) => b.value - a.value)
     .slice(0, 5)
-
-  const handleTopicClick = (topic: TopicData) => {
-    if (onTopicClick && interaction === 'click-filter') {
-      onTopicClick(topic)
-    }
-  }
 
   return (
     <motion.div
@@ -229,7 +279,7 @@ export default function TopicCloud({
           >
             <Hash className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-medium text-blue-600">
-              {data.length} Topics
+              {displayData.length} keywords
             </span>
           </motion.div>
         </div>
@@ -253,13 +303,13 @@ export default function TopicCloud({
         </div>
       </div>
 
-      <div className="relative h-80 w-full mb-6 overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <div className="relative h-80 w-full mb-6 overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-800 dark:via-gray-750 dark:to-gray-800">
         {renderFallback ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="text-4xl font-bold text-gray-600 dark:text-gray-400 mb-2">📊</div>
               <div className="text-sm text-gray-600 dark:text-gray-400">Word cloud unavailable</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Showing topic list below</div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Showing top topics below</div>
             </div>
           </div>
         ) : (
@@ -273,42 +323,84 @@ export default function TopicCloud({
         )}
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.0 }}
-        className="space-y-3"
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <TrendingUp className="h-4 w-4 text-green-600" />
-          <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">Top Trending Topics</h4>
+      {/* Aspect Legend - only show when using API data */}
+      {shouldUseAPI && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.9 }}
+          className="flex items-center gap-4 mb-6 flex-wrap"
+        >
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Aspects:</span>
+          {Object.entries(ASPECT_COLORS)
+            .filter(([key]) => key !== 'null')
+            .map(([aspect, color]) => (
+              <div key={aspect} className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-xs text-gray-600 dark:text-gray-400">{aspect}</span>
+              </div>
+            ))}
+        </motion.div>
+      )}
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp className="h-4 w-4 text-purple-600" />
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Top Trending Keywords
+          </h4>
         </div>
 
-        {topTrendingTopics.map((topic, index) => (
-          <motion.div
-            key={topic.text}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 1.1 + index * 0.1 }}
-            onClick={() => handleTopicClick(topic)}
-            className={`flex items-center justify-between p-3 rounded-lg bg-gray-200/50 dark:bg-gray-700/50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${
-              interaction === 'click-filter' ? 'cursor-pointer hover:shadow-md' : ''
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-xs font-bold">
-                {index + 1}
+        {topTopics.map((topic, index) => {
+          const apiKeyword = shouldUseAPI
+            ? keywordsFromAPI.find(kw => kw.keyword === topic.text)
+            : null
+          const aspectColor = getColorByAspect(topic.text)
+
+          return (
+            <motion.div
+              key={topic.text}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.0 + index * 0.1 }}
+              className="flex items-center justify-between p-3 rounded-md bg-white/80 dark:bg-gray-800/80 hover:bg-white dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              onClick={() => onTopicClick && onTopicClick(topic)}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: aspectColor }}
+                />
+                <div className="flex flex-col">
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {topic.text}
+                  </span>
+                  {shouldUseAPI && apiKeyword?.aspect && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {apiKeyword.aspect}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: getColor(topic.sentiment, topic.trend) }}
-              />
-              <span className="font-medium">{topic.text}</span>
-            </div>
-            <div className="text-sm font-bold">{topic.value}</div>
-          </motion.div>
-        ))}
-      </motion.div>
+
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {topic.value} mentions
+                </div>
+                {topic.sentiment !== undefined && (
+                  <div
+                    className={`text-sm font-medium ${
+                      topic.sentiment > 0 ? 'text-green-600' : topic.sentiment < 0 ? 'text-red-600' : 'text-gray-600'
+                    }`}
+                  >
+                    {topic.sentiment > 0 ? '+' : ''}{topic.sentiment.toFixed(2)}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
     </motion.div>
   )
 }

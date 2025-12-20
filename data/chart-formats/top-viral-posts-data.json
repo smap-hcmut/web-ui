@@ -1,0 +1,223 @@
+{
+  "description": "Định dạng dữ liệu cho TopViralPosts - Bảng hiển thị các bài viết viral với impact score và risk analysis",
+  "interface": "ViralPostData[]",
+  "fields": {
+    "id": {
+      "type": "number",
+      "required": true,
+      "description": "ID duy nhất của bài viết",
+      "example": 1
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "description": "Tiêu đề bài viết",
+      "example": "Breaking: Major Product Launch Announcement"
+    },
+    "platform": {
+      "type": "string",
+      "required": true,
+      "description": "Nền tảng đăng bài",
+      "example": "Facebook"
+    },
+    "engagement": {
+      "type": "number",
+      "required": true,
+      "description": "Số lượng tương tác",
+      "example": 45000
+    },
+    "reach": {
+      "type": "number",
+      "required": true,
+      "description": "Số lượt tiếp cận",
+      "example": 500000
+    },
+    "impact_score": {
+      "type": "number",
+      "required": true,
+      "description": "Điểm tác động (0-100)",
+      "range": "0-100",
+      "example": 85
+    },
+    "risk": {
+      "type": "enum",
+      "values": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "required": true,
+      "description": "Mức độ rủi ro"
+    },
+    "virality_index": {
+      "type": "number",
+      "required": true,
+      "description": "Chỉ số viral (0-100)",
+      "range": "0-100",
+      "example": 78
+    },
+    "timestamp": {
+      "type": "string",
+      "required": true,
+      "description": "Thời gian đăng bài",
+      "example": "2025-12-01 14:30:00"
+    }
+  },
+  "sample_data": [
+    {
+      "id": 1,
+      "title": "Breaking: Major Product Launch Announcement",
+      "platform": "Facebook",
+      "engagement": 45000,
+      "reach": 500000,
+      "impact_score": 85,
+      "risk": "CRITICAL",
+      "virality_index": 78,
+      "timestamp": "2025-12-01 14:30:00"
+    },
+    {
+      "id": 2,
+      "title": "Customer Service Complaint Goes Viral",
+      "platform": "TikTok", 
+      "engagement": 32000,
+      "reach": 380000,
+      "impact_score": 72,
+      "risk": "HIGH",
+      "virality_index": 65,
+      "timestamp": "2025-12-01 09:15:00"
+    },
+    {
+      "id": 3,
+      "title": "Positive Brand Mention by Influencer",
+      "platform": "Instagram",
+      "engagement": 28000,
+      "reach": 420000,
+      "impact_score": 58,
+      "risk": "MEDIUM",
+      "virality_index": 52,
+      "timestamp": "2025-11-30 16:45:00"
+    },
+    {
+      "id": 4,
+      "title": "Industry Award Recognition Post",
+      "platform": "LinkedIn",
+      "engagement": 15000,
+      "reach": 180000,
+      "impact_score": 45,
+      "risk": "LOW",
+      "virality_index": 38,
+      "timestamp": "2025-11-30 11:20:00"
+    },
+    {
+      "id": 5,
+      "title": "Product Demo Video Trending",
+      "platform": "YouTube",
+      "engagement": 67000,
+      "reach": 750000,
+      "impact_score": 92,
+      "risk": "HIGH",
+      "virality_index": 89,
+      "timestamp": "2025-11-29 20:10:00"
+    }
+  ],
+  "risk_levels": {
+    "CRITICAL": {
+      "color": "text-red-600 bg-red-100 dark:bg-red-900/30",
+      "description": "Cần hành động ngay lập tức",
+      "threshold": "impact_score >= 80 && negative_sentiment"
+    },
+    "HIGH": {
+      "color": "text-orange-600 bg-orange-100 dark:bg-orange-900/30", 
+      "description": "Cần theo dõi sát sao",
+      "threshold": "impact_score >= 60"
+    },
+    "MEDIUM": {
+      "color": "text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30",
+      "description": "Theo dõi thường xuyên",
+      "threshold": "impact_score >= 40"
+    },
+    "LOW": {
+      "color": "text-blue-600 bg-blue-100 dark:bg-blue-900/30",
+      "description": "Theo dõi cơ bản",
+      "threshold": "impact_score < 40"
+    }
+  },
+  "virality_levels": {
+    "viral": {
+      "threshold": "virality_index >= 80",
+      "label": "Viral",
+      "color": "text-purple-600",
+      "icon": "Flame"
+    },
+    "high": {
+      "threshold": "virality_index >= 60",
+      "label": "High",
+      "color": "text-orange-600", 
+      "icon": "TrendingUp"
+    },
+    "medium": {
+      "threshold": "virality_index >= 40",
+      "label": "Medium",
+      "color": "text-yellow-600",
+      "icon": "Zap"
+    },
+    "low": {
+      "threshold": "virality_index < 40",
+      "label": "Low",
+      "color": "text-blue-600",
+      "icon": "TrendingUp"
+    }
+  },
+  "calculated_metrics": {
+    "engagement_rate": {
+      "formula": "(engagement / reach) * 100",
+      "description": "Tỷ lệ tương tác"
+    },
+    "average_impact": {
+      "formula": "sum(impact_score) / count(posts)",
+      "description": "Điểm tác động trung bình"
+    },
+    "average_virality": {
+      "formula": "sum(virality_index) / count(posts)",
+      "description": "Chỉ số viral trung bình"
+    },
+    "critical_count": {
+      "formula": "count(posts where risk = 'CRITICAL' or 'HIGH')",
+      "description": "Số bài viết rủi ro cao"
+    }
+  },
+  "validation_rules": {
+    "id_unique": "id phải duy nhất",
+    "title_required": "title không được rỗng",
+    "platform_required": "platform không được rỗng",
+    "impact_score_range": "0 <= impact_score <= 100",
+    "virality_index_range": "0 <= virality_index <= 100",
+    "engagement_reach_logic": "engagement <= reach",
+    "timestamp_format": "YYYY-MM-DD HH:mm:ss"
+  },
+  "table_features": {
+    "sorting": {
+      "fields": ["impact_score", "virality_index", "engagement", "reach"],
+      "default": "impact_score desc"
+    },
+    "filtering": {
+      "platform_filter": "Filter theo platform",
+      "risk_filter": "Filter theo mức độ rủi ro"
+    },
+    "interaction": ["sort-filter", "read-only"],
+    "animations": ["row-reveal", "fade-in"],
+    "detail_panel": "Click để xem phân tích chi tiết"
+  },
+  "platform_icons": {
+    "Facebook": "📘",
+    "Instagram": "📷",
+    "TikTok": "🎵", 
+    "YouTube": "📺",
+    "Twitter": "🐦",
+    "LinkedIn": "💼",
+    "default": "📱"
+  },
+  "usage_notes": {
+    "impact_analysis": "impact_score cao + risk CRITICAL = cần hành động ngay",
+    "virality_tracking": "virality_index > 80 = viral content",
+    "risk_monitoring": "Theo dõi posts có risk HIGH/CRITICAL",
+    "performance_indicators": "Sử dụng progress bar cho impact_score",
+    "alert_system": "Hiển thị cảnh báo cho critical posts"
+  }
+}

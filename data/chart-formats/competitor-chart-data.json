@@ -1,0 +1,76 @@
+{
+  "description": "Định dạng dữ liệu cho CompetitorChart - Biểu đồ so sánh Share of Voice của các đối thủ",
+  "interface": "CompetitorData[]",
+  "fields": {
+    "brand": {
+      "type": "string",
+      "required": true,
+      "description": "Tên thương hiệu/đối thủ cạnh tranh",
+      "example": "Our Brand"
+    },
+    "sov": {
+      "type": "number",
+      "required": true,
+      "description": "Share of Voice - Tỷ lệ phần trăm thị phần tiếng nói (mention của brand chia cho tổng mention)",
+      "range": "0-100",
+      "example": 26.2
+    },
+    "color": {
+      "type": "string",
+      "required": true,
+      "description": "Màu sắc đại diện cho thương hiệu (hex code)",
+      "example": "#3b82f6"
+    }
+  },
+  "sample_data": [
+    {
+      "brand": "Our Brand",
+      "sov": 26.2,
+      "color": "#3b82f6"
+    },
+    {
+      "brand": "Competitor A",
+      "sov": 18.5,
+      "color": "#ef4444"
+    },
+    {
+      "brand": "Competitor B", 
+      "sov": 15.3,
+      "color": "#10b981"
+    },
+    {
+      "brand": "Competitor C",
+      "sov": 12.8,
+      "color": "#f59e0b"
+    },
+    {
+      "brand": "Competitor D",
+      "sov": 10.4,
+      "color": "#8b5cf6"
+    },
+    {
+      "brand": "Others",
+      "sov": 16.8,
+      "color": "#6b7280"
+    }
+  ],
+  "validation_rules": {
+    "brand_required": "brand không được rỗng",
+    "sov_range": "0 <= sov <= 100",
+    "color_format": "color phải là hex code hợp lệ (#rrggbb)",
+    "total_sov": "Tổng sov của tất cả brands nên = 100%"
+  },
+  "chart_features": {
+    "sorting": ["sov", "alphabetical"],
+    "interaction": ["hover-only", "drill-down"],
+    "display_mode": "Horizontal bar chart",
+    "market_leader": "Brand có sov cao nhất",
+    "your_brand_highlight": "Highlight vị trí của 'Your Brand'"
+  },
+  "usage_notes": {
+    "ranking": "Brands được xếp hạng theo sov từ cao đến thấp",
+    "colors": "Mỗi brand cần có màu riêng biệt để phân biệt",
+    "market_analysis": "Hiển thị market leader và vị trí của brand chính",
+    "drill_down": "Click vào brand để xem phân tích chi tiết"
+  }
+}

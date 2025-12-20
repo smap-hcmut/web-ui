@@ -1,0 +1,135 @@
+{
+  "description": "Định dạng dữ liệu cho UnifiedChart - Biểu đồ tích hợp hiển thị mentions, sentiment và critical events",
+  "interface": "UnifiedChartData[]",
+  "fields": {
+    "date": {
+      "type": "string",
+      "required": true,
+      "description": "Ngày theo định dạng ISO (YYYY-MM-DD)",
+      "example": "2025-12-01"
+    },
+    "mentions": {
+      "type": "number",
+      "required": true,
+      "description": "Số lượng mentions trong ngày",
+      "example": 1200
+    },
+    "sentiment": {
+      "type": "SentimentBreakdown",
+      "required": true,
+      "description": "Phân tích cảm xúc theo phần trăm",
+      "fields": {
+        "positive": {
+          "type": "number",
+          "range": "0-100",
+          "description": "Phần trăm cảm xúc tích cực"
+        },
+        "negative": {
+          "type": "number", 
+          "range": "0-100",
+          "description": "Phần trăm cảm xúc tiêu cực"
+        },
+        "neutral": {
+          "type": "number",
+          "range": "0-100", 
+          "description": "Phần trăm cảm xúc trung tính"
+        }
+      }
+    },
+    "criticalEvents": {
+      "type": "CriticalEvent[]",
+      "required": false,
+      "description": "Danh sách sự kiện quan trọng trong ngày",
+      "fields": {
+        "id": {
+          "type": "string",
+          "required": true,
+          "description": "ID duy nhất của sự kiện"
+        },
+        "timestamp": {
+          "type": "number",
+          "required": true,
+          "description": "Timestamp của sự kiện"
+        },
+        "impact_score": {
+          "type": "number",
+          "range": "0-100",
+          "required": true,
+          "description": "Điểm tác động của sự kiện"
+        },
+        "risk": {
+          "type": "enum",
+          "values": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+          "required": true,
+          "description": "Mức độ rủi ro"
+        },
+        "title": {
+          "type": "string",
+          "required": true,
+          "description": "Tiêu đề sự kiện"
+        },
+        "platform": {
+          "type": "string",
+          "required": true,
+          "description": "Nền tảng xảy ra sự kiện"
+        }
+      }
+    }
+  },
+  "sample_data": [
+    {
+      "date": "2025-12-01",
+      "mentions": 1200,
+      "sentiment": {
+        "positive": 45,
+        "negative": 20,
+        "neutral": 35
+      },
+      "criticalEvents": [
+        {
+          "id": "c1",
+          "timestamp": 1733097000000,
+          "impact_score": 85,
+          "risk": "CRITICAL",
+          "title": "Negative review went viral",
+          "platform": "Facebook"
+        }
+      ]
+    },
+    {
+      "date": "2025-12-02", 
+      "mentions": 1350,
+      "sentiment": {
+        "positive": 48,
+        "negative": 18,
+        "neutral": 34
+      },
+      "criticalEvents": [
+        {
+          "id": "c2",
+          "timestamp": 1733183400000,
+          "impact_score": 72,
+          "risk": "HIGH",
+          "title": "Product complaint trending",
+          "platform": "TikTok"
+        }
+      ]
+    },
+    {
+      "date": "2025-12-03",
+      "mentions": 1100,
+      "sentiment": {
+        "positive": 42,
+        "negative": 25,
+        "neutral": 33
+      },
+      "criticalEvents": []
+    }
+  ],
+  "validation_rules": {
+    "sentiment_sum": "positive + negative + neutral phải = 100",
+    "mentions_min": "mentions >= 0",
+    "impact_score_range": "0 <= impact_score <= 100",
+    "date_format": "ISO date string (YYYY-MM-DD)"
+  }
+}

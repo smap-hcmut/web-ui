@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react'
 import { useRealTimeData, RealTimeData } from '@/hooks/useRealTimeData'
 import { useProjectWebSocket } from '@/hooks/useProjectWebSocket'
+import { useDashboardData } from '@/hooks/useDashboardData'
+import { DashboardData } from '@/lib/utils/dashboardDataTransform'
 
 export interface Project {
   id: string
@@ -36,6 +38,10 @@ export interface DashboardState {
   sidebarCollapsed: boolean
   selectedMetrics: string[]
   realTimeData: RealTimeData | null
+  dashboardData: DashboardData | null
+  isDashboardLoading: boolean
+  isDashboardRevalidating: boolean
+  dashboardError: string | null
   isRealTimeEnabled: boolean
   lastUpdate: Date | null
   error: string | null
@@ -54,6 +60,10 @@ export type DashboardAction =
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SELECTED_METRICS'; payload: string[] }
   | { type: 'SET_REAL_TIME_DATA'; payload: RealTimeData }
+  | { type: 'SET_DASHBOARD_DATA'; payload: DashboardData | null }
+  | { type: 'SET_DASHBOARD_LOADING'; payload: boolean }
+  | { type: 'SET_DASHBOARD_REVALIDATING'; payload: boolean }
+  | { type: 'SET_DASHBOARD_ERROR'; payload: string | null }
   | { type: 'TOGGLE_REAL_TIME' }
   | { type: 'SET_LAST_UPDATE'; payload: Date }
   | { type: 'SET_ERROR'; payload: string | null }
@@ -108,6 +118,10 @@ const initialState: DashboardState = {
   sidebarCollapsed: false,
   selectedMetrics: ['sov', 'sentiment', 'mentions', 'engagement'],
   realTimeData: null,
+  dashboardData: null,
+  isDashboardLoading: false,
+  isDashboardRevalidating: false,
+  dashboardError: null,
   isRealTimeEnabled: true,
   lastUpdate: null,
   error: null,
@@ -170,6 +184,18 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
     case 'SET_REAL_TIME_DATA':
       return { ...state, realTimeData: action.payload }
 
+    case 'SET_DASHBOARD_DATA':
+      return { ...state, dashboardData: action.payload }
+
+    case 'SET_DASHBOARD_LOADING':
+      return { ...state, isDashboardLoading: action.payload }
+
+    case 'SET_DASHBOARD_REVALIDATING':
+      return { ...state, isDashboardRevalidating: action.payload }
+
+    case 'SET_DASHBOARD_ERROR':
+      return { ...state, dashboardError: action.payload }
+
     case 'TOGGLE_REAL_TIME':
       return { ...state, isRealTimeEnabled: !state.isRealTimeEnabled }
 
@@ -203,6 +229,27 @@ interface DashboardContextType {
   filteredData: RealTimeData | null
   isLoading: boolean
   currentProject: Project | null
+  refreshDashboard: () => void
+
+  // Individual data sources (from three-phase loading)
+  dashboardSummary: any | null
+  dashboardKeywords: any | null
+  dashboardPosts: any[] | null
+
+  // Individual loading states
+  loadingSummary: boolean
+  loadingKeywords: boolean
+  loadingPosts: boolean
+
+  // Individual errors
+  summaryError: string | null
+  keywordsError: string | null
+  postsError: string | null
+
+  // Individual refresh actions
+  refreshSummary: () => void
+  refreshKeywords: () => void
+  refreshPosts: () => void
 
   setProject: (projectId: string | null) => void
   addProject: (project: Project) => void
@@ -224,6 +271,93 @@ interface DashboardProviderProps {
 
 export function DashboardProvider({ children }: DashboardProviderProps) {
   const [state, dispatch] = useReducer(dashboardReducer, initialState)
+
+  // Get project keywords from current project
+  const projectKeywords = React.useMemo(() => {
+    if (!state.selectedProject) return []
+    const project = state.projects.find(p => p.id === state.selectedProject)
+    if (!project) return []
+
+    // Collect all keywords from brands and competitors
+    const allKeywords: string[] = []
+    project.brands.forEach(brand => allKeywords.push(...brand.keywords))
+    project.competitors.forEach(comp => allKeywords.push(...comp.keywords))
+
+    // Remove duplicates
+    return Array.from(new Set(allKeywords))
+  }, [state.selectedProject, state.projects])
+
+  // Dashboard data hook with three-phase caching
+  const {
+    data: dashboardData,
+    isLoading: isDashboardLoading,
+    error: dashboardError,
+
+    // Individual data sources
+    summary: dashboardSummary,
+    keywords: dashboardKeywords,
+    posts: dashboardPosts,
+
+    // Individual loading states
+    loadingSummary,
+    loadingKeywords,
+    loadingPosts,
+
+    // Revalidation states
+    revalidatingSummary,
+    revalidatingKeywords,
+    revalidatingPosts,
+
+    // Individual errors
+    summaryError,
+    keywordsError,
+    postsError,
+
+    // Last update timestamps
+    summaryLastUpdate,
+    keywordsLastUpdate,
+    postsLastUpdate,
+
+    // Actions
+    refresh: refreshDashboard,
+    refreshSummary,
+    refreshKeywords,
+    refreshPosts,
+  } = useDashboardData({
+    projectId: state.selectedProject,
+    enabled: state.selectedProject !== null,
+    projectKeywords,
+  })
+
+  // Sync dashboard data to context state
+  useEffect(() => {
+    dispatch({ type: 'SET_DASHBOARD_DATA', payload: dashboardData })
+  }, [dashboardData])
+
+  useEffect(() => {
+    dispatch({ type: 'SET_DASHBOARD_LOADING', payload: isDashboardLoading })
+  }, [isDashboardLoading])
+
+  useEffect(() => {
+    // Set revalidating if any of the individual revalidations are active
+    const isRevalidating = revalidatingSummary || revalidatingKeywords || revalidatingPosts
+    dispatch({ type: 'SET_DASHBOARD_REVALIDATING', payload: isRevalidating })
+  }, [revalidatingSummary, revalidatingKeywords, revalidatingPosts])
+
+  useEffect(() => {
+    dispatch({ type: 'SET_DASHBOARD_ERROR', payload: dashboardError })
+  }, [dashboardError])
+
+  useEffect(() => {
+    // Use the most recent update time from any of the APIs
+    const lastUpdate = [summaryLastUpdate, keywordsLastUpdate, postsLastUpdate]
+      .filter(Boolean)
+      .sort((a, b) => (b?.getTime() || 0) - (a?.getTime() || 0))[0]
+
+    if (lastUpdate) {
+      dispatch({ type: 'SET_LAST_UPDATE', payload: lastUpdate })
+    }
+  }, [summaryLastUpdate, keywordsLastUpdate, postsLastUpdate])
 
   // Project-specific WebSocket connection (only when ?project={id} exists)
   const { isConnected: wsConnected, error: wsError } = useProjectWebSocket({
@@ -263,12 +397,6 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
   }, [realTimeData])
 
   useEffect(() => {
-    if (lastUpdate) {
-      dispatch({ type: 'SET_LAST_UPDATE', payload: lastUpdate })
-    }
-  }, [lastUpdate])
-
-  useEffect(() => {
     if (realTimeError) {
       dispatch({ type: 'SET_ERROR', payload: realTimeError })
     }
@@ -302,7 +430,7 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
     return filtered
   }, [state.realTimeData, state.filters])
 
-  const isLoading = isConnecting || !state.realTimeData
+  const isLoading = state.isDashboardLoading || isConnecting || !state.dashboardData
   const currentProject = state.projects.find(p => p.id === state.selectedProject) || null
 
   const setProject = (projectId: string | null) => {
@@ -351,6 +479,28 @@ export function DashboardProvider({ children }: DashboardProviderProps) {
     filteredData,
     isLoading,
     currentProject,
+    refreshDashboard,
+
+    // Individual data sources
+    dashboardSummary,
+    dashboardKeywords,
+    dashboardPosts,
+
+    // Individual loading states
+    loadingSummary,
+    loadingKeywords,
+    loadingPosts,
+
+    // Individual errors
+    summaryError,
+    keywordsError,
+    postsError,
+
+    // Individual refresh actions
+    refreshSummary,
+    refreshKeywords,
+    refreshPosts,
+
     setProject,
     addProject,
     updateProject,
