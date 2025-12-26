@@ -77,6 +77,7 @@ export interface PlatformData {
   color: string
   posts?: number
   engagement?: number
+  [key: string]: string | number | undefined
 }
 
 /**
