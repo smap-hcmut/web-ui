@@ -13,6 +13,11 @@
     "settings": "Cài đặt",
     "logout": "Đăng xuất"
   },
+  "nav": {
+    "dashboard": "Bảng điều khiển",
+    "trendAnalysis": "Phân tích xu hướng",
+    "reportWizard": "Tạo báo cáo"
+  },
   "theme": {
     "light": "Sáng",
     "dark": "Tối"
@@ -28,6 +33,26 @@
     "lastUpdate": "Cập nhật lần cuối",
     "export": "Xuất",
     "share": "Chia sẻ",
+    "dataSources": "Nguồn Dữ Liệu",
+    "recentAlerts": "Cảnh Báo Gần Đây",
+    "unifiedAnalyticsDashboard": "Bảng Điều Khiển Phân Tích Tổng Hợp",
+    "shareOfVoiceComparison": "So Sánh Thị Phần Tiếng Nói",
+    "trendingTopics": "Chủ Đề Thịnh Hành",
+    "salesFunnel": "Phễu Bán Hàng (Theo Dõi Ý Định)",
+    "topViralPosts": "Bài Đăng Viral Hàng Đầu (theo Điểm Tác Động)",
+    "noDataAvailable": "Không có dữ liệu",
+    "noCompetitorData": "Không có dữ liệu đối thủ",
+    "checkDataSource": "Vui lòng kiểm tra nguồn dữ liệu của bạn",
+    "failedToLoadMetrics": "Không thể tải các chỉ số",
+    "failedToLoadChartData": "Không thể tải dữ liệu biểu đồ",
+    "failedToLoadCompetitorData": "Không thể tải dữ liệu đối thủ",
+    "failedToLoadKeywords": "Không thể tải từ khóa",
+    "failedToLoadPlatformData": "Không thể tải dữ liệu nền tảng",
+    "failedToLoadViralPosts": "Không thể tải bài đăng viral",
+    "platformDistribution": "Phân Bố Theo Nền Tảng",
+    "retry": "Thử lại",
+    "updatingData": "Đang cập nhật dữ liệu...",
+    "noAnalyzedPosts": "Chưa có bài đăng được phân tích cho dự án này. Vui lòng chạy công việc phân tích hoặc chờ dữ liệu được xử lý.",
     "totalReach": "Tổng tiếp cận",
     "engagementRate": "Tỷ lệ tương tác",
     "sentimentScore": "Điểm cảm xúc",
@@ -49,11 +74,68 @@
     "offline": "Ngoại tuyến",
     "enableRealTime": "Bật cập nhật thời gian thực",
     "disableRealTime": "Tắt cập nhật thời gian thực",
+    "notifications": "Thông báo",
+    "settings": "Cài đặt",
     "timeRanges": {
       "last7Days": "7 ngày qua",
       "last30Days": "30 ngày qua",
-      "last90Days": "90 ngày qua", 
+      "last90Days": "90 ngày qua",
       "lastYear": "Năm ngoái"
+    },
+    "processing": {
+      "errors": "lỗi",
+      "statusProcessing": "Đang xử lý và phân tích dữ liệu...",
+      "statusCompleted": "Hoàn thành!",
+      "statusFailed": "Xử lý thất bại",
+      "statusPaused": "Đã tạm dừng",
+      "statusWaiting": "Đang chờ cập nhật...",
+      "statusConnecting": "Đang kết nối...",
+      "titleCompleted": "Project hoàn thành!",
+      "titleFailed": "Xử lý thất bại",
+      "titlePaused": "Project đã tạm dừng",
+      "titleProcessing": "Đang thiết lập project",
+      "descriptionCompleted": "Dữ liệu cho <strong>{projectName}</strong> đã sẵn sàng",
+      "descriptionFailed": "Đã xảy ra lỗi khi xử lý <strong>{projectName}</strong>",
+      "descriptionProcessing": "Chúng tôi đang chuẩn bị dữ liệu cho <strong>{projectName}</strong>",
+      "redirectingIn": "Chuyển hướng sau {seconds} giây...",
+      "cancel": "Hủy",
+      "errorsOccurred": "{count} lỗi xảy ra",
+      "hideDetails": "Ẩn",
+      "showDetails": "Xem chi tiết",
+      "partialResults": "Đã thu thập được {current} / {total} items. Bạn có thể xem kết quả một phần.",
+      "pausedNotice": "Project đã được tạm dừng. Tiến độ hiện tại: {current} / {total}",
+      "processing": "Đang xử lý...",
+      "progressDetails": "Chi tiết tiến độ",
+      "dataCrawl": "🔍 Thu thập dữ liệu (Crawl)",
+      "dataAnalyze": "📊 Phân tích (Analyze)",
+      "progress": "Tiến độ",
+      "viewResults": "Xem kết quả",
+      "viewPartialResults": "Xem kết quả một phần",
+      "retry": "Thử lại",
+      "continue": "Tiếp tục",
+      "cancelAction": "Hủy bỏ",
+      "projectInfo": "Thông tin project",
+      "yourBrands": "Thương hiệu của bạn",
+      "competitors": "Đối thủ cạnh tranh",
+      "connectionError": "Lỗi kết nối:",
+      "steps": {
+        "dataCollection": {
+          "title": "Thu thập dữ liệu",
+          "description": "Thu thập dữ liệu từ các nguồn social media"
+        },
+        "brandAnalysis": {
+          "title": "Phân tích thương hiệu",
+          "description": "Phân tích và nhận diện thương hiệu"
+        },
+        "sentimentAnalysis": {
+          "title": "Phân tích sentiment",
+          "description": "Phân tích cảm xúc và xu hướng"
+        },
+        "dashboardSetup": {
+          "title": "Thiết lập dashboard",
+          "description": "Chuẩn bị dashboard và báo cáo"
+        }
+      }
     }
   },
   "trendAnalysis": {
@@ -601,6 +683,9 @@
     "searchPlaceholder": "Tìm kiếm dự án...",
     "fetchError": "Không thể tải danh sách dự án. Vui lòng thử lại.",
     "error": "Không thể tải danh sách dự án",
+    "showingOf": "Hiển thị {{count}} trong tổng số {{total}} dự án",
+    "perPage": "Mỗi trang:",
+    "allStatus": "Tất Cả Trạng Thái",
     "createSuccess": {
       "title": "Đã Tạo!",
       "text": "Dự án đã được tạo thành công!"

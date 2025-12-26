@@ -131,7 +131,7 @@ export default function DashboardHeader() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="p-2 rounded-md hover:bg-accent transition-colors relative"
-              aria-label="Notifications"
+              aria-label={t('dashboard.notifications')}
             >
               <Bell className="h-4 w-4" />
               <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs flex items-center justify-center text-white">
@@ -143,7 +143,7 @@ export default function DashboardHeader() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="p-2 rounded-md hover:bg-accent transition-colors"
-              aria-label="Settings"
+              aria-label={t('dashboard.settings')}
             >
               <Settings className="h-4 w-4" />
             </motion.button>

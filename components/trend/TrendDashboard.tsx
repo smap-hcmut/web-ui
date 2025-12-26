@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
-  Filter,
   TrendingUp,
   Hash,
   FileText,
@@ -11,7 +10,13 @@ import {
   RefreshCw,
   Grid,
   List,
-  BarChart3
+  BarChart3,
+  Database,
+  Wifi,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react'
 import { useTranslation } from 'next-i18next'
 import { useTrend } from '@/contexts/TrendContext'
@@ -24,6 +29,8 @@ interface TrendDashboardProps {
   onTopicSelect: (topicId: string) => void
 }
 
+const PAGE_SIZE_OPTIONS = [12, 24, 48]
+
 export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
   const { t } = useTranslation('common')
   const {
@@ -34,10 +41,58 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
     setSearchQuery,
     setViewMode,
     setSort,
-    refreshData
+    refreshData,
+    isUsingRealData
   } = useTrend()
 
   const [showMetrics, setShowMetrics] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
+
+  // Reset page when view mode, search, or filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [state.viewMode, state.searchQuery, state.filters, state.sortBy, state.sortOrder])
+
+  // Get current data based on view mode
+  const currentData = useMemo(() => {
+    switch (state.viewMode) {
+      case 'topics': return filteredTopics
+      case 'hashtags': return filteredHashtags
+      case 'posts': return filteredPosts
+      default: return []
+    }
+  }, [state.viewMode, filteredTopics, filteredHashtags, filteredPosts])
+
+  // Pagination calculations
+  const totalItems = currentData.length
+  const totalPages = Math.ceil(totalItems / pageSize)
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, totalItems)
+
+  // Paginated data
+  const paginatedTopics = useMemo(() => 
+    state.viewMode === 'topics' ? filteredTopics.slice(startIndex, endIndex) : [],
+    [state.viewMode, filteredTopics, startIndex, endIndex]
+  )
+  const paginatedHashtags = useMemo(() => 
+    state.viewMode === 'hashtags' ? filteredHashtags.slice(startIndex, endIndex) : [],
+    [state.viewMode, filteredHashtags, startIndex, endIndex]
+  )
+  const paginatedPosts = useMemo(() => 
+    state.viewMode === 'posts' ? filteredPosts.slice(startIndex, endIndex) : [],
+    [state.viewMode, filteredPosts, startIndex, endIndex]
+  )
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
+  }
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(1)
+  }
 
   const handleSort = (by: 'volume' | 'delta' | 'confidence' | 'sentiment') => {
     const newOrder = state.sortBy === by && state.sortOrder === 'desc' ? 'asc' : 'desc'
@@ -69,12 +124,105 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
     </button>
   )
 
+  // Pagination component
+  const Pagination = () => {
+    if (totalItems === 0) return null
+
+    return (
+      <div className="flex items-center justify-between pt-6 border-t border-border mt-6">
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            Hiển thị {startIndex + 1}-{endIndex} / {totalItems}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Số lượng:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="px-2 py-1 text-sm border border-border rounded-md bg-background"
+            >
+              {PAGE_SIZE_OPTIONS.map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => goToPage(1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang đầu"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang trước"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center gap-1 mx-2">
+            {/* Show page numbers */}
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (currentPage <= 3) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = currentPage - 2 + i
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => goToPage(pageNum)}
+                  className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition-colors ${
+                    currentPage === pageNum
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang sau"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => goToPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang cuối"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="h-full flex flex-col">
-      {}
+    <div>
+      {/* Search and Controls */}
       <div className="p-6 border-b border-border bg-card/50">
         <div className="flex items-center gap-4 mb-4">
-          {}
+          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -86,7 +234,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
             />
           </div>
 
-          {}
+          {/* View Mode Toggle */}
           <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
             <button
               onClick={() => setViewMode('topics')}
@@ -123,7 +271,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
             </button>
           </div>
 
-          {}
+          {/* Refresh Button */}
           <button
             onClick={refreshData}
             disabled={state.isLoading}
@@ -132,9 +280,28 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
              <RefreshCw className={`h-4 w-4 ${state.isLoading ? 'animate-spin' : ''}`} />
 {t('trendAnalysis.refresh')}
           </button>
+
+          {/* Data Source Indicator */}
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+            isUsingRealData 
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+          }`}>
+            {isUsingRealData ? (
+              <>
+                <Wifi className="h-3 w-3" />
+                <span>Live Data</span>
+              </>
+            ) : (
+              <>
+                <Database className="h-3 w-3" />
+                <span>No Data</span>
+              </>
+            )}
+          </div>
         </div>
 
-        {}
+        {/* Sort Options */}
         <div className="flex items-center gap-2">
            <span className="text-sm font-medium text-muted-foreground">{t('trendAnalysis.sortBy')}:</span>
           <SortButton field="volume" labelKey="trendAnalysis.sortByVolume" icon={<BarChart3 className="h-4 w-4" />} />
@@ -144,7 +311,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
         </div>
       </div>
 
-      {}
+      {/* Metrics Section */}
       {showMetrics && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -156,10 +323,10 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
         </motion.div>
       )}
 
-      {}
-      <div className="flex-1 overflow-auto">
+      {/* Content Section */}
+      <div>
         {state.isLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
               <p className="text-muted-foreground">Đang tải dữ liệu xu hướng...</p>
@@ -201,21 +368,24 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredTopics.map((topic, index) => (
-                        <motion.div
-                          key={topic.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <TrendTopicCard
-                            topic={topic}
-                            onClick={() => onTopicSelect(topic.id)}
-                          />
-                        </motion.div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {paginatedTopics.map((topic, index) => (
+                          <motion.div
+                            key={topic.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                          >
+                            <TrendTopicCard
+                              topic={topic}
+                              onClick={() => onTopicSelect(topic.id)}
+                            />
+                          </motion.div>
+                        ))}
+                      </div>
+                      <Pagination />
+                    </>
                   )}
                 </motion.div>
               )}
@@ -242,18 +412,21 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredHashtags.map((hashtag, index) => (
-                        <motion.div
-                          key={hashtag.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <TrendHashtagCard hashtag={hashtag} />
-                        </motion.div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {paginatedHashtags.map((hashtag, index) => (
+                          <motion.div
+                            key={hashtag.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                          >
+                            <TrendHashtagCard hashtag={hashtag} />
+                          </motion.div>
+                        ))}
+                      </div>
+                      <Pagination />
+                    </>
                   )}
                 </motion.div>
               )}
@@ -280,18 +453,21 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {filteredPosts.map((post, index) => (
-                        <motion.div
-                          key={post.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <TrendPostCard post={post} />
-                        </motion.div>
-                      ))}
-                    </div>
+                    <>
+                      <div className="space-y-4">
+                        {paginatedPosts.map((post, index) => (
+                          <motion.div
+                            key={post.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                          >
+                            <TrendPostCard post={post} />
+                          </motion.div>
+                        ))}
+                      </div>
+                      <Pagination />
+                    </>
                   )}
                 </motion.div>
               )}

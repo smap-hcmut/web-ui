@@ -422,10 +422,10 @@ const ProjectsContent: React.FC = () => {
                   }}
                   className="px-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
                 >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="process">Processing</option>
-                  <option value="draft">Draft</option>
+                  <option value="all">{t('projects.allStatus')}</option>
+                  <option value="completed">{t('projects.status.completed')}</option>
+                  <option value="process">{t('projects.status.process')}</option>
+                  <option value="draft">{t('projects.status.draft')}</option>
                 </select>
               </div>
             </div>
@@ -433,10 +433,10 @@ const ProjectsContent: React.FC = () => {
             {/* Results Info */}
             <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
               <p>
-                Showing {projects.length} of {totalProjects} projects
+                {t('projects.showingOf', { count: projects.length, total: totalProjects })}
               </p>
               <div className="flex items-center gap-2">
-                <label>Per page:</label>
+                <label>{t('projects.perPage')}</label>
                 <select
                   value={pageSize}
                   onChange={(e) => {

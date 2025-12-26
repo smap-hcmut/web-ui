@@ -1,5 +1,6 @@
-import React from 'react'
-import { motion } from 'framer-motion'
+import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Hash,
   TrendingUp,
@@ -12,12 +13,13 @@ import {
   Bookmark,
   BookmarkCheck,
   Share2,
-  Calendar,
   Eye,
-  Heart
+  Heart,
+  X
 } from 'lucide-react'
 import { useTranslation } from 'next-i18next'
 import { TrendHashtag, useTrend } from '@/contexts/TrendContext'
+import TrendPostCard from './TrendPostCard'
 
 interface TrendHashtagCardProps {
   hashtag: TrendHashtag
@@ -27,6 +29,13 @@ export default function TrendHashtagCard({ hashtag }: TrendHashtagCardProps) {
   const { t } = useTranslation('common')
   const { toggleSavedItem, isItemSaved } = useTrend()
   const isSaved = isItemSaved('hashtags', hashtag.id)
+  const [showSamples, setShowSamples] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // For Portal - ensure we're on client side
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const getEngagementColor = (rate: number) => {
     if (rate >= 5) return 'text-green-600 bg-green-100'
@@ -100,7 +109,13 @@ export default function TrendHashtagCard({ hashtag }: TrendHashtagCardProps) {
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">{hashtag.volume.toLocaleString()}</p>
+            <p className="text-sm font-medium">
+              {hashtag.volume >= 1000000 
+                ? `${(hashtag.volume / 1000000).toFixed(1)}M`
+                : hashtag.volume >= 1000 
+                  ? `${(hashtag.volume / 1000).toFixed(1)}K`
+                  : hashtag.volume.toLocaleString()}
+            </p>
             <p className="text-xs text-muted-foreground">Volume</p>
           </div>
         </div>
@@ -113,6 +128,18 @@ export default function TrendHashtagCard({ hashtag }: TrendHashtagCardProps) {
           </div>
         </div>
       </div>
+
+      {/* Sentiment Distribution */}
+      {hashtag.sentiment && (
+        <div className="mb-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">Sentiment</p>
+          <div className="flex gap-1 h-2 bg-muted rounded-full overflow-hidden">
+            <div className="bg-green-500 h-full" style={{ width: `${hashtag.sentiment.positive}%` }} />
+            <div className="bg-gray-500 h-full" style={{ width: `${hashtag.sentiment.neutral}%` }} />
+            <div className="bg-red-500 h-full" style={{ width: `${hashtag.sentiment.negative}%` }} />
+          </div>
+        </div>
+      )}
 
       {}
       <div className="mb-4">
@@ -163,7 +190,7 @@ export default function TrendHashtagCard({ hashtag }: TrendHashtagCardProps) {
         </div>
       </div>
 
-      {}
+      {/* Sample Posts Count */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -172,10 +199,71 @@ export default function TrendHashtagCard({ hashtag }: TrendHashtagCardProps) {
           </span>
         </div>
 
-        <button className="text-xs text-primary hover:text-primary/80 transition-colors">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowSamples(true)
+          }}
+          className="text-xs text-primary hover:text-primary/80 transition-colors"
+          disabled={hashtag.samplePosts.length === 0}
+        >
           View samples →
         </button>
       </div>
+
+      {/* Sample Posts Modal - Using Portal to render at document.body */}
+      {mounted && createPortal(
+        <AnimatePresence>
+          {showSamples && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
+              onClick={() => setShowSamples(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-4 border-b border-border bg-card">
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">{hashtag.hashtag}</h3>
+                    <span className="text-sm text-muted-foreground">
+                      - Sample Posts ({hashtag.samplePosts.length})
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowSamples(false)}
+                    className="p-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)] space-y-4 bg-background">
+                  {hashtag.samplePosts.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No sample posts available
+                    </div>
+                  ) : (
+                    hashtag.samplePosts.map((post) => (
+                      <TrendPostCard key={post.id} post={post} />
+                    ))
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   )
 }

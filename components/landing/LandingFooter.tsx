@@ -1,5 +1,6 @@
 import { useTranslation } from 'next-i18next'
 import { Facebook, Twitter, Linkedin, Instagram, Youtube, Mail } from 'lucide-react'
+import Image from 'next/image'
 
 const footerLinks = {
   product: [
@@ -42,9 +43,18 @@ export default function LandingFooter() {
           {/* Brand & Description */}
           <div className="lg:col-span-2">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-yellow-400 shadow-lg dark:bg-white" />
-              <h2 className="text-lg font-black text-gray-900 dark:text-white">
-                {t('navbar.brand')}
+              <Image
+                src="/logo.svg"
+                alt="SMAP Logo"
+                width={40}
+                height={40}
+                className="w-10 h-10"
+              />
+              <h2 
+                className="text-lg font-bold text-gray-900 dark:text-white"
+                style={{ fontFamily: "'Zen Dots', cursive" }}
+              >
+                SMAP
               </h2>
             </div>
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 max-w-xs">

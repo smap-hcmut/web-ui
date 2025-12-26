@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboard } from '@/contexts/DashboardContext'
 import ProjectSelector from './dashboard/ProjectSelector'
@@ -75,10 +76,20 @@ export default function Navbar() {
         {/* Left section - Logo + Project Tools (when in project) */}
         <div className="flex items-center gap-4 lg:gap-6">
           {/* Logo */}
-          <Link href="/" className="flex items-center flex-shrink-0">
-            <h1 className="text-lg lg:text-xl font-black bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
-              {t('navbar.brand')}
-            </h1>
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+            <Image
+              src="/logo.svg"
+              alt="SMAP Logo"
+              width={40}
+              height={40}
+              className="h-9 w-9"
+            />
+            <span 
+              className="text-lg lg:text-xl font-bold text-gray-900 dark:text-white"
+              style={{ fontFamily: "'Zen Dots', cursive" }}
+            >
+              SMAP
+            </span>
           </Link>
 
           {/* Project Context Tools - Show when in project */}

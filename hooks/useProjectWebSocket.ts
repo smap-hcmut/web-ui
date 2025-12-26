@@ -26,6 +26,8 @@ import { isPhaseBasedMessage } from '@/lib/types/websocket'
  * Options for useProjectWebSocket hook
  */
 interface UseProjectWebSocketOptions {
+  /** Project ID to connect to (optional - falls back to router.query.project) */
+  projectId?: string
   /** Called when any message is received (raw message) */
   onMessage?: (message: ProjectNotificationMessage) => void
   /** Called when phase-based message is received */
@@ -78,15 +80,25 @@ interface UseProjectWebSocketReturn {
 
 /**
  * Hook to manage project-specific WebSocket connections
- * 
- * Automatically connects when URL has ?project={projectId} parameter.
+ *
+ * Automatically connects when:
+ * 1. projectId is provided via options.projectId, OR
+ * 2. URL has ?project={projectId} parameter
+ *
  * Disconnects when leaving the page or project param is removed.
- * 
+ *
  * @example
  * ```tsx
+ * // Example 1: Using with explicit projectId
  * const { isConnected, status, progress } = useProjectWebSocket({
+ *   projectId: 'proj_123',
  *   onCompleted: () => router.push('/results'),
  *   onFailed: (errors) => console.error('Failed:', errors),
+ * })
+ *
+ * // Example 2: Using with URL query parameter
+ * const { isConnected, status, progress } = useProjectWebSocket({
+ *   onCompleted: () => router.push('/results'),
  * })
  * ```
  */
@@ -112,8 +124,9 @@ export function useProjectWebSocket(
   const [analyzeProgress, setAnalyzeProgress] = useState<PhaseProgress | null>(null)
   const [overallPercent, setOverallPercent] = useState(0)
 
-  // Extract project ID from URL
-  const projectId = (router.query.project as string) || null
+  // Extract project ID from options or URL query parameter
+  // Priority: options.projectId > router.query.project
+  const projectId = options.projectId || (router.query.project as string) || null
 
   /**
    * Handle incoming phase-based message
@@ -279,20 +292,20 @@ export function useProjectWebSocket(
     }
   }, [])
 
-  // Main effect: Connect/disconnect based on URL param
+  // Main effect: Connect/disconnect based on projectId
   useEffect(() => {
     const hasProjectParam = projectId !== null && projectId !== undefined
 
     if (hasProjectParam) {
       // Connect to WebSocket for this project
       if (currentProjectIdRef.current !== projectId) {
-        console.log(`[WebSocket] URL changed to project: ${projectId}`)
+        console.log(`[WebSocket] Connecting to project: ${projectId}`)
         connectToProject(projectId)
       }
     } else {
       // No project param → disconnect immediately
       if (currentProjectIdRef.current !== null) {
-        console.log(`[WebSocket] No project param, disconnecting`)
+        console.log(`[WebSocket] No project ID, disconnecting`)
         disconnect()
       }
     }
@@ -301,7 +314,8 @@ export function useProjectWebSocket(
     return () => {
       disconnect()
     }
-  }, [projectId, connectToProject, disconnect])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   // Cleanup on component unmount
   useEffect(() => {

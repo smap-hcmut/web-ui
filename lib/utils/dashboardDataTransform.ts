@@ -24,11 +24,16 @@ export interface TopicData {
 }
 
 /**
- * Competitor Share of Voice data
+ * Competitor Share of Voice data with multi-metric support
  */
 export interface CompetitorData {
   brand: string
-  sov: number // Percentage
+  sov: number // Primary SOV (defaults to weighted)
+  sovVolume: number // Volume-based SOV percentage
+  sovEngagement: number // Engagement-based SOV percentage
+  sovWeighted: number // Weighted SOV percentage
+  postCount: number // Raw post count
+  totalEngagement: number // Sum of all engagement (likes + comments + shares)
   color: string
 }
 
@@ -45,6 +50,8 @@ export interface ViralPostData {
   risk: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
   virality_index: number
   timestamp: string
+  permalink?: string
+  is_viral: boolean
 }
 
 /**
@@ -60,12 +67,39 @@ export interface FunnelStageData {
 }
 
 /**
+ * Platform distribution data
+ */
+export interface PlatformData {
+  name: string
+  value: number
+  percentage: number
+  change: number
+  color: string
+  posts?: number
+  engagement?: number
+}
+
+/**
  * Trend data point for time-series charts
  */
 export interface TrendData {
   date: string
   mentions: number
   sentiment: number
+}
+
+/**
+ * Crisis/Critical event data point for unified chart
+ */
+export interface CrisisDataPoint {
+  id: string
+  timestamp: number
+  date: string
+  impact_score: number
+  risk: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  title: string
+  platform: string
+  mentions: number
 }
 
 /**
@@ -79,7 +113,8 @@ export interface DashboardData {
   topics: TopicData[]
   content: any[]
   viralPosts: ViralPostData[]
-  salesFunnel: FunnelStageData[]
+  platformDistribution: PlatformData[]
+  crisisData: CrisisDataPoint[]
 }
 
 /**
@@ -260,60 +295,334 @@ export function extractTopics(posts: DashboardPost[]): TopicData[] {
 }
 
 /**
+ * Normalize impact score to 0-100 range
+ * Handles API responses that may return impact_score in different formats:
+ * - 0-1 decimal (e.g., 0.094) → multiply by 100
+ * - 1-100 values (e.g., 1.351, 10.01, 85) → already in correct range
+ * - >100 values (e.g., 10000) → divide by 100 until in range
+ *
+ * @param score - Raw impact score from API
+ * @returns Normalized score in 0-100 range (not rounded, preserves decimals)
+ */
+function normalizeImpactScore(score: number | null | undefined): number {
+  if (score === null || score === undefined || isNaN(score)) {
+    return 0
+  }
+
+  let normalized = score
+
+  // If value is in 0-1 range (decimal), scale up to 0-100
+  if (normalized >= 0 && normalized <= 1) {
+    normalized = normalized * 100
+  }
+  // If value is > 100, scale down by dividing by 100 until in 0-100 range
+  else if (normalized > 100) {
+    while (normalized > 100) {
+      normalized = normalized / 100
+    }
+    // After scaling down, if now in 0-1 range, scale back up
+    if (normalized >= 0 && normalized <= 1) {
+      normalized = normalized * 100
+    }
+  }
+  // Values between 1-100 are already in correct range, no change needed
+
+  // Clamp to 0-100 range (do NOT round, preserve decimals for later rounding)
+  return Math.max(0, Math.min(100, normalized))
+}
+
+/**
+ * Calculate risk level based on impact score
+ * Used as fallback when API doesn't provide risk_level
+ *
+ * @param impactScore - Normalized impact score (0-100)
+ * @returns Risk level
+ */
+function calculateRiskLevel(impactScore: number): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  if (impactScore >= 80) return 'CRITICAL'
+  if (impactScore >= 60) return 'HIGH'
+  if (impactScore >= 40) return 'MEDIUM'
+  return 'LOW'
+}
+
+/**
+ * Validate and sanitize risk level from API
+ *
+ * @param riskLevel - Risk level from API
+ * @param impactScore - Normalized impact score for fallback calculation
+ * @returns Valid risk level
+ */
+function validateRiskLevel(
+  riskLevel: string | null | undefined,
+  impactScore: number
+): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
+  const validRiskLevels = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+
+  if (riskLevel && validRiskLevels.includes(riskLevel)) {
+    return riskLevel as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  }
+
+  // Fallback to calculated risk level
+  return calculateRiskLevel(impactScore)
+}
+
+/**
  * Extract viral posts sorted by impact score
  *
- * Filters posts with high impact scores or viral flag
+ * Normalizes impact scores to 0-100 range, rounds to 2 decimal places, and returns top 100 by impact
+ * Uses risk_level from API with validation
+ * Pagination is handled by the component (10 posts per page, max 10 pages)
  */
 export function extractViralPosts(posts: DashboardPost[]): ViralPostData[] {
   const viralPosts = posts
-    .filter((post) => post.is_viral || post.impact_score > 0.5)
-    .map((post, index) => ({
-      id: index + 1, // Use index as numeric ID
-      title: post.content_text.substring(0, 100) + (post.content_text.length > 100 ? '...' : ''),
-      platform: post.platform,
-      engagement: (post.like_count || 0) + (post.comment_count || 0),
-      reach: post.view_count || 0,
-      impact_score: Math.round(post.impact_score * 100),
-      risk: post.risk_level,
-      virality_index: Math.round(post.impact_score * 100),
-      timestamp: new Date(post.published_at).toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    }))
+    .map((post, index) => {
+      // Normalize impact score to 0-100 range
+      const normalizedScore = normalizeImpactScore(post.impact_score)
+
+      // Round to 2 decimal places
+      const roundedImpactScore = Math.round(normalizedScore * 100) / 100
+
+      // Validate risk level from API - use risk_level field directly
+      const validatedRisk = validateRiskLevel(post.risk_level, normalizedScore)
+
+      // Get is_viral directly from API response (boolean field)
+      const isViral = post.is_viral === true
+
+      return {
+        id: index + 1, // Use index as numeric ID
+        title: post.content_text.substring(0, 100) + (post.content_text.length > 100 ? '...' : ''),
+        platform: post.platform,
+        engagement: (post.like_count || 0) + (post.comment_count || 0),
+        reach: post.view_count || 0,
+        impact_score: roundedImpactScore,
+        risk: validatedRisk,
+        virality_index: roundedImpactScore,
+        timestamp: new Date(post.published_at).toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        permalink: post.permalink || undefined,
+        is_viral: isViral,
+      }
+    })
     .sort((a, b) => b.impact_score - a.impact_score)
-    .slice(0, 10) // Top 10 viral posts
+    .slice(0, 100) // Max 100 posts (10 pages x 10 posts per page)
 
   return viralPosts
 }
 
 /**
- * Aggregate competitor Share of Voice
+ * Calculate Volume-based Share of Voice
  *
- * Calculates SOV percentage for each brand
+ * Formula: SOV_volume(brand) = (posts_count(brand) / total_posts) × 100%
+ *
+ * @param brandCounts - Record of brand name to post count
+ * @param totalPosts - Total number of posts across all brands
+ * @returns Record of brand name to volume SOV percentage
  */
-export function aggregateCompetitors(posts: DashboardPost[]): CompetitorData[] {
-  const brandCounts: Record<string, number> = {}
+function calculateVolumeSOV(
+  brandCounts: Record<string, number>,
+  totalPosts: number
+): Record<string, number> {
+  if (totalPosts === 0) return {}
 
-  posts.forEach((post) => {
-    brandCounts[post.brand_name] = (brandCounts[post.brand_name] || 0) + 1
+  const volumeSOV: Record<string, number> = {}
+  Object.entries(brandCounts).forEach(([brand, count]) => {
+    volumeSOV[brand] = Math.round((count / totalPosts) * 1000) / 10
   })
 
-  const total = posts.length
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+  return volumeSOV
+}
 
+/**
+ * Calculate Engagement-based Share of Voice
+ *
+ * Formula: SOV_engagement(brand) = (total_engagement(brand) / total_engagement_all) × 100%
+ * where engagement = like_count + comment_count + share_count
+ *
+ * @param brandEngagement - Record of brand name to total engagement
+ * @param totalEngagement - Total engagement across all brands
+ * @returns Record of brand name to engagement SOV percentage
+ */
+function calculateEngagementSOV(
+  brandEngagement: Record<string, number>,
+  totalEngagement: number
+): Record<string, number> {
+  if (totalEngagement === 0) return {}
+
+  const engagementSOV: Record<string, number> = {}
+  Object.entries(brandEngagement).forEach(([brand, engagement]) => {
+    engagementSOV[brand] = Math.round((engagement / totalEngagement) * 1000) / 10
+  })
+
+  return engagementSOV
+}
+
+/**
+ * Calculate Weighted Share of Voice
+ *
+ * Formula: SOV_weighted = (w_volume × SOV_volume) + (w_engagement × SOV_engagement)
+ * Default weights: 40% volume, 60% engagement
+ *
+ * @param volumeSOV - Volume-based SOV percentages
+ * @param engagementSOV - Engagement-based SOV percentages
+ * @param volumeWeight - Weight for volume metric (default: 0.4)
+ * @param engagementWeight - Weight for engagement metric (default: 0.6)
+ * @returns Record of brand name to weighted SOV percentage
+ */
+function calculateWeightedSOV(
+  volumeSOV: Record<string, number>,
+  engagementSOV: Record<string, number>,
+  volumeWeight: number = 0.4,
+  engagementWeight: number = 0.6
+): Record<string, number> {
+  const weightedSOV: Record<string, number> = {}
+
+  // Get all brands from both SOV records
+  const brands = new Set([...Object.keys(volumeSOV), ...Object.keys(engagementSOV)])
+
+  brands.forEach((brand) => {
+    const volSOV = volumeSOV[brand] || 0
+    const engSOV = engagementSOV[brand] || 0
+
+    // If engagement data is missing for all brands, fall back to volume
+    const hasEngagementData = Object.keys(engagementSOV).length > 0
+
+    if (!hasEngagementData) {
+      weightedSOV[brand] = volSOV
+    } else {
+      weightedSOV[brand] = Math.round((volumeWeight * volSOV + engagementWeight * engSOV) * 10) / 10
+    }
+  })
+
+  return weightedSOV
+}
+
+/**
+ * Aggregate competitor Share of Voice with multi-metric support
+ *
+ * Calculates three types of SOV: Volume, Engagement, and Weighted
+ * Handles edge cases: zero posts, missing engagement data, single brand
+ */
+export function aggregateCompetitors(posts: DashboardPost[]): CompetitorData[] {
+  // Edge case: empty posts array
+  if (posts.length === 0) {
+    return []
+  }
+
+  const brandCounts: Record<string, number> = {}
+  const brandEngagement: Record<string, number> = {}
+
+  // Aggregate post counts and engagement per brand
+  posts.forEach((post) => {
+    const brand = post.brand_name
+    brandCounts[brand] = (brandCounts[brand] || 0) + 1
+
+    // Calculate engagement: likes + comments + shares
+    // Handle null/undefined values by treating as 0
+    const likes = Math.max(0, post.like_count || 0)
+    const comments = Math.max(0, post.comment_count || 0)
+    const shares = 0 // share_count not in current DashboardPost type, reserve for future
+    const engagement = likes + comments + shares
+
+    brandEngagement[brand] = (brandEngagement[brand] || 0) + engagement
+  })
+
+  const totalPosts = posts.length
+  const totalEngagement = Object.values(brandEngagement).reduce((sum, eng) => sum + eng, 0)
+
+  // Calculate all three SOV metrics
+  const volumeSOV = calculateVolumeSOV(brandCounts, totalPosts)
+  const engagementSOV = calculateEngagementSOV(brandEngagement, totalEngagement)
+  const weightedSOV = calculateWeightedSOV(volumeSOV, engagementSOV)
+
+  // Modern, professional color palette matching the amber/gold theme
+  const colors = ['#d97706', '#92400e', '#78350f', '#451a03', '#fbbf24']
+
+  // Build competitor data with all metrics
   const competitors: CompetitorData[] = Object.entries(brandCounts)
     .map(([brand, count], index) => ({
       brand,
-      sov: Math.round((count / total) * 1000) / 10,
+      sov: weightedSOV[brand] || 0, // Default to weighted SOV
+      sovVolume: volumeSOV[brand] || 0,
+      sovEngagement: engagementSOV[brand] || 0,
+      sovWeighted: weightedSOV[brand] || 0,
+      postCount: count,
+      totalEngagement: brandEngagement[brand] || 0,
       color: colors[index % colors.length],
     }))
-    .sort((a, b) => b.sov - a.sov)
+    .sort((a, b) => b.sov - a.sov) // Sort by primary SOV (weighted)
 
   return competitors
+}
+
+/**
+ * Build platform distribution from posts
+ *
+ * Aggregates posts by platform with engagement metrics
+ */
+export function buildPlatformDistribution(posts: DashboardPost[]): PlatformData[] {
+  if (posts.length === 0) {
+    return []
+  }
+
+  const platformMap: Record<
+    string,
+    {
+      count: number
+      engagement: number
+      views: number
+    }
+  > = {}
+
+  // Aggregate posts by platform
+  posts.forEach((post) => {
+    const platform = post.platform
+    if (!platformMap[platform]) {
+      platformMap[platform] = {
+        count: 0,
+        engagement: 0,
+        views: 0,
+      }
+    }
+
+    platformMap[platform].count++
+    platformMap[platform].engagement += (post.like_count || 0) + (post.comment_count || 0)
+    platformMap[platform].views += post.view_count || 0
+  })
+
+  const totalMentions = posts.length
+
+  // Platform colors - adjusted for better harmony with amber theme
+  const platformColors: Record<string, string> = {
+    facebook: '#4267B2',
+    tiktok: '#1a1a1a',
+    youtube: '#CD201F',
+    instagram: '#C13584',
+    twitter: '#1DA1F2',
+  }
+
+  // Build platform data
+  const platforms: PlatformData[] = Object.entries(platformMap).map(([platform, data]) => {
+    const percentage = (data.count / totalMentions) * 100
+    const avgEngagement = data.views > 0 ? (data.engagement / data.views) * 100 : 0
+
+    return {
+      name: platform.charAt(0).toUpperCase() + platform.slice(1),
+      value: data.count,
+      percentage: Math.round(percentage * 10) / 10,
+      change: Math.random() * 20 - 10, // Mock change data (replace with real calculation later)
+      color: platformColors[platform.toLowerCase()] || '#6b7280',
+      posts: data.count,
+      engagement: Math.round(avgEngagement * 10) / 10,
+    }
+  })
+
+  // Sort by value descending
+  return platforms.sort((a, b) => b.value - a.value)
 }
 
 /**
@@ -368,7 +677,7 @@ export function buildSalesFunnel(posts: DashboardPost[]): FunnelStageData[] {
       count: awarenessCount,
       percentage: 100,
       change: awarenessCount > 0 ? 12.5 : 0,
-      color: '#3b82f6',
+      color: '#fbbf24',
       icon: Users,
     },
     {
@@ -376,7 +685,7 @@ export function buildSalesFunnel(posts: DashboardPost[]): FunnelStageData[] {
       count: interestCount,
       percentage: total > 0 ? (interestCount / total) * 100 : 0,
       change: interestCount > awarenessCount ? 8.3 : -5.2,
-      color: '#8b5cf6',
+      color: '#f59e0b',
       icon: MessageCircle,
     },
     {
@@ -384,7 +693,7 @@ export function buildSalesFunnel(posts: DashboardPost[]): FunnelStageData[] {
       count: considerationCount,
       percentage: total > 0 ? (considerationCount / total) * 100 : 0,
       change: considerationCount > interestCount ? 5.0 : -2.1,
-      color: '#f59e0b',
+      color: '#d97706',
       icon: ShoppingCart,
     },
     {
@@ -392,7 +701,7 @@ export function buildSalesFunnel(posts: DashboardPost[]): FunnelStageData[] {
       count: intentCount,
       percentage: total > 0 ? (intentCount / total) * 100 : 0,
       change: intentCount > considerationCount ? 3.7 : -1.5,
-      color: '#10b981',
+      color: '#92400e',
       icon: DollarSign,
     },
     {
@@ -400,18 +709,24 @@ export function buildSalesFunnel(posts: DashboardPost[]): FunnelStageData[] {
       count: purchaseCount,
       percentage: total > 0 ? (purchaseCount / total) * 100 : 0,
       change: purchaseCount > intentCount ? 2.2 : -0.8,
-      color: '#ef4444',
+      color: '#78350f',
       icon: DollarSign,
     },
   ]
 }
 
 /**
- * Build time-series trend data
+ * Build time-series trend data with continuous date range
  *
- * Aggregates posts by date for trend charts
+ * Aggregates posts by date for trend charts and fills gaps with zero values
+ * to ensure continuous timeline visualization
  */
 function buildTrends(posts: DashboardPost[]): TrendData[] {
+  if (posts.length === 0) {
+    return []
+  }
+
+  // Aggregate posts by date
   const trendMap: Record<string, { count: number; sentimentSum: number }> = {}
 
   posts.forEach((post) => {
@@ -423,13 +738,33 @@ function buildTrends(posts: DashboardPost[]): TrendData[] {
     trendMap[date].sentimentSum += post.overall_sentiment_score
   })
 
-  return Object.entries(trendMap)
-    .map(([date, data]) => ({
-      date,
-      mentions: data.count,
-      sentiment: data.sentimentSum / data.count,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date))
+  // Find date range
+  const dates = Object.keys(trendMap).sort()
+  if (dates.length === 0) {
+    return []
+  }
+
+  const minDate = new Date(dates[0])
+  const maxDate = new Date(dates[dates.length - 1])
+
+  // Fill gaps: create entry for each day in range
+  const result: TrendData[] = []
+  const currentDate = new Date(minDate)
+
+  while (currentDate <= maxDate) {
+    const dateStr = currentDate.toISOString().split('T')[0]
+    const data = trendMap[dateStr]
+
+    result.push({
+      date: dateStr,
+      mentions: data ? data.count : 0,
+      sentiment: data ? data.sentimentSum / data.count : 0,
+    })
+
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+
+  return result
 }
 
 /**
@@ -446,9 +781,9 @@ export function buildSentimentFromSummary(summary: DashboardSummary) {
 
   if (total === 0) {
     return [
-      { name: 'Positive', value: 0, color: '#10b981' },
-      { name: 'Neutral', value: 0, color: '#6b7280' },
-      { name: 'Negative', value: 0, color: '#ef4444' },
+      { name: 'Positive', value: 0, color: '#16a34a' },
+      { name: 'Neutral', value: 0, color: '#64748b' },
+      { name: 'Negative', value: 0, color: '#dc2626' },
     ]
   }
 
@@ -456,17 +791,17 @@ export function buildSentimentFromSummary(summary: DashboardSummary) {
     {
       name: 'Positive',
       value: Math.round((summary.sentiment_distribution.POSITIVE / total) * 100),
-      color: '#10b981',
+      color: '#16a34a',
     },
     {
       name: 'Neutral',
       value: Math.round((summary.sentiment_distribution.NEUTRAL / total) * 100),
-      color: '#6b7280',
+      color: '#64748b',
     },
     {
       name: 'Negative',
       value: Math.round((summary.sentiment_distribution.NEGATIVE / total) * 100),
-      color: '#ef4444',
+      color: '#dc2626',
     },
   ]
 }
@@ -487,17 +822,17 @@ function buildSentimentBreakdown(posts: DashboardPost[]) {
     {
       name: 'Positive',
       value: Math.round((sentimentCounts.POSITIVE / total) * 100),
-      color: '#10b981',
+      color: '#16a34a',
     },
     {
       name: 'Neutral',
       value: Math.round((sentimentCounts.NEUTRAL / total) * 100),
-      color: '#6b7280',
+      color: '#64748b',
     },
     {
       name: 'Negative',
       value: Math.round((sentimentCounts.NEGATIVE / total) * 100),
-      color: '#ef4444',
+      color: '#dc2626',
     },
   ]
 }
@@ -517,6 +852,40 @@ export function getSentimentBreakdown(
     return buildSentimentFromSummary(summary)
   }
   return buildSentimentBreakdown(posts)
+}
+
+/**
+ * Extract crisis/critical events from posts
+ *
+ * Filters posts with HIGH or CRITICAL risk_level for display on unified chart
+ * Returns data formatted for the UnifiedChart critical events overlay
+ *
+ * @param posts - Array of DashboardPost from API
+ * @returns Array of CrisisDataPoint for chart overlay
+ */
+export function extractCrisisData(posts: DashboardPost[]): CrisisDataPoint[] {
+  return posts
+    .filter((post) => {
+      const riskLevel = post.risk_level?.toUpperCase()
+      return riskLevel === 'HIGH' || riskLevel === 'CRITICAL'
+    })
+    .map((post, index) => {
+      const publishedDate = new Date(post.published_at)
+      const normalizedScore = normalizeImpactScore(post.impact_score)
+      const validatedRisk = validateRiskLevel(post.risk_level, normalizedScore)
+
+      return {
+        id: `crisis-${index}-${post.published_at}`,
+        timestamp: publishedDate.getTime(),
+        date: publishedDate.toISOString().split('T')[0], // Format: YYYY-MM-DD
+        impact_score: Math.round(normalizedScore * 100) / 100,
+        risk: validatedRisk,
+        title: post.content_text.substring(0, 80) + (post.content_text.length > 80 ? '...' : ''),
+        platform: post.platform,
+        mentions: 1, // Each post counts as 1 mention
+      }
+    })
+    .sort((a, b) => b.timestamp - a.timestamp) // Most recent first
 }
 
 /**
@@ -546,6 +915,7 @@ export function transformToDashboardData(
       reach: post.view_count || 0,
     })),
     viralPosts: extractViralPosts(posts),
-    salesFunnel: buildSalesFunnel(posts),
+    platformDistribution: buildPlatformDistribution(posts),
+    crisisData: extractCrisisData(posts),
   }
 }

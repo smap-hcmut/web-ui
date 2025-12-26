@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react'
+import { useTranslation } from 'next-i18next'
 import { useDashboard } from '@/contexts/DashboardContext'
 import { useProjectWebSocket } from '@/hooks/useProjectWebSocket'
 import type { PhaseProgress } from '@/lib/types/websocket'
@@ -39,6 +40,8 @@ const PhaseProgressBar: React.FC<PhaseProgressBarProps> = ({
   phase,
   colorClass = 'from-blue-600 to-violet-600',
 }) => {
+  const { t } = useTranslation('common')
+
   if (!phase) return null
 
   const percent = Math.round(phase.progress_percent)
@@ -55,7 +58,7 @@ const PhaseProgressBar: React.FC<PhaseProgressBarProps> = ({
           {hasErrors && (
             <span className="text-red-500 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
-              {phase.errors} lỗi
+              {phase.errors} {t('dashboard.processing.errors')}
             </span>
           )}
         </div>
@@ -86,6 +89,7 @@ export default function ProjectProcessingState({
   redirectDelay = 5,
 }: ProjectProcessingStateProps) {
   const router = useRouter()
+  const { t } = useTranslation('common')
   const { currentProject, state, updateProject } = useDashboard()
 
   // Local state
@@ -107,6 +111,7 @@ export default function ProjectProcessingState({
     overallPercent,
     error
   } = useProjectWebSocket({
+    projectId, // Pass projectId explicitly to the hook
     onCompleted: async () => {
       console.log('Project completed:', projectId)
       // Update project status
@@ -165,20 +170,20 @@ export default function ProjectProcessingState({
     (status: ProjectStatus | null): string => {
       switch (status) {
         case 'PROCESSING':
-          return 'Đang xử lý và phân tích dữ liệu...'
+          return t('dashboard.processing.statusProcessing')
         case 'COMPLETED':
-          return 'Hoàn thành!'
+          return t('dashboard.processing.statusCompleted')
         case 'FAILED':
-          return 'Xử lý thất bại'
+          return t('dashboard.processing.statusFailed')
         case 'PAUSED':
-          return 'Đã tạm dừng'
+          return t('dashboard.processing.statusPaused')
         default:
           return isConnected
-            ? 'Đang chờ cập nhật...'
-            : 'Đang kết nối...'
+            ? t('dashboard.processing.statusWaiting')
+            : t('dashboard.processing.statusConnecting')
       }
     },
-    [isConnected]
+    [isConnected, t]
   )
 
   // Get status icon
@@ -228,8 +233,8 @@ export default function ProjectProcessingState({
       return [
         {
           id: 'data-collection',
-          title: 'Thu thập dữ liệu',
-          description: 'Thu thập dữ liệu từ các nguồn social media',
+          title: t('dashboard.processing.steps.dataCollection.title'),
+          description: t('dashboard.processing.steps.dataCollection.description'),
           icon: <TrendingUp className="h-5 w-5" />,
           status: isProcessing
             ? 'processing'
@@ -241,8 +246,8 @@ export default function ProjectProcessingState({
         },
         {
           id: 'brand-analysis',
-          title: 'Phân tích thương hiệu',
-          description: 'Phân tích và nhận diện thương hiệu',
+          title: t('dashboard.processing.steps.brandAnalysis.title'),
+          description: t('dashboard.processing.steps.brandAnalysis.description'),
           icon: <Target className="h-5 w-5" />,
           status: isProcessing
             ? 'processing'
@@ -252,8 +257,8 @@ export default function ProjectProcessingState({
         },
         {
           id: 'sentiment-analysis',
-          title: 'Phân tích sentiment',
-          description: 'Phân tích cảm xúc và xu hướng',
+          title: t('dashboard.processing.steps.sentimentAnalysis.title'),
+          description: t('dashboard.processing.steps.sentimentAnalysis.description'),
           icon: <Users className="h-5 w-5" />,
           status: isProcessing
             ? 'processing'
@@ -263,14 +268,14 @@ export default function ProjectProcessingState({
         },
         {
           id: 'dashboard-setup',
-          title: 'Thiết lập dashboard',
-          description: 'Chuẩn bị dashboard và báo cáo',
+          title: t('dashboard.processing.steps.dashboardSetup.title'),
+          description: t('dashboard.processing.steps.dashboardSetup.description'),
           icon: <BarChart3 className="h-5 w-5" />,
           status: isCompleted ? 'completed' : 'pending',
         },
       ]
     },
-    []
+    [t]
   )
 
   // Early return if no project or not processing
@@ -304,21 +309,21 @@ export default function ProjectProcessingState({
             className={`text-3xl font-bold bg-gradient-to-r ${getHeaderGradient(status)} bg-clip-text text-transparent mb-4`}
           >
             {status === 'COMPLETED'
-              ? 'Project hoàn thành!'
+              ? t('dashboard.processing.titleCompleted')
               : status === 'FAILED'
-                ? 'Xử lý thất bại'
+                ? t('dashboard.processing.titleFailed')
                 : status === 'PAUSED'
-                  ? 'Project đã tạm dừng'
-                  : 'Đang thiết lập project'}
+                  ? t('dashboard.processing.titlePaused')
+                  : t('dashboard.processing.titleProcessing')}
           </h1>
 
           <p className="text-lg text-muted-foreground">
             {status === 'COMPLETED' ? (
-              <>Dữ liệu cho <strong>{project.name}</strong> đã sẵn sàng</>
+              <span dangerouslySetInnerHTML={{ __html: t('dashboard.processing.descriptionCompleted', { projectName: project.name }) }} />
             ) : status === 'FAILED' ? (
-              <>Đã xảy ra lỗi khi xử lý <strong>{project.name}</strong></>
+              <span dangerouslySetInnerHTML={{ __html: t('dashboard.processing.descriptionFailed', { projectName: project.name }) }} />
             ) : (
-              <>Chúng tôi đang chuẩn bị dữ liệu cho <strong>{project.name}</strong></>
+              <span dangerouslySetInnerHTML={{ __html: t('dashboard.processing.descriptionProcessing', { projectName: project.name }) }} />
             )}
           </p>
         </motion.div>
@@ -336,14 +341,14 @@ export default function ProjectProcessingState({
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-green-600" />
                   <span className="text-green-700 dark:text-green-300">
-                    Chuyển hướng sau {countdown} giây...
+                    {t('dashboard.processing.redirectingIn', { seconds: countdown })}
                   </span>
                 </div>
                 <button
                   onClick={cancelRedirect}
                   className="px-3 py-1 text-sm bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-700 transition-colors"
                 >
-                  Hủy
+                  {t('dashboard.processing.cancel')}
                 </button>
               </div>
             </motion.div>
@@ -366,11 +371,11 @@ export default function ProjectProcessingState({
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                   <span className="text-red-700 dark:text-red-300 font-medium">
-                    {progress.errors.length} lỗi xảy ra
+                    {t('dashboard.processing.errorsOccurred', { count: progress.errors.length })}
                   </span>
                 </div>
                 <span className="text-sm text-red-600">
-                  {showErrors ? 'Ẩn' : 'Xem chi tiết'}
+                  {showErrors ? t('dashboard.processing.hideDetails') : t('dashboard.processing.showDetails')}
                 </span>
               </div>
               <AnimatePresence>
@@ -406,8 +411,7 @@ export default function ProjectProcessingState({
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-yellow-600" />
               <span className="text-yellow-700 dark:text-yellow-300">
-                Đã thu thập được {progress?.current} / {progress?.total} items.
-                Bạn có thể xem kết quả một phần.
+                {t('dashboard.processing.partialResults', { current: progress?.current, total: progress?.total })}
               </span>
             </div>
           </motion.div>
@@ -423,7 +427,7 @@ export default function ProjectProcessingState({
             <div className="flex items-center gap-2">
               <PauseCircle className="h-5 w-5 text-yellow-600" />
               <span className="text-yellow-700 dark:text-yellow-300">
-                Project đã được tạm dừng. Tiến độ hiện tại: {progress?.current ?? 0} / {progress?.total ?? 0}
+                {t('dashboard.processing.pausedNotice', { current: progress?.current ?? 0, total: progress?.total ?? 0 })}
               </span>
             </div>
           </motion.div>
@@ -480,7 +484,7 @@ export default function ProjectProcessingState({
                     animate={{ opacity: 1 }}
                     className="text-xs text-primary font-medium"
                   >
-                    Đang xử lý...
+                    {t('dashboard.processing.processing')}
                   </motion.div>
                 )}
               </motion.div>
@@ -496,14 +500,14 @@ export default function ProjectProcessingState({
             transition={{ delay: 0.9, duration: 0.6 }}
             className="mt-8 p-4 bg-card border rounded-lg"
           >
-            <h4 className="text-sm font-semibold mb-4 text-muted-foreground">Chi tiết tiến độ</h4>
+            <h4 className="text-sm font-semibold mb-4 text-muted-foreground">{t('dashboard.processing.progressDetails')}</h4>
             <PhaseProgressBar
-              label="🔍 Thu thập dữ liệu (Crawl)"
+              label={t('dashboard.processing.dataCrawl')}
               phase={crawlProgress}
               colorClass="from-cyan-600 to-blue-600"
             />
             <PhaseProgressBar
-              label="📊 Phân tích (Analyze)"
+              label={t('dashboard.processing.dataAnalyze')}
               phase={analyzeProgress}
               colorClass="from-violet-600 to-purple-600"
             />
@@ -518,7 +522,7 @@ export default function ProjectProcessingState({
           className="mt-8"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Tiến độ</span>
+            <span className="text-sm font-medium">{t('dashboard.processing.progress')}</span>
             <div className="flex items-center gap-3">
               {/* ETA Display */}
               {progress?.eta && progress.eta > 0 && status === 'PROCESSING' && (
@@ -594,7 +598,7 @@ export default function ProjectProcessingState({
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
               >
                 <ExternalLink className="h-4 w-4" />
-                Xem kết quả
+                {t('dashboard.processing.viewResults')}
               </button>
             </>
           )}
@@ -607,14 +611,14 @@ export default function ProjectProcessingState({
                   className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors flex items-center gap-2"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  Xem kết quả một phần
+                  {t('dashboard.processing.viewPartialResults')}
                 </button>
               )}
               <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
-                Thử lại
+                {t('dashboard.processing.retry')}
               </button>
             </>
           )}
@@ -622,10 +626,10 @@ export default function ProjectProcessingState({
           {status === 'PAUSED' && (
             <>
               <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-                Tiếp tục
+                {t('dashboard.processing.continue')}
               </button>
               <button className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors">
-                Hủy bỏ
+                {t('dashboard.processing.cancelAction')}
               </button>
             </>
           )}
@@ -638,12 +642,12 @@ export default function ProjectProcessingState({
           transition={{ delay: 1.8, duration: 0.6 }}
           className="mt-8 bg-muted/50 rounded-lg p-6"
         >
-          <h3 className="font-semibold mb-4">Thông tin project</h3>
+          <h3 className="font-semibold mb-4">{t('dashboard.processing.projectInfo')}</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <h4 className="text-sm font-medium text-muted-foreground mb-1">
-                Thương hiệu của bạn
+                {t('dashboard.processing.yourBrands')}
               </h4>
               <div className="space-y-1">
                 {project.brands.map((brand) => (
@@ -657,7 +661,7 @@ export default function ProjectProcessingState({
 
             <div>
               <h4 className="text-sm font-medium text-muted-foreground mb-1">
-                Đối thủ cạnh tranh
+                {t('dashboard.processing.competitors')}
               </h4>
               <div className="space-y-1">
                 {project.competitors.map((competitor) => (
@@ -678,7 +682,7 @@ export default function ProjectProcessingState({
             animate={{ opacity: 1 }}
             className="mt-4 text-center text-sm text-red-500"
           >
-            Lỗi kết nối: {error}
+            {t('dashboard.processing.connectionError')} {error}
           </motion.div>
         )}
       </div>

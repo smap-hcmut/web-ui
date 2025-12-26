@@ -1,50 +1,18 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useMemo, ReactNode } from 'react'
+import { useDashboard } from './DashboardContext'
+import {
+  TrendTopic,
+  TrendPost,
+  TrendHashtag,
+  TrendMetricsSummary,
+  extractTrendTopics,
+  extractTrendHashtags,
+  transformToTrendPosts,
+  calculateTrendMetrics,
+} from '@/lib/utils/trendDataTransform'
 
-export interface TrendTopic {
-  id: string
-  name: string
-  volume: number
-  delta: number
-  confidence: number
-  sentiment: {
-    positive: number
-    neutral: number
-    negative: number
-  }
-  platforms: string[]
-  keywords: string[]
-  samplePosts: TrendPost[]
-  createdAt: Date
-}
-
-export interface TrendPost {
-  id: string
-  title: string
-  content: string
-  canonicalUrl: string
-  platform: string
-  author: string
-  publishedAt: Date
-  metrics: {
-    likes: number
-    shares: number
-    comments: number
-    views: number
-  }
-  sentiment: {
-    label: 'positive' | 'neutral' | 'negative'
-    score: number
-  }
-}
-
-export interface TrendHashtag {
-  id: string
-  hashtag: string
-  volume: number
-  engagementRate: number
-  samplePosts: string[]
-  platforms: string[]
-}
+// Re-export types for convenience
+export type { TrendTopic, TrendPost, TrendHashtag, TrendMetricsSummary }
 
 export interface TrendFilters {
   timeRange: string
@@ -64,6 +32,7 @@ export interface TrendState {
   topics: TrendTopic[]
   hashtags: TrendHashtag[]
   samplePosts: TrendPost[]
+  metrics: TrendMetricsSummary | null
   filters: TrendFilters
   isLoading: boolean
   error: string | null
@@ -84,6 +53,7 @@ export type TrendAction =
   | { type: 'SET_TOPICS'; payload: TrendTopic[] }
   | { type: 'SET_HASHTAGS'; payload: TrendHashtag[] }
   | { type: 'SET_SAMPLE_POSTS'; payload: TrendPost[] }
+  | { type: 'SET_METRICS'; payload: TrendMetricsSummary }
   | { type: 'SET_FILTERS'; payload: Partial<TrendFilters> }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
@@ -95,19 +65,22 @@ export type TrendAction =
   | { type: 'RESET_FILTERS' }
   | { type: 'TOGGLE_SAVED_ITEM'; payload: { type: 'topics' | 'hashtags' | 'posts'; id: string } }
 
+const initialFilters: TrendFilters = {
+  timeRange: '7d',
+  platforms: [],
+  industries: [],
+  keywords: [],
+  minVolume: 0,
+  minConfidence: 0,
+  sentiment: []
+}
+
 const initialState: TrendState = {
   topics: [],
   hashtags: [],
   samplePosts: [],
-  filters: {
-    timeRange: '7d',
-    platforms: [],
-    industries: [],
-    keywords: [],
-    minVolume: 100,
-    minConfidence: 0.7,
-    sentiment: []
-  },
+  metrics: null,
+  filters: initialFilters,
   isLoading: false,
   error: null,
   lastUpdate: null,
@@ -127,55 +100,34 @@ function trendReducer(state: TrendState, action: TrendAction): TrendState {
   switch (action.type) {
     case 'SET_TOPICS':
       return { ...state, topics: action.payload }
-
     case 'SET_HASHTAGS':
       return { ...state, hashtags: action.payload }
-
     case 'SET_SAMPLE_POSTS':
       return { ...state, samplePosts: action.payload }
-
+    case 'SET_METRICS':
+      return { ...state, metrics: action.payload }
     case 'SET_FILTERS':
-      return {
-        ...state,
-        filters: { ...state.filters, ...action.payload }
-      }
-
+      return { ...state, filters: { ...state.filters, ...action.payload } }
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload }
-
     case 'SET_ERROR':
       return { ...state, error: action.payload }
-
     case 'SET_LAST_UPDATE':
       return { ...state, lastUpdate: action.payload }
-
     case 'SET_SELECTED_TOPIC':
       return { ...state, selectedTopic: action.payload }
-
     case 'SET_SEARCH_QUERY':
       return { ...state, searchQuery: action.payload }
-
     case 'SET_VIEW_MODE':
       return { ...state, viewMode: action.payload }
-
     case 'SET_SORT':
-      return {
-        ...state,
-        sortBy: action.payload.by,
-        sortOrder: action.payload.order
-      }
-
+      return { ...state, sortBy: action.payload.by, sortOrder: action.payload.order }
     case 'RESET_FILTERS':
-      return {
-        ...state,
-        filters: initialState.filters
-      }
-
+      return { ...state, filters: initialFilters }
     case 'TOGGLE_SAVED_ITEM':
       const { type, id } = action.payload
       const currentSaved = state.savedItems[type]
       const isSaved = currentSaved.includes(id)
-
       return {
         ...state,
         savedItems: {
@@ -185,20 +137,20 @@ function trendReducer(state: TrendState, action: TrendAction): TrendState {
             : [...currentSaved, id]
         }
       }
-
     default:
       return state
   }
 }
 
+
 interface TrendContextType {
   state: TrendState
   dispatch: React.Dispatch<TrendAction>
-
+  // Filtered data
   filteredTopics: TrendTopic[]
   filteredHashtags: TrendHashtag[]
   filteredPosts: TrendPost[]
-
+  // Actions
   setFilters: (filters: Partial<TrendFilters>) => void
   setSelectedTopic: (topicId: string | null) => void
   setSearchQuery: (query: string) => void
@@ -208,6 +160,8 @@ interface TrendContextType {
   refreshData: () => void
   toggleSavedItem: (type: 'topics' | 'hashtags' | 'posts', id: string) => void
   isItemSaved: (type: 'topics' | 'hashtags' | 'posts', id: string) => boolean
+  // Data source info
+  isUsingRealData: boolean
 }
 
 const TrendContext = createContext<TrendContextType | undefined>(undefined)
@@ -218,262 +172,169 @@ interface TrendProviderProps {
 
 export function TrendProvider({ children }: TrendProviderProps) {
   const [state, dispatch] = useReducer(trendReducer, initialState)
+  
+  // Get data from DashboardContext
+  const { dashboardPosts, loadingPosts, postsError, refreshPosts } = useDashboard()
 
-  const generateMockData = () => {
-    const mockTopics: TrendTopic[] = [
-      {
-        id: '1',
-        name: 'Coffee Culture',
-        volume: 15420,
-        delta: 12.5,
-        confidence: 0.89,
-        sentiment: { positive: 65, neutral: 25, negative: 10 },
-        platforms: ['facebook', 'tiktok', 'instagram'],
-        keywords: ['coffee', 'cafe', 'barista', 'espresso'],
-        samplePosts: [],
-        createdAt: new Date()
-      },
-      {
-        id: '2',
-        name: 'Sustainable Fashion',
-        volume: 12890,
-        delta: -3.2,
-        confidence: 0.76,
-        sentiment: { positive: 78, neutral: 18, negative: 4 },
-        platforms: ['instagram', 'tiktok'],
-        keywords: ['sustainable', 'eco-friendly', 'fashion', 'green'],
-        samplePosts: [],
-        createdAt: new Date()
-      },
-      {
-        id: '3',
-        name: 'Remote Work',
-        volume: 9870,
-        delta: 8.7,
-        confidence: 0.82,
-        sentiment: { positive: 45, neutral: 40, negative: 15 },
-        platforms: ['linkedin', 'twitter', 'facebook'],
-        keywords: ['remote', 'work from home', 'flexible', 'digital nomad'],
-        samplePosts: [],
-        createdAt: new Date()
-      }
-    ]
-
-    const mockHashtags: TrendHashtag[] = [
-      {
-        id: '1',
-        hashtag: '#coffee',
-        volume: 45200,
-        engagementRate: 4.8,
-        samplePosts: ['post1', 'post2', 'post3'],
-        platforms: ['instagram', 'tiktok']
-      },
-      {
-        id: '2',
-        hashtag: '#sustainablefashion',
-        volume: 23400,
-        engagementRate: 6.2,
-        samplePosts: ['post4', 'post5'],
-        platforms: ['instagram']
-      },
-      {
-        id: '3',
-        hashtag: '#remotework',
-        volume: 18900,
-        engagementRate: 3.5,
-        samplePosts: ['post6', 'post7', 'post8'],
-        platforms: ['linkedin', 'twitter']
-      },
-      {
-        id: '4',
-        hashtag: '#digitalnomad',
-        volume: 15600,
-        engagementRate: 5.8,
-        samplePosts: ['post9', 'post10'],
-        platforms: ['instagram', 'tiktok', 'youtube']
-      },
-      {
-        id: '5',
-        hashtag: '#workfromhome',
-        volume: 32100,
-        engagementRate: 2.9,
-        samplePosts: ['post11', 'post12', 'post13', 'post14'],
-        platforms: ['facebook', 'linkedin']
-      },
-      {
-        id: '6',
-        hashtag: '#coffeelover',
-        volume: 12800,
-        engagementRate: 7.2,
-        samplePosts: ['post15', 'post16'],
-        platforms: ['instagram']
-      }
-    ]
-
-    const mockPosts: TrendPost[] = [
-      {
-        id: '1',
-        title: 'Amazing coffee art at local cafe',
-        content: 'Just discovered this incredible coffee shop with the most beautiful latte art. The barista is truly an artist! ☕️✨ #coffee #latteart #localbusiness',
-        canonicalUrl: 'https://instagram.com/p/example1',
-        platform: 'instagram',
-        author: '@coffeelover',
-        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        metrics: { likes: 1250, shares: 45, comments: 89, views: 5600 },
-        sentiment: { label: 'positive', score: 0.8 }
-      },
-      {
-        id: '2',
-        title: 'Sustainable fashion is the future',
-        content: 'Love seeing more brands embracing eco-friendly practices. This dress is made from recycled materials and looks amazing! 🌱 #sustainablefashion #ecofriendly',
-        canonicalUrl: 'https://instagram.com/p/example2',
-        platform: 'instagram',
-        author: '@ecofashionista',
-        publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-        metrics: { likes: 890, shares: 120, comments: 45, views: 3200 },
-        sentiment: { label: 'positive', score: 0.9 }
-      },
-      {
-        id: '3',
-        title: 'Remote work productivity tips',
-        content: 'After 2 years of remote work, here are my top productivity tips: 1) Dedicated workspace 2) Time blocking 3) Regular breaks 4) Clear boundaries. What works for you? #remotework #productivity',
-        canonicalUrl: 'https://linkedin.com/posts/example3',
-        platform: 'linkedin',
-        author: '@remoteworker',
-        publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-        metrics: { likes: 2100, shares: 340, comments: 156, views: 8900 },
-        sentiment: { label: 'positive', score: 0.7 }
-      },
-      {
-        id: '4',
-        title: 'Digital nomad life in Bali',
-        content: 'Working from paradise today! The internet is surprisingly good here. Coffee shop hopping while getting work done. This is the life! 🏝️ #digitalnomad #bali #workfromanywhere',
-        canonicalUrl: 'https://instagram.com/p/example4',
-        platform: 'instagram',
-        author: '@nomadlife',
-        publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
-        metrics: { likes: 3200, shares: 89, comments: 234, views: 12000 },
-        sentiment: { label: 'positive', score: 0.85 }
-      },
-      {
-        id: '5',
-        title: 'Work from home setup tour',
-        content: 'Finally organized my home office! Here\'s my complete WFH setup. The standing desk has been a game changer for my productivity. #workfromhome #homeoffice #productivity',
-        canonicalUrl: 'https://tiktok.com/@example5',
-        platform: 'tiktok',
-        author: '@wfhsetup',
-        publishedAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
-        metrics: { likes: 4500, shares: 567, comments: 89, views: 25000 },
-        sentiment: { label: 'positive', score: 0.75 }
-      },
-      {
-        id: '6',
-        title: 'Coffee shop recommendations in NYC',
-        content: 'Best coffee shops in NYC for remote work: 1) Blue Bottle 2) Stumptown 3) La Colombe 4) Intelligentsia. All have great wifi and atmosphere! #coffee #nyc #remotework',
-        canonicalUrl: 'https://twitter.com/example6',
-        platform: 'twitter',
-        author: '@nyccoffee',
-        publishedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-        metrics: { likes: 780, shares: 123, comments: 67, views: 4200 },
-        sentiment: { label: 'positive', score: 0.8 }
-      }
-    ]
-
-    dispatch({ type: 'SET_TOPICS', payload: mockTopics })
-    dispatch({ type: 'SET_HASHTAGS', payload: mockHashtags })
-    dispatch({ type: 'SET_SAMPLE_POSTS', payload: mockPosts })
-    dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() })
-  }
-
+  // Transform dashboard posts to trend data when posts change
   useEffect(() => {
-    dispatch({ type: 'SET_LOADING', payload: true })
+    if (loadingPosts) {
+      dispatch({ type: 'SET_LOADING', payload: true })
+      return
+    }
 
-    setTimeout(() => {
-      generateMockData()
+    if (postsError) {
+      dispatch({ type: 'SET_ERROR', payload: postsError })
       dispatch({ type: 'SET_LOADING', payload: false })
-    }, 1000)
-  }, [])
+      return
+    }
 
-  const filteredTopics = React.useMemo(() => {
+    if (dashboardPosts && dashboardPosts.length > 0) {
+      // Transform posts to trend data
+      const topics = extractTrendTopics(dashboardPosts)
+      const hashtags = extractTrendHashtags(dashboardPosts)
+      const posts = transformToTrendPosts(dashboardPosts)
+      const metrics = calculateTrendMetrics(dashboardPosts, topics, hashtags)
+
+      dispatch({ type: 'SET_TOPICS', payload: topics })
+      dispatch({ type: 'SET_HASHTAGS', payload: hashtags })
+      dispatch({ type: 'SET_SAMPLE_POSTS', payload: posts })
+      dispatch({ type: 'SET_METRICS', payload: metrics })
+      dispatch({ type: 'SET_LAST_UPDATE', payload: new Date() })
+      dispatch({ type: 'SET_ERROR', payload: null })
+    }
+
+    dispatch({ type: 'SET_LOADING', payload: false })
+  }, [dashboardPosts, loadingPosts, postsError])
+
+  // Filter topics
+  const filteredTopics = useMemo(() => {
     let filtered = state.topics
 
+    // Search filter
     if (state.searchQuery) {
+      const query = state.searchQuery.toLowerCase()
       filtered = filtered.filter(topic =>
-        topic.name.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
-        topic.keywords.some(keyword =>
-          keyword.toLowerCase().includes(state.searchQuery.toLowerCase())
-        )
+        topic.name.toLowerCase().includes(query) ||
+        topic.keywords.some(kw => kw.toLowerCase().includes(query))
       )
     }
 
+    // Platform filter
     if (state.filters.platforms.length > 0) {
       filtered = filtered.filter(topic =>
         state.filters.platforms.some(platform =>
-          topic.platforms.includes(platform)
+          topic.platforms.includes(platform.toLowerCase())
         )
       )
     }
 
-    filtered = filtered.filter(topic => topic.volume >= state.filters.minVolume)
+    // Volume filter
+    if (state.filters.minVolume > 0) {
+      filtered = filtered.filter(topic => topic.volume >= state.filters.minVolume)
+    }
 
-    filtered = filtered.filter(topic => topic.confidence >= state.filters.minConfidence)
+    // Confidence filter
+    if (state.filters.minConfidence > 0) {
+      filtered = filtered.filter(topic => topic.confidence >= state.filters.minConfidence)
+    }
 
+    // Sentiment filter
+    if (state.filters.sentiment.length > 0) {
+      filtered = filtered.filter(topic => {
+        const dominant = getDominantSentiment(topic.sentiment)
+        return state.filters.sentiment.includes(dominant)
+      })
+    }
+
+    // Sort
     filtered.sort((a, b) => {
       let aValue: number, bValue: number
-
       switch (state.sortBy) {
-        case 'volume':
-          aValue = a.volume
-          bValue = b.volume
-          break
-        case 'delta':
-          aValue = a.delta
-          bValue = b.delta
-          break
-        case 'confidence':
-          aValue = a.confidence
-          bValue = b.confidence
-          break
-        case 'sentiment':
-          aValue = a.sentiment.positive
-          bValue = b.sentiment.positive
-          break
-        default:
-          aValue = a.volume
-          bValue = b.volume
+        case 'volume': aValue = a.volume; bValue = b.volume; break
+        case 'delta': aValue = a.delta; bValue = b.delta; break
+        case 'confidence': aValue = a.confidence; bValue = b.confidence; break
+        case 'sentiment': aValue = a.sentiment.positive; bValue = b.sentiment.positive; break
+        default: aValue = a.volume; bValue = b.volume
       }
-
       return state.sortOrder === 'asc' ? aValue - bValue : bValue - aValue
     })
 
     return filtered
   }, [state.topics, state.searchQuery, state.filters, state.sortBy, state.sortOrder])
 
-  const filteredHashtags = React.useMemo(() => {
+  // Filter hashtags
+  const filteredHashtags = useMemo(() => {
     let filtered = state.hashtags
 
     if (state.searchQuery) {
+      const query = state.searchQuery.toLowerCase()
       filtered = filtered.filter(hashtag =>
-        hashtag.hashtag.toLowerCase().includes(state.searchQuery.toLowerCase())
+        hashtag.hashtag.toLowerCase().includes(query)
       )
     }
 
-    return filtered
-  }, [state.hashtags, state.searchQuery])
+    if (state.filters.platforms.length > 0) {
+      filtered = filtered.filter(hashtag =>
+        state.filters.platforms.some(platform =>
+          hashtag.platforms.includes(platform.toLowerCase())
+        )
+      )
+    }
 
-  const filteredPosts = React.useMemo(() => {
+    // Sort by volume
+    filtered.sort((a, b) => {
+      const aValue = state.sortBy === 'volume' ? a.volume : a.engagementRate
+      const bValue = state.sortBy === 'volume' ? b.volume : b.engagementRate
+      return state.sortOrder === 'asc' ? aValue - bValue : bValue - aValue
+    })
+
+    return filtered
+  }, [state.hashtags, state.searchQuery, state.filters.platforms, state.sortBy, state.sortOrder])
+
+  // Filter posts
+  const filteredPosts = useMemo(() => {
     let filtered = state.samplePosts
 
     if (state.searchQuery) {
+      const query = state.searchQuery.toLowerCase()
       filtered = filtered.filter(post =>
-        post.title.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
-        post.content.toLowerCase().includes(state.searchQuery.toLowerCase())
+        post.title.toLowerCase().includes(query) ||
+        post.content.toLowerCase().includes(query) ||
+        post.author.toLowerCase().includes(query)
       )
     }
 
-    return filtered
-  }, [state.samplePosts, state.searchQuery])
+    if (state.filters.platforms.length > 0) {
+      filtered = filtered.filter(post =>
+        state.filters.platforms.includes(post.platform.toLowerCase())
+      )
+    }
 
+    if (state.filters.sentiment.length > 0) {
+      filtered = filtered.filter(post =>
+        state.filters.sentiment.includes(post.sentiment.label)
+      )
+    }
+
+    // Sort by engagement
+    filtered.sort((a, b) => {
+      const engA = a.metrics.likes + a.metrics.comments
+      const engB = b.metrics.likes + b.metrics.comments
+      return state.sortOrder === 'asc' ? engA - engB : engB - engA
+    })
+
+    return filtered
+  }, [state.samplePosts, state.searchQuery, state.filters, state.sortOrder])
+
+  // Helper function
+  function getDominantSentiment(sentiment: { positive: number; neutral: number; negative: number }): string {
+    if (sentiment.positive >= sentiment.neutral && sentiment.positive >= sentiment.negative) return 'positive'
+    if (sentiment.negative >= sentiment.neutral && sentiment.negative >= sentiment.positive) return 'negative'
+    return 'neutral'
+  }
+
+  // Actions
   const setFilters = (filters: Partial<TrendFilters>) => {
     dispatch({ type: 'SET_FILTERS', payload: filters })
   }
@@ -499,11 +360,7 @@ export function TrendProvider({ children }: TrendProviderProps) {
   }
 
   const refreshData = () => {
-    dispatch({ type: 'SET_LOADING', payload: true })
-    setTimeout(() => {
-      generateMockData()
-      dispatch({ type: 'SET_LOADING', payload: false })
-    }, 1000)
+    refreshPosts()
   }
 
   const toggleSavedItem = (type: 'topics' | 'hashtags' | 'posts', id: string) => {
@@ -513,6 +370,8 @@ export function TrendProvider({ children }: TrendProviderProps) {
   const isItemSaved = (type: 'topics' | 'hashtags' | 'posts', id: string) => {
     return state.savedItems[type].includes(id)
   }
+
+  const isUsingRealData = dashboardPosts && dashboardPosts.length > 0
 
   const contextValue: TrendContextType = {
     state,
@@ -528,7 +387,8 @@ export function TrendProvider({ children }: TrendProviderProps) {
     resetFilters,
     refreshData,
     toggleSavedItem,
-    isItemSaved
+    isItemSaved,
+    isUsingRealData,
   }
 
   return (

@@ -1,7 +1,6 @@
 import type { NextPage } from 'next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
-import { useTranslation } from 'next-i18next'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/router'
 import ProjectDetailLayout from '@/components/project/ProjectDetailLayout'
 import TrendDashboard from '@/components/trend/TrendDashboard'
@@ -10,27 +9,85 @@ import TrendFilters from '@/components/trend/TrendFilters'
 import SavedItems from '@/components/trend/SavedItems'
 import { TrendProvider } from '@/contexts/TrendContext'
 import { useDashboard } from '@/contexts/DashboardContext'
+import { projectService } from '@/lib/api/services/project.service'
 
 const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectId }) => {
   const router = useRouter()
-  const { t } = useTranslation('common')
-  const { state, setProject } = useDashboard()
+  const { state, setProject, addProject, dashboardPosts, loadingPosts } = useDashboard()
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const loadedProjectRef = useRef<string | null>(null)
 
-  // Handle project selection from URL route parameter
-  useEffect(() => {
-    if (projectId && projectId !== state.selectedProject) {
-      const projectExists = state.projects.some(p => p.id === projectId)
-      if (projectExists) {
-        setProject(projectId)
-      }
+  // Load project from API if not in context
+  const loadProject = useCallback(async () => {
+    if (loadedProjectRef.current === projectId) {
+      return
     }
-    setIsLoading(false)
-  }, [projectId, state.selectedProject, state.projects, setProject])
 
-  // Handle redirect for draft projects
+    setIsLoading(true)
+
+    try {
+      // Check if project exists in context
+      const contextProject = state.projects.find(p => p.id === projectId)
+      
+      if (contextProject) {
+        if (state.selectedProject !== projectId) {
+          setProject(projectId)
+        }
+        loadedProjectRef.current = projectId
+        setIsLoading(false)
+        return
+      }
+
+      // If not in context, try to fetch from API
+      try {
+        const projectsResponse = await projectService.getProjects({
+          page: 1,
+          limit: 100
+        })
+        
+        const foundProject = projectsResponse.projects.find(p => p.id === projectId)
+        
+        if (foundProject) {
+          addProject(foundProject)
+          setProject(projectId)
+        } else {
+          // Project not found in API, but still set it to trigger data fetch
+          // The dashboard data hook will handle the actual data fetching
+          setProject(projectId)
+        }
+        loadedProjectRef.current = projectId
+      } catch (apiError) {
+        console.error('Failed to fetch project:', apiError)
+        // Still set project to trigger data fetch attempt
+        setProject(projectId)
+        loadedProjectRef.current = projectId
+      }
+    } catch (error) {
+      console.error('Error loading project:', error)
+      setProject(projectId)
+      loadedProjectRef.current = projectId
+    } finally {
+      setIsLoading(false)
+    }
+  }, [projectId, state.projects, state.selectedProject, addProject, setProject])
+
+  // Handle project loading
+  useEffect(() => {
+    if (projectId && loadedProjectRef.current !== projectId) {
+      loadProject()
+    }
+  }, [projectId, loadProject])
+
+  // Reset loaded project ref when projectId changes
+  useEffect(() => {
+    if (loadedProjectRef.current !== projectId) {
+      loadedProjectRef.current = null
+    }
+  }, [projectId])
+
+  // Handle redirect for draft projects (only for mock projects)
   useEffect(() => {
     const currentProject = state.projects.find(p => p.id === state.selectedProject)
     if (currentProject?.status === 'draft') {
@@ -38,7 +95,11 @@ const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectI
     }
   }, [state.selectedProject, state.projects, router])
 
-  if (isLoading) {
+  // Show loading while data is being fetched
+  // For API-based projects, we show loading until posts are loaded (or error occurs)
+  const isDataLoading = isLoading || (state.selectedProject === projectId && loadingPosts && !dashboardPosts)
+  
+  if (isDataLoading) {
     return (
       <ProjectDetailLayout projectId={projectId}>
         <div className="flex items-center justify-center h-full">
@@ -51,34 +112,18 @@ const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectI
     )
   }
 
-  const currentProject = state.projects.find(p => p.id === state.selectedProject)
-
-  // Handle project not found
-  if (!currentProject && !isLoading) {
-    return (
-      <ProjectDetailLayout projectId={projectId}>
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Project Not Found</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">The project you&apos;re looking for doesn&apos;t exist.</p>
-            <button
-              onClick={() => router.push('/projects')}
-              className="px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100"
-            >
-              Back to Projects
-            </button>
-          </div>
-        </div>
-      </ProjectDetailLayout>
-    )
-  }
+  // Note: We don't check for "Project Not Found" anymore because:
+  // - API-based projects (UUID) won't be in the mock projects list
+  // - The API will return data if the project exists
+  // - If no data is returned, the TrendDashboard will show "No Data" state
 
   return (
     <ProjectDetailLayout projectId={projectId}>
-      <div className="flex h-full">
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20">
+      <div className="flex h-full overflow-hidden">
+        {/* Main content area - scrollable */}
+        <div className="flex-1 overflow-auto">
+          {/* Header - sticky */}
+          <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20 bg-amber-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
                 Trend Analysis
@@ -102,7 +147,7 @@ const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectI
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-hidden">
+          <div>
             {selectedTopic ? (
               <TopicDetail
                 topicId={selectedTopic}
@@ -116,7 +161,7 @@ const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectI
 
         {/* Filters Sidebar */}
         {showFilters && (
-          <div className="w-80 border-l border-amber-300/60 dark:border-white/20 bg-white/40 dark:bg-gray-900/40">
+          <div className="w-80 border-l border-amber-300/60 dark:border-white/20 bg-white/40 dark:bg-gray-900/40 overflow-auto">
             <TrendFilters onClose={() => setShowFilters(false)} />
           </div>
         )}

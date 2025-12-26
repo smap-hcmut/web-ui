@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
 import {
   Menu,
   X,
@@ -65,11 +66,11 @@ export default function MobileDashboard() {
       { name: 'Negative', value: 20, color: '#ef4444' },
     ],
     competitors: [
-      { brand: 'Your Brand', sov: 26.2, color: '#3b82f6' },
-      { brand: 'Competitor A', sov: 24.8, color: '#10b981' },
-      { brand: 'Competitor B', sov: 18.5, color: '#f59e0b' },
-      { brand: 'Competitor C', sov: 15.2, color: '#ef4444' },
-      { brand: 'Others', sov: 15.3, color: '#8b5cf6' },
+      { brand: 'Your Brand', sov: 26.2, sovVolume: 25.0, sovEngagement: 27.5, sovWeighted: 26.2, postCount: 250, totalEngagement: 12500, color: '#3b82f6' },
+      { brand: 'Competitor A', sov: 24.8, sovVolume: 24.0, sovEngagement: 25.5, sovWeighted: 24.8, postCount: 240, totalEngagement: 11500, color: '#10b981' },
+      { brand: 'Competitor B', sov: 18.5, sovVolume: 20.0, sovEngagement: 17.0, sovWeighted: 18.5, postCount: 200, totalEngagement: 7800, color: '#f59e0b' },
+      { brand: 'Competitor C', sov: 15.2, sovVolume: 16.0, sovEngagement: 14.5, sovWeighted: 15.2, postCount: 160, totalEngagement: 6500, color: '#ef4444' },
+      { brand: 'Others', sov: 15.3, sovVolume: 15.0, sovEngagement: 15.5, sovWeighted: 15.3, postCount: 150, totalEngagement: 7000, color: '#8b5cf6' },
     ],
     topics: [
       { text: 'coffee', value: 100 },
@@ -267,8 +268,6 @@ export default function MobileDashboard() {
                 <TopicCloud
                   title="Trending Topics"
                   data={data.topics}
-                  animation="word-cloud"
-                  interaction="click-filter"
                   onTopicClick={setSelectedTopic}
                 />
               )}
@@ -359,7 +358,17 @@ export default function MobileDashboard() {
               <Menu className="h-5 w-5" />
             </motion.button>
 
-            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+            <Image
+              src="/logo.svg"
+              alt="SMAP Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+            />
+            <h1 
+              className="text-lg font-bold text-gray-900 dark:text-white"
+              style={{ fontFamily: "'Zen Dots', cursive" }}
+            >
               SMAP
             </h1>
           </div>

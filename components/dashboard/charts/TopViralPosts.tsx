@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Download,
@@ -13,7 +13,9 @@ import {
   TrendingUp,
   AlertTriangle,
   Flame,
-  Zap
+  Zap,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 interface ViralPostData {
@@ -26,6 +28,8 @@ interface ViralPostData {
   risk: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
   virality_index: number
   timestamp: string
+  permalink?: string
+  is_viral: boolean
 }
 
 interface TopViralPostsProps {
@@ -73,6 +77,10 @@ export default function TopViralPosts({
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
   const [filterPlatform, setFilterPlatform] = useState<string>('all')
   const [filterRisk, setFilterRisk] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  
+  const ITEMS_PER_PAGE = 10
+  const MAX_PAGES = 10
 
   // Add null check
   if (!data || !Array.isArray(data) || data.length === 0) {
@@ -97,6 +105,8 @@ export default function TopViralPosts({
         setSortField(field)
         setSortDirection('desc')
       }
+      // Reset to first page when sorting changes
+      setCurrentPage(1)
     }
   }
 
@@ -162,6 +172,23 @@ export default function TopViralPosts({
 
   const sortedData = getSortedData()
   const criticalCount = data.filter(d => d.risk === 'CRITICAL').length
+  
+  // Pagination logic
+  const totalItems = sortedData.length
+  const totalPages = Math.min(Math.ceil(totalItems / ITEMS_PER_PAGE), MAX_PAGES)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems)
+  const paginatedData = sortedData.slice(startIndex, endIndex)
+  
+  // Reset page when filters change
+  const handleFilterChange = (type: 'platform' | 'risk', value: string) => {
+    if (type === 'platform') {
+      setFilterPlatform(value)
+    } else {
+      setFilterRisk(value)
+    }
+    setCurrentPage(1)
+  }
 
   return (
     <motion.div
@@ -225,7 +252,7 @@ export default function TopViralPosts({
               key={platform}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setFilterPlatform(platform)}
+              onClick={() => handleFilterChange('platform', platform)}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 filterPlatform === platform
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -244,7 +271,7 @@ export default function TopViralPosts({
               key={risk}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setFilterRisk(risk)}
+              onClick={() => handleFilterChange('risk', risk)}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 filterRisk === risk
                   ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
@@ -314,10 +341,8 @@ export default function TopViralPosts({
           </thead>
           <tbody>
             <AnimatePresence>
-              {sortedData.map((item, index) => {
-                const viralityLevel = getViralityLevel(item.virality_index)
-                const ViralityIcon = viralityLevel.icon
-
+              {paginatedData.map((item, index) => {
+                const globalIndex = startIndex + index + 1
                 return (
                   <motion.tr
                     key={item.id}
@@ -335,7 +360,7 @@ export default function TopViralPosts({
                     }}
                   >
                     <td className="py-4 px-4 text-sm text-gray-600 dark:text-gray-400">
-                      {index + 1}
+                      {globalIndex}
                     </td>
                     <td className="py-4 px-4">
                       <div className="font-medium text-sm max-w-xs truncate">
@@ -364,10 +389,14 @@ export default function TopViralPosts({
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
-                        <ViralityIcon className={`h-4 w-4 ${viralityLevel.color}`} />
-                        <span className={`text-sm font-medium ${viralityLevel.color}`}>
-                          {item.virality_index}
-                        </span>
+                        {item.is_viral ? (
+                          <>
+                            <Flame className="h-4 w-4 text-purple-600" />
+                            <span className="text-sm font-medium text-purple-600">Yes</span>
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-600 dark:text-gray-400">No</span>
+                        )}
                       </div>
                     </td>
                     <td className="py-4 px-4">
@@ -386,14 +415,27 @@ export default function TopViralPosts({
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
                         <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                          whileHover={item.permalink ? { scale: 1.1 } : {}}
+                          whileTap={item.permalink ? { scale: 0.9 } : {}}
+                          className={`p-1 rounded-md transition-colors ${
+                            item.permalink
+                              ? 'hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer'
+                              : 'cursor-not-allowed opacity-50'
+                          }`}
+                          disabled={!item.permalink}
                           onClick={(e) => {
                             e.stopPropagation()
+                            if (item.permalink) {
+                              window.open(item.permalink, '_blank', 'noopener,noreferrer')
+                            }
                           }}
+                          title={item.permalink ? 'Open post' : 'Link not available'}
                         >
-                          <ExternalLink className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                          <ExternalLink className={`h-4 w-4 ${
+                            item.permalink
+                              ? 'text-gray-600 dark:text-gray-400'
+                              : 'text-gray-400 dark:text-gray-600'
+                          }`} />
                         </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.1 }}
@@ -414,6 +456,117 @@ export default function TopViralPosts({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-amber-300/60 dark:border-white/20">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {startIndex + 1}-{endIndex} of {totalItems} posts
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* First Page */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className={`p-2 rounded-md transition-colors ${
+                currentPage === 1
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 -ml-3" />
+            </motion.button>
+            
+            {/* Previous Page */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className={`p-2 rounded-md transition-colors ${
+                currentPage === 1
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </motion.button>
+            
+            {/* Page Numbers */}
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // Show first page, last page, current page, and pages around current
+                const showPage = 
+                  page === 1 || 
+                  page === totalPages || 
+                  Math.abs(page - currentPage) <= 1
+                
+                if (!showPage) {
+                  // Show ellipsis
+                  if (page === 2 && currentPage > 3) {
+                    return <span key={page} className="px-1 text-gray-400">...</span>
+                  }
+                  if (page === totalPages - 1 && currentPage < totalPages - 2) {
+                    return <span key={page} className="px-1 text-gray-400">...</span>
+                  }
+                  return null
+                }
+                
+                return (
+                  <motion.button
+                    key={page}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setCurrentPage(page)}
+                    className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition-colors ${
+                      currentPage === page
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {page}
+                  </motion.button>
+                )
+              })}
+            </div>
+            
+            {/* Next Page */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className={`p-2 rounded-md transition-colors ${
+                currentPage === totalPages
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </motion.button>
+            
+            {/* Last Page */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className={`p-2 rounded-md transition-colors ${
+                currentPage === totalPages
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 -ml-3" />
+            </motion.button>
+          </div>
+        </div>
+      )}
 
       {/* Detail Panel */}
       <AnimatePresence>

@@ -326,6 +326,7 @@ const ErrorState = ({ error, onRetry }: { error: string; onRetry?: () => void })
 // Time range options
 const TIME_RANGES = [
   { value: '7d', label: 'Last 7 Days', days: 7 },
+  { value: '14d', label: 'Last 14 Days', days: 14 },
   { value: '30d', label: 'Last 30 Days', days: 30 },
   { value: '90d', label: 'Last 90 Days', days: 90 },
   { value: '1y', label: 'Last Year', days: 365 },
@@ -372,6 +373,7 @@ export default function UnifiedChart({
   }, [data])
 
   // Filter data based on selected time range
+  // Algorithm: Show min(requested_days, available_days), always prioritizing most recent data
   const filteredData = useMemo(() => {
     if (selectedTimeRange === 'all') {
       return validatedData
@@ -382,13 +384,23 @@ export default function UnifiedChart({
       return validatedData
     }
 
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - range.days)
+    // If we have less data than requested, return all available data
+    if (validatedData.length <= range.days) {
+      return validatedData
+    }
 
-    return validatedData.filter(dataPoint => {
-      const pointDate = new Date(dataPoint.date)
-      return pointDate >= cutoffDate
-    })
+    // Sort data by date descending to get most recent first
+    const sortedData = [...validatedData].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+
+    // Take the most recent N days
+    const recentData = sortedData.slice(0, range.days)
+
+    // Return sorted ascending (oldest to newest) for proper chart rendering
+    return recentData.sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
   }, [validatedData, selectedTimeRange])
 
   const formatXAxisLabel = (tickItem: string) => {

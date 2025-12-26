@@ -277,35 +277,47 @@ export default function ProjectPreviewStep({
           </div>
         </>
       )}
-
-      {/* Navigation - Hide in fullscreen mode */}
-      {!isFullscreen && (
-        <div className="flex items-center justify-between pt-6 border-t border-amber-300/60 dark:border-white/20">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            {t('common.back')}
-          </button>
-
-          <button
-            onClick={onNext}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
-          >
-            {t('common.next')}
-            <ArrowRight className="w-5 h-5" />
-          </button>
-        </div>
-      )}
     </motion.div>
+  )
+
+  // Render navigation buttons
+  const renderNavigation = () => (
+    <div className="flex items-center justify-between">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
+      >
+        <ArrowLeft className="w-5 h-5" />
+        {t('common.back')}
+      </button>
+
+      <button
+        onClick={onNext}
+        className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+      >
+        {t('common.next')}
+        <ArrowRight className="w-5 h-5" />
+      </button>
+    </div>
   )
 
   // Main return - wrap in fullscreen modal if needed
   return (
     <>
-      {/* Normal View */}
-      {!isFullscreen && renderContent()}
+      {/* Normal View - Flex layout with sticky footer */}
+      {!isFullscreen && (
+        <div className="flex flex-col h-full -m-6">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {renderContent()}
+          </div>
+          
+          {/* Sticky Footer Navigation */}
+          <div className="flex-shrink-0 px-6 py-4 border-t border-border bg-background">
+            {renderNavigation()}
+          </div>
+        </div>
+      )}
 
       {/* Fullscreen Modal */}
       <AnimatePresence>
@@ -353,23 +365,7 @@ export default function ProjectPreviewStep({
 
               {/* Fullscreen Footer with Navigation */}
               <div className="flex-shrink-0 px-6 py-4 border-t border-amber-300/60 dark:border-white/20 bg-white dark:bg-gray-900">
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg font-semibold hover:bg-muted/80 transition-colors"
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                    {t('common.back')}
-                  </button>
-
-                  <button
-                    onClick={onNext}
-                    className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-colors"
-                  >
-                    {t('common.next')}
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
+                {renderNavigation()}
               </div>
             </div>
           </motion.div>

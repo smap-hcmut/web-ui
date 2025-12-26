@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { CompetitorData } from '@/lib/utils/dashboardDataTransform'
 
 export interface RealTimeData {
   timestamp: number
@@ -18,11 +19,7 @@ export interface RealTimeData {
     value: number
     color: string
   }[]
-  competitors: {
-    brand: string
-    sov: number
-    color: string
-  }[]
+  competitors: CompetitorData[]
   topics: {
     text: string
     value: number
@@ -86,11 +83,11 @@ const generateMockData = (): RealTimeData => {
       { name: 'Negative', value: 20 + Math.floor((Math.random() - 0.5) * 10), color: '#ef4444' }
     ],
     competitors: [
-      { brand: 'Your Brand', sov: 26.2 + (Math.random() - 0.5) * 2, color: '#3b82f6' },
-      { brand: 'Competitor A', sov: 24.8 + (Math.random() - 0.5) * 2, color: '#10b981' },
-      { brand: 'Competitor B', sov: 18.5 + (Math.random() - 0.5) * 2, color: '#f59e0b' },
-      { brand: 'Competitor C', sov: 15.2 + (Math.random() - 0.5) * 2, color: '#ef4444' },
-      { brand: 'Others', sov: 15.3 + (Math.random() - 0.5) * 2, color: '#8b5cf6' }
+      { brand: 'Your Brand', sov: 26.2 + (Math.random() - 0.5) * 2, sovVolume: 25.0, sovEngagement: 27.5, sovWeighted: 26.2, postCount: 250, totalEngagement: 12500, color: '#3b82f6' },
+      { brand: 'Competitor A', sov: 24.8 + (Math.random() - 0.5) * 2, sovVolume: 24.0, sovEngagement: 25.5, sovWeighted: 24.8, postCount: 240, totalEngagement: 11500, color: '#10b981' },
+      { brand: 'Competitor B', sov: 18.5 + (Math.random() - 0.5) * 2, sovVolume: 20.0, sovEngagement: 17.0, sovWeighted: 18.5, postCount: 200, totalEngagement: 7800, color: '#f59e0b' },
+      { brand: 'Competitor C', sov: 15.2 + (Math.random() - 0.5) * 2, sovVolume: 16.0, sovEngagement: 14.5, sovWeighted: 15.2, postCount: 160, totalEngagement: 6500, color: '#ef4444' },
+      { brand: 'Others', sov: 15.3 + (Math.random() - 0.5) * 2, sovVolume: 15.0, sovEngagement: 15.5, sovWeighted: 15.3, postCount: 150, totalEngagement: 7000, color: '#8b5cf6' }
     ],
     topics: [
       { text: 'coffee', value: 100 + Math.floor((Math.random() - 0.5) * 20), sentiment: 0.7, trend: 'rising', mentions: 1250, engagement: 4.8 },

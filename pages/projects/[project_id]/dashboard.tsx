@@ -1,6 +1,6 @@
 import type { NextPage } from 'next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/router'
 import ProjectDetailLayout from '@/components/project/ProjectDetailLayout'
 import DashboardSidebar from '@/components/dashboard/DashboardSidebar'
@@ -10,6 +10,7 @@ import ProjectSetupWizard from '@/components/dashboard/ProjectSetupWizard'
 import ProjectProcessingState from '@/components/dashboard/ProjectProcessingState'
 import { useDashboard, Project } from '@/contexts/DashboardContext'
 import { useIsMobile } from '@/hooks/useResponsive'
+import { projectService } from '@/lib/api/services/project.service'
 
 const ProjectDashboardContent: React.FC<{ projectId: string }> = ({ projectId }) => {
   const router = useRouter()
@@ -17,25 +18,90 @@ const ProjectDashboardContent: React.FC<{ projectId: string }> = ({ projectId })
   const isMobile = useIsMobile()
   const [showWizard, setShowWizard] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  const [projectNotFound, setProjectNotFound] = useState(false)
+  const loadedProjectRef = useRef<string | null>(null)
 
-  // Handle project selection from URL route parameter
-  useEffect(() => {
-    if (projectId && projectId !== state.selectedProject) {
-      const projectExists = state.projects.some(p => p.id === projectId)
-      if (projectExists) {
-        setProject(projectId)
-      }
+  // Memoize the load project function to prevent infinite loops
+  const loadProject = useCallback(async () => {
+    // Prevent loading the same project multiple times
+    if (loadedProjectRef.current === projectId) {
+      return
     }
-    setIsLoading(false)
-  }, [projectId, state.selectedProject, state.projects, setProject])
+
+    setIsLoading(true)
+    setProjectNotFound(false)
+
+    try {
+      // First, check if project exists in context
+      const contextProject = state.projects.find(p => p.id === projectId)
+      
+      if (contextProject) {
+        setCurrentProject(contextProject)
+        if (state.selectedProject !== projectId) {
+          setProject(projectId)
+        }
+        loadedProjectRef.current = projectId
+        setIsLoading(false)
+        return
+      }
+
+      // If not in context, try to fetch from API
+      try {
+        // Try to get the project from the projects list API first
+        const projectsResponse = await projectService.getProjects({
+          page: 1,
+          limit: 100 // Get a reasonable number to find our project
+        })
+        
+        const foundProject = projectsResponse.projects.find(p => p.id === projectId)
+        
+        if (foundProject) {
+          // Add to context and set as current
+          addProject(foundProject)
+          setCurrentProject(foundProject)
+          setProject(projectId)
+          loadedProjectRef.current = projectId
+        } else {
+          // Project not found
+          setProjectNotFound(true)
+          loadedProjectRef.current = projectId
+        }
+      } catch (apiError) {
+        console.error('Failed to fetch project:', apiError)
+        // If API fails, still show project not found
+        setProjectNotFound(true)
+        loadedProjectRef.current = projectId
+      }
+    } catch (error) {
+      console.error('Error loading project:', error)
+      setProjectNotFound(true)
+      loadedProjectRef.current = projectId
+    } finally {
+      setIsLoading(false)
+    }
+  }, [projectId, state.projects, state.selectedProject, addProject, setProject])
+
+  // Handle project loading
+  useEffect(() => {
+    if (projectId && loadedProjectRef.current !== projectId) {
+      loadProject()
+    }
+  }, [projectId, loadProject])
+
+  // Reset loaded project ref when projectId changes
+  useEffect(() => {
+    if (loadedProjectRef.current !== projectId) {
+      loadedProjectRef.current = null
+    }
+  }, [projectId])
 
   // Handle redirect for draft projects
   useEffect(() => {
-    const currentProject = state.projects.find(p => p.id === state.selectedProject)
     if (currentProject?.status === 'draft') {
       router.push('/projects')
     }
-  }, [state.selectedProject, state.projects, router])
+  }, [currentProject, router])
 
   const handleProjectComplete = (projectData: any) => {
     const newProject: Project = {
@@ -65,10 +131,8 @@ const ProjectDashboardContent: React.FC<{ projectId: string }> = ({ projectId })
     )
   }
 
-  const currentProject = state.projects.find(p => p.id === state.selectedProject)
-
   // Handle project not found
-  if (!currentProject && !isLoading) {
+  if (projectNotFound || (!currentProject && !isLoading)) {
     return (
       <ProjectDetailLayout projectId={projectId}>
         <div className="flex items-center justify-center h-full">

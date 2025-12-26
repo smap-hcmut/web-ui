@@ -76,6 +76,79 @@ const keywordsCache = new Map<string, CacheEntry<TopKeywordsResponse['data']>>()
 const postsCache = new Map<string, CacheEntry<DashboardPost[]>>()
 
 /**
+ * LocalStorage keys
+ */
+const STORAGE_PREFIX = 'dashboard_cache_'
+const STORAGE_VERSION = 'v1'
+
+/**
+ * Get localStorage key
+ */
+function getStorageKey(projectId: string, type: 'summary' | 'keywords' | 'posts'): string {
+  return `${STORAGE_PREFIX}${STORAGE_VERSION}:${type}:${projectId}`
+}
+
+/**
+ * Save to localStorage (with error handling)
+ */
+function saveToStorage<T>(projectId: string, type: 'summary' | 'keywords' | 'posts', data: T): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const key = getStorageKey(projectId, type)
+    const entry: CacheEntry<T> = {
+      data,
+      timestamp: Date.now(),
+      projectId,
+    }
+    localStorage.setItem(key, JSON.stringify(entry))
+  } catch (error) {
+    // localStorage might be full or disabled
+    console.warn(`Failed to save ${type} to localStorage:`, error)
+  }
+}
+
+/**
+ * Load from localStorage
+ */
+function loadFromStorage<T>(projectId: string, type: 'summary' | 'keywords' | 'posts'): CacheEntry<T> | null {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const key = getStorageKey(projectId, type)
+    const stored = localStorage.getItem(key)
+    if (!stored) return null
+    
+    const entry = JSON.parse(stored) as CacheEntry<T>
+    // Validate entry structure
+    if (!entry.data || !entry.timestamp || entry.projectId !== projectId) {
+      localStorage.removeItem(key)
+      return null
+    }
+    
+    return entry
+  } catch (error) {
+    console.warn(`Failed to load ${type} from localStorage:`, error)
+    return null
+  }
+}
+
+/**
+ * Clear localStorage cache for a project
+ */
+function clearStorageCache(projectId: string): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    localStorage.removeItem(getStorageKey(projectId, 'summary'))
+    localStorage.removeItem(getStorageKey(projectId, 'keywords'))
+    localStorage.removeItem(getStorageKey(projectId, 'posts'))
+  } catch (error) {
+    console.warn('Failed to clear localStorage cache:', error)
+  }
+}
+
+/**
  * Get cache key for a project and data type
  */
 function getCacheKey(projectId: string, type: 'summary' | 'keywords' | 'posts'): string {
@@ -83,7 +156,7 @@ function getCacheKey(projectId: string, type: 'summary' | 'keywords' | 'posts'):
 }
 
 /**
- * Get cached data if valid
+ * Get cached data if valid (checks both memory and localStorage)
  */
 function getCachedData<T>(
   projectId: string,
@@ -93,12 +166,29 @@ function getCachedData<T>(
   const cacheKey = getCacheKey(projectId, type)
   let cached: CacheEntry<T> | undefined
 
+  // First check in-memory cache
   if (type === 'summary') {
     cached = summaryCache.get(cacheKey) as CacheEntry<T> | undefined
   } else if (type === 'keywords') {
     cached = keywordsCache.get(cacheKey) as CacheEntry<T> | undefined
   } else {
     cached = postsCache.get(cacheKey) as CacheEntry<T> | undefined
+  }
+
+  // If not in memory, try localStorage
+  if (!cached) {
+    const storedEntry = loadFromStorage<T>(projectId, type)
+    if (storedEntry) {
+      // Restore to in-memory cache
+      if (type === 'summary') {
+        summaryCache.set(cacheKey, storedEntry as CacheEntry<DashboardSummary>)
+      } else if (type === 'keywords') {
+        keywordsCache.set(cacheKey, storedEntry as CacheEntry<TopKeywordsResponse['data']>)
+      } else {
+        postsCache.set(cacheKey, storedEntry as CacheEntry<DashboardPost[]>)
+      }
+      cached = storedEntry
+    }
   }
 
   if (!cached) return null
@@ -113,7 +203,7 @@ function getCachedData<T>(
 }
 
 /**
- * Set cache data
+ * Set cache data (both memory and localStorage)
  */
 function setCacheData<T>(projectId: string, type: 'summary' | 'keywords' | 'posts', data: T): void {
   const cacheKey = getCacheKey(projectId, type)
@@ -123,6 +213,7 @@ function setCacheData<T>(projectId: string, type: 'summary' | 'keywords' | 'post
     projectId,
   }
 
+  // Save to in-memory cache
   if (type === 'summary') {
     summaryCache.set(cacheKey, entry as CacheEntry<DashboardSummary>)
   } else if (type === 'keywords') {
@@ -130,15 +221,19 @@ function setCacheData<T>(projectId: string, type: 'summary' | 'keywords' | 'post
   } else {
     postsCache.set(cacheKey, entry as CacheEntry<DashboardPost[]>)
   }
+
+  // Also save to localStorage for persistence
+  saveToStorage(projectId, type, data)
 }
 
 /**
- * Clear all caches for a specific project
+ * Clear all caches for a specific project (both memory and localStorage)
  */
 function clearAllCaches(projectId: string): void {
   summaryCache.delete(getCacheKey(projectId, 'summary'))
   keywordsCache.delete(getCacheKey(projectId, 'keywords'))
   postsCache.delete(getCacheKey(projectId, 'posts'))
+  clearStorageCache(projectId)
 }
 
 /**

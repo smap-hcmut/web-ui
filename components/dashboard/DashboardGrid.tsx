@@ -5,7 +5,7 @@ import UnifiedChart from './charts/UnifiedChart'
 import CompetitorChart from './charts/CompetitorChart'
 import TopicCloud from './charts/TopicCloud'
 import TopViralPosts from './charts/TopViralPosts'
-import SalesFunnel from './charts/SalesFunnel'
+import PlatformDistribution from './charts/PlatformDistribution'
 import DataTable from './DataTable'
 import TopicDetailModal from './TopicDetailModal'
 import { useDashboard } from '../../contexts/DashboardContext'
@@ -36,7 +36,7 @@ export default function DashboardGrid() {
     refreshKeywords,
     refreshPosts,
   } = useDashboard()
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation('common')
 
   // Use dashboard data from API instead of filteredData/mock
   const dashboardData = state.dashboardData
@@ -82,7 +82,7 @@ export default function DashboardGrid() {
     topics: [],
     content: [],
     viralPosts: [],
-    salesFunnel: [],
+    platformDistribution: [],
   }
 
   const metrics = [
@@ -93,7 +93,7 @@ export default function DashboardGrid() {
       delta: '+2.3%',
       trend: 'up' as const,
       animation: 'counter' as const,
-      color: 'text-blue-600',
+      color: 'text-amber-700',
       tooltip: getTooltip('sov')
     },
     {
@@ -103,7 +103,7 @@ export default function DashboardGrid() {
       delta: '-0.12',
       trend: data.metrics.sentiment > 0 ? 'up' as const : 'down' as const,
       animation: 'gauge' as const,
-      color: data.metrics.sentiment > 0 ? 'text-green-600' : 'text-red-600',
+      color: data.metrics.sentiment > 0 ? 'text-green-700' : 'text-red-700',
       tooltip: getTooltip('sentiment')
     },
     {
@@ -113,7 +113,7 @@ export default function DashboardGrid() {
       delta: '+12.3%',
       trend: 'up' as const,
       animation: 'counter' as const,
-      color: 'text-purple-600',
+      color: 'text-amber-900',
       tooltip: getTooltip('mentions')
     },
     {
@@ -123,7 +123,7 @@ export default function DashboardGrid() {
       delta: '+0.3%',
       trend: 'up' as const,
       animation: 'progress' as const,
-      color: 'text-orange-600',
+      color: 'text-amber-600',
       tooltip: getTooltip('engagement')
     }
   ]
@@ -154,7 +154,7 @@ export default function DashboardGrid() {
           onClick={onRetry}
           className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors"
         >
-          Retry
+          {t('dashboard.retry')}
         </button>
       </div>
     </div>
@@ -166,9 +166,9 @@ export default function DashboardGrid() {
       <div className="p-6 space-y-6">
         <div className="flex flex-col items-center justify-center h-96 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg">
           <div className="text-gray-400 dark:text-gray-600 text-6xl mb-4">📊</div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Data Available</h3>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('dashboard.noDataAvailable')}</h3>
           <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
-            No analyzed posts found for this project yet. Please run an analysis job or wait for data to be processed.
+            {t('dashboard.noAnalyzedPosts')}
           </p>
         </div>
       </div>
@@ -202,7 +202,7 @@ export default function DashboardGrid() {
             <ErrorBanner
               error={summaryError}
               onRetry={refreshSummary}
-              title="Failed to load metrics"
+              title={t('dashboard.failedToLoadMetrics')}
             />
           </div>
         ) : (
@@ -232,19 +232,22 @@ export default function DashboardGrid() {
           <ErrorBanner
             error={postsError}
             onRetry={refreshPosts}
-            title="Failed to load chart data"
+            title={t('dashboard.failedToLoadChartData')}
           />
         ) : (
           <UnifiedChart
-            title="Unified Analytics Dashboard"
-            data={createSampleUnifiedData()}
+            title={t('dashboard.unifiedAnalyticsDashboard')}
+            data={data.trends && data.trends.length > 0
+              ? transformToUnifiedData(data.trends, data.crisisData || [], data.sentiment)
+              : createSampleUnifiedData()
+            }
             animation="line-draw"
             interaction="hover-only"
           />
         )}
       </motion.div>
 
-      {/* Phase 2: TopicCloud & CompetitorChart (from Keywords & Posts API) */}
+      {/* Phase 2: CompetitorChart & PlatformDistribution (2-column grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -257,11 +260,11 @@ export default function DashboardGrid() {
             <ErrorBanner
               error={postsError}
               onRetry={refreshPosts}
-              title="Failed to load competitor data"
+              title={t('dashboard.failedToLoadCompetitorData')}
             />
           ) : data.competitors && data.competitors.length > 0 ? (
             <CompetitorChart
-              title="Share of Voice Comparison"
+              title={t('dashboard.shareOfVoiceComparison')}
               data={data.competitors}
               animation="bar-stack"
               interaction="drill-down"
@@ -270,8 +273,8 @@ export default function DashboardGrid() {
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6">
               <div className="flex items-center justify-center h-80">
                 <div className="text-center">
-                  <div className="text-gray-600 dark:text-gray-400 mb-2">No competitor data available</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Please check your data source</div>
+                  <div className="text-gray-600 dark:text-gray-400 mb-2">{t('dashboard.noCompetitorData')}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{t('dashboard.checkDataSource')}</div>
                 </div>
               </div>
             </div>
@@ -283,45 +286,44 @@ export default function DashboardGrid() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6, duration: 0.6 }}
         >
-          {loadingKeywords ? (
+          {loadingPosts ? (
             <ChartSkeleton height="h-80" />
-          ) : keywordsError ? (
+          ) : postsError ? (
             <ErrorBanner
-              error={keywordsError}
-              onRetry={refreshKeywords}
-              title="Failed to load keywords"
+              error={postsError}
+              onRetry={refreshPosts}
+              title={t('dashboard.failedToLoadPlatformData')}
             />
           ) : (
-            <TopicCloud
-              title="Trending Topics"
-              data={data.topics}
-              animation="word-cloud"
-              interaction="click-filter"
-              onTopicClick={setSelectedTopic}
+            <PlatformDistribution
+              title={t('dashboard.platformDistribution')}
+              data={data.platformDistribution}
+              animation="scale-up"
+              interaction="hover-details"
             />
           )}
         </motion.div>
       </div>
 
+      {/* Phase 3: TopicCloud (full width) */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7, duration: 0.6 }}
       >
-        {loadingPosts ? (
-          <ChartSkeleton height="h-64" />
-        ) : postsError ? (
+        {loadingKeywords ? (
+          <ChartSkeleton height="h-80" />
+        ) : keywordsError ? (
           <ErrorBanner
-            error={postsError}
-            onRetry={refreshPosts}
-            title="Failed to load sales funnel"
+            error={keywordsError}
+            onRetry={refreshKeywords}
+            title={t('dashboard.failedToLoadKeywords')}
           />
         ) : (
-          <SalesFunnel
-            title="Sales Funnel (INTENT Tracking)"
-            data={data.salesFunnel}
-            animation="bar-grow"
-            interaction="hover-details"
+          <TopicCloud
+            title={t('dashboard.trendingTopics')}
+            data={data.topics}
+            onTopicClick={setSelectedTopic}
           />
         )}
       </motion.div>
@@ -337,11 +339,11 @@ export default function DashboardGrid() {
           <ErrorBanner
             error={postsError}
             onRetry={refreshPosts}
-            title="Failed to load viral posts"
+            title={t('dashboard.failedToLoadViralPosts')}
           />
         ) : (
           <TopViralPosts
-            title="Top Viral Posts (by Impact Score)"
+            title={t('dashboard.topViralPosts')}
             data={data.viralPosts}
             animation="row-reveal"
             interaction="sort-filter"
@@ -353,7 +355,7 @@ export default function DashboardGrid() {
       {state.isDashboardRevalidating && (
         <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-medium">Updating data...</span>
+          <span className="text-sm font-medium">{t('dashboard.updatingData')}</span>
         </div>
       )}
     </div>

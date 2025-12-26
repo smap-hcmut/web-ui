@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient chính -->
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6"/>
+      <stop offset="50%" style="stop-color:#8B5CF6"/>
+      <stop offset="100%" style="stop-color:#EC4899"/>
+    </linearGradient>
+    
+    <!-- Gradient cho vòng tròn ngoài -->
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+    
+    <!-- Shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#6366F1" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Icon container - scaled up and centered -->
+  <g transform="translate(12, 12)">
+    <!-- Vòng tròn ngoài - đại diện cho mạng lưới -->
+    <circle cx="48" cy="48" r="46" fill="none" stroke="url(#ringGrad)" stroke-width="3" stroke-dasharray="10 5" opacity="0.7">
+      <animateTransform attributeName="transform" type="rotate" from="0 48 48" to="360 48 48" dur="30s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Vòng tròn giữa -->
+    <circle cx="48" cy="48" r="36" fill="none" stroke="url(#mainGrad)" stroke-width="2.5" opacity="0.5"/>
+    
+    <!-- Node trung tâm - Analytics Hub -->
+    <circle cx="48" cy="48" r="22" fill="url(#mainGrad)" filter="url(#shadow)"/>
+    
+    <!-- Biểu tượng kính lúp/search bên trong -->
+    <circle cx="44" cy="44" r="10" fill="none" stroke="white" stroke-width="3"/>
+    <line x1="52" y1="52" x2="60" y2="60" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Social nodes xung quanh -->
+    <!-- Node 1 - Top -->
+    <circle cx="48" cy="6" r="8" fill="#3B82F6"/>
+    <circle cx="48" cy="6" r="3.5" fill="white"/>
+    
+    <!-- Node 2 - Right -->
+    <circle cx="90" cy="48" r="8" fill="#8B5CF6"/>
+    <rect x="86.5" y="44.5" width="7" height="7" rx="1.5" fill="white"/>
+    
+    <!-- Node 3 - Bottom -->
+    <circle cx="48" cy="90" r="8" fill="#EC4899"/>
+    <polygon points="48,85 52,92 44,92" fill="white"/>
+    
+    <!-- Node 4 - Left -->
+    <circle cx="6" cy="48" r="8" fill="#10B981"/>
+    <circle cx="6" cy="48" r="3.5" fill="none" stroke="white" stroke-width="2"/>
+    
+    <!-- Connection lines từ center đến các nodes -->
+    <line x1="48" y1="26" x2="48" y2="14" stroke="#3B82F6" stroke-width="2.5" opacity="0.7"/>
+    <line x1="70" y1="48" x2="82" y2="48" stroke="#8B5CF6" stroke-width="2.5" opacity="0.7"/>
+    <line x1="48" y1="70" x2="48" y2="82" stroke="#EC4899" stroke-width="2.5" opacity="0.7"/>
+    <line x1="26" y1="48" x2="14" y2="48" stroke="#10B981" stroke-width="2.5" opacity="0.7"/>
+    
+    <!-- Data flow dots animation -->
+    <circle r="2.5" fill="#3B82F6">
+      <animateMotion dur="2s" repeatCount="indefinite" path="M48,26 L48,14"/>
+    </circle>
+    <circle r="2.5" fill="#8B5CF6">
+      <animateMotion dur="2s" repeatCount="indefinite" path="M70,48 L82,48" begin="0.5s"/>
+    </circle>
+    <circle r="2.5" fill="#EC4899">
+      <animateMotion dur="2s" repeatCount="indefinite" path="M48,70 L48,82" begin="1s"/>
+    </circle>
+    <circle r="2.5" fill="#10B981">
+      <animateMotion dur="2s" repeatCount="indefinite" path="M26,48 L14,48" begin="1.5s"/>
+    </circle>
+  </g>
+</svg>

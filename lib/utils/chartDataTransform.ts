@@ -119,18 +119,51 @@ export function validateUnifiedChartData(data: UnifiedChartData[]): boolean {
 
 /**
  * Creates sample unified chart data for development and testing
- * @returns Array of sample unified chart data
+ * Generates 14 days of data to support testing of all time range options (7d, 14d, 30d, etc.)
+ * Dates are relative to current date for realistic testing
+ * @returns Array of sample unified chart data (14 days)
  */
 export function createSampleUnifiedData(): UnifiedChartData[] {
+  const now = new Date()
+  const formatDate = (daysAgo: number) => {
+    const date = new Date(now)
+    date.setDate(date.getDate() - daysAgo)
+    return date.toISOString().split('T')[0]
+  }
+
   const sampleData: UnifiedChartData[] = [
+    // Day 14 (oldest)
     {
-      date: '2025-12-01',
+      date: formatDate(13),
+      mentions: 950,
+      sentiment: { positive: 40, negative: 22, neutral: 38 },
+      criticalEvents: [
+        {
+          id: 'c1',
+          timestamp: new Date(formatDate(13) + 'T09:00:00').getTime(),
+          impact_score: 42,
+          risk: 'MEDIUM',
+          title: 'Service quality discussion',
+          platform: 'Facebook'
+        }
+      ]
+    },
+    // Day 13
+    {
+      date: formatDate(12),
+      mentions: 1050,
+      sentiment: { positive: 43, negative: 20, neutral: 37 },
+      criticalEvents: []
+    },
+    // Day 12
+    {
+      date: formatDate(11),
       mentions: 1200,
       sentiment: { positive: 45, negative: 20, neutral: 35 },
       criticalEvents: [
         {
-          id: 'c1',
-          timestamp: new Date('2025-12-01T10:30:00').getTime(),
+          id: 'c2',
+          timestamp: new Date(formatDate(11) + 'T10:30:00').getTime(),
           impact_score: 85,
           risk: 'CRITICAL',
           title: 'Negative review went viral',
@@ -138,14 +171,15 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 11
     {
-      date: '2025-12-02',
+      date: formatDate(10),
       mentions: 1350,
       sentiment: { positive: 48, negative: 18, neutral: 34 },
       criticalEvents: [
         {
-          id: 'c2',
-          timestamp: new Date('2025-12-02T14:20:00').getTime(),
+          id: 'c3',
+          timestamp: new Date(formatDate(10) + 'T14:20:00').getTime(),
           impact_score: 72,
           risk: 'HIGH',
           title: 'Product complaint trending',
@@ -153,22 +187,23 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 10
     {
-      date: '2025-12-03',
+      date: formatDate(9),
       mentions: 1100,
       sentiment: { positive: 42, negative: 25, neutral: 33 },
       criticalEvents: [
         {
-          id: 'c3',
-          timestamp: new Date('2025-12-03T09:15:00').getTime(),
+          id: 'c4',
+          timestamp: new Date(formatDate(9) + 'T09:15:00').getTime(),
           impact_score: 45,
           risk: 'MEDIUM',
           title: 'Service delay discussion',
           platform: 'Facebook'
         },
         {
-          id: 'c4',
-          timestamp: new Date('2025-12-03T16:45:00').getTime(),
+          id: 'c5',
+          timestamp: new Date(formatDate(9) + 'T16:45:00').getTime(),
           impact_score: 91,
           risk: 'CRITICAL',
           title: 'PR crisis escalating',
@@ -176,14 +211,15 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 9
     {
-      date: '2025-12-04',
+      date: formatDate(8),
       mentions: 1600,
       sentiment: { positive: 52, negative: 15, neutral: 33 },
       criticalEvents: [
         {
-          id: 'c5',
-          timestamp: new Date('2025-12-04T11:00:00').getTime(),
+          id: 'c6',
+          timestamp: new Date(formatDate(8) + 'T11:00:00').getTime(),
           impact_score: 58,
           risk: 'HIGH',
           title: 'Customer complaint spike',
@@ -191,14 +227,15 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 8 (start of most recent 7 days when testing 7d vs 14d)
     {
-      date: '2025-12-05',
+      date: formatDate(7),
       mentions: 1800,
       sentiment: { positive: 55, negative: 12, neutral: 33 },
       criticalEvents: [
         {
-          id: 'c6',
-          timestamp: new Date('2025-12-05T08:30:00').getTime(),
+          id: 'c7',
+          timestamp: new Date(formatDate(7) + 'T08:30:00').getTime(),
           impact_score: 32,
           risk: 'LOW',
           title: 'Minor feedback issue',
@@ -206,14 +243,15 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 7
     {
-      date: '2025-12-06',
+      date: formatDate(6),
       mentions: 1500,
       sentiment: { positive: 50, negative: 18, neutral: 32 },
       criticalEvents: [
         {
-          id: 'c7',
-          timestamp: new Date('2025-12-06T13:20:00').getTime(),
+          id: 'c8',
+          timestamp: new Date(formatDate(6) + 'T13:20:00').getTime(),
           impact_score: 65,
           risk: 'HIGH',
           title: 'Competitor attack post',
@@ -221,17 +259,89 @@ export function createSampleUnifiedData(): UnifiedChartData[] {
         }
       ]
     },
+    // Day 6
     {
-      date: '2025-12-07',
+      date: formatDate(5),
       mentions: 2000,
       sentiment: { positive: 58, negative: 10, neutral: 32 },
       criticalEvents: [
         {
-          id: 'c8',
-          timestamp: new Date('2025-12-07T10:10:00').getTime(),
+          id: 'c9',
+          timestamp: new Date(formatDate(5) + 'T10:10:00').getTime(),
           impact_score: 28,
           risk: 'LOW',
           title: 'General inquiry thread',
+          platform: 'YouTube'
+        }
+      ]
+    },
+    // Day 5
+    {
+      date: formatDate(4),
+      mentions: 1750,
+      sentiment: { positive: 56, negative: 14, neutral: 30 },
+      criticalEvents: []
+    },
+    // Day 4
+    {
+      date: formatDate(3),
+      mentions: 1900,
+      sentiment: { positive: 60, negative: 12, neutral: 28 },
+      criticalEvents: [
+        {
+          id: 'c10',
+          timestamp: new Date(formatDate(3) + 'T15:30:00').getTime(),
+          impact_score: 38,
+          risk: 'MEDIUM',
+          title: 'Feature request discussion',
+          platform: 'Instagram'
+        }
+      ]
+    },
+    // Day 3
+    {
+      date: formatDate(2),
+      mentions: 2100,
+      sentiment: { positive: 62, negative: 10, neutral: 28 },
+      criticalEvents: [
+        {
+          id: 'c11',
+          timestamp: new Date(formatDate(2) + 'T11:45:00').getTime(),
+          impact_score: 25,
+          risk: 'LOW',
+          title: 'Positive campaign feedback',
+          platform: 'Facebook'
+        }
+      ]
+    },
+    // Day 2
+    {
+      date: formatDate(1),
+      mentions: 2250,
+      sentiment: { positive: 65, negative: 8, neutral: 27 },
+      criticalEvents: [
+        {
+          id: 'c12',
+          timestamp: new Date(formatDate(1) + 'T09:20:00').getTime(),
+          impact_score: 68,
+          risk: 'HIGH',
+          title: 'Viral positive testimonial',
+          platform: 'TikTok'
+        }
+      ]
+    },
+    // Day 1 (today/most recent)
+    {
+      date: formatDate(0),
+      mentions: 2400,
+      sentiment: { positive: 68, negative: 7, neutral: 25 },
+      criticalEvents: [
+        {
+          id: 'c13',
+          timestamp: new Date(formatDate(0) + 'T14:00:00').getTime(),
+          impact_score: 52,
+          risk: 'MEDIUM',
+          title: 'New product launch buzz',
           platform: 'YouTube'
         }
       ]

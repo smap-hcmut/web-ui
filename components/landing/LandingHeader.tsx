@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { Moon, Sun, Globe, Menu, X, User, LogOut, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/contexts/AuthContext'
 
 const navItems = [
@@ -54,15 +55,25 @@ export default function LandingHeader() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo & Brand */}
           <motion.div
-            className="flex items-center gap-3"
+            className="flex items-center gap-2"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="w-8 h-8 rounded-lg bg-yellow-400 shadow-lg dark:bg-white" />
-            <h1 className="text-xl font-black text-gray-900 dark:text-white">
-              {t('navbar.brand')}
-            </h1>
+            <Image
+              src="/logo.svg"
+              alt="SMAP Logo"
+              width={48}
+              height={48}
+              className="h-10 w-10"
+              priority
+            />
+            <span 
+              className="text-2xl font-bold text-gray-900 dark:text-white"
+              style={{ fontFamily: "'Zen Dots', cursive" }}
+            >
+              SMAP
+            </span>
           </motion.div>
 
           {/* Desktop Navigation */}

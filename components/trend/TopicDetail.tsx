@@ -14,9 +14,14 @@ import {
   Share2,
   Eye,
   Download,
-  Bookmark
+  Bookmark,
+  Zap,
+  AlertTriangle,
+  Star,
+  Clock
 } from 'lucide-react'
-import { useTrend } from '@/contexts/TrendContext'
+import { useTrend, TrendPost } from '@/contexts/TrendContext'
+import TrendPostCard from './TrendPostCard'
 
 interface TopicDetailProps {
   topicId: string
@@ -151,7 +156,13 @@ export default function TopicDetail({ topicId, onBack }: TopicDetailProps) {
                   <Users className="h-5 w-5 text-blue-600" />
                   <span className="text-sm font-medium text-muted-foreground">Volume</span>
                 </div>
-                <p className="text-2xl font-bold">{topic.volume.toLocaleString()}</p>
+                <p className="text-2xl font-bold">
+                  {topic.volume >= 1000000 
+                    ? `${(topic.volume / 1000000).toFixed(1)}M`
+                    : topic.volume >= 1000 
+                      ? `${(topic.volume / 1000).toFixed(1)}K`
+                      : topic.volume.toLocaleString()}
+                </p>
                 <div className="flex items-center gap-1 mt-1">
                   {topic.delta > 0 ? (
                     <TrendingUp className="h-3 w-3 text-green-600" />
@@ -191,6 +202,47 @@ export default function TopicDetail({ topicId, onBack }: TopicDetailProps) {
                 </div>
                 <p className="text-2xl font-bold">{topic.samplePosts.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">Sample posts</p>
+              </div>
+            </div>
+
+            {/* Additional Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-5 w-5 text-yellow-600" />
+                  <span className="text-sm font-medium text-muted-foreground">Viral Posts</span>
+                </div>
+                <p className="text-2xl font-bold">{topic.viralCount || 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">High-reach content</p>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-5 w-5 text-indigo-600" />
+                  <span className="text-sm font-medium text-muted-foreground">Engagement Rate</span>
+                </div>
+                <p className="text-2xl font-bold">{topic.avgEngagement?.toFixed(1) || 0}%</p>
+                <p className="text-xs text-muted-foreground mt-1">Average ER</p>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <span className="text-sm font-medium text-muted-foreground">High Risk</span>
+                </div>
+                <p className="text-2xl font-bold">
+                  {(topic.riskDistribution?.high || 0) + (topic.riskDistribution?.critical || 0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Posts needing attention</p>
+              </div>
+
+              <div className="bg-card border border-border rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-5 w-5 text-cyan-600" />
+                  <span className="text-sm font-medium text-muted-foreground">Platforms</span>
+                </div>
+                <p className="text-2xl font-bold">{topic.platforms.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Active channels</p>
               </div>
             </div>
 
@@ -286,7 +338,7 @@ export default function TopicDetail({ topicId, onBack }: TopicDetailProps) {
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-2">Sample Posts</h3>
               <p className="text-muted-foreground">
-                Recent posts related to &quot;{topic.name}&quot; topic
+                Top {topic.samplePosts.length} posts related to &quot;{topic.name}&quot; by engagement
               </p>
             </div>
 
@@ -300,43 +352,8 @@ export default function TopicDetail({ topicId, onBack }: TopicDetailProps) {
               </div>
             ) : (
               <div className="space-y-4">
-                {topic.samplePosts.map((post, index) => (
-                  <div key={index} className="bg-card border border-border rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <Users className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Sample Post {index + 1}</p>
-                          <p className="text-sm text-muted-foreground">2 hours ago</p>
-                        </div>
-                      </div>
-                      <button className="p-1 hover:bg-muted rounded transition-colors">
-                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                      </button>
-                    </div>
-
-                    <p className="text-muted-foreground mb-3">
-                      This is a sample post related to the topic. In a real implementation,
-                      this would show actual content from social media platforms.
-                    </p>
-
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Heart className="h-4 w-4" />
-                        <span>1.2K</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="h-4 w-4" />
-                        <span>89</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Share2 className="h-4 w-4" />
-                        <span>45</span>
-                      </div>
-                    </div>
-                  </div>
+                {topic.samplePosts.map((post: TrendPost) => (
+                  <TrendPostCard key={post.id} post={post} />
                 ))}
               </div>
             )}
