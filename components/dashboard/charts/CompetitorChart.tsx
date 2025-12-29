@@ -19,6 +19,7 @@ import {
   TrendingDown,
   Target
 } from 'lucide-react'
+import { CompetitorData } from '@/lib/utils/dashboardDataTransform'
 
 ChartJS.register(
   CategoryScale,
@@ -29,11 +30,7 @@ ChartJS.register(
   Legend
 )
 
-interface CompetitorData {
-  brand: string
-  sov: number
-  color: string
-}
+type SOVMetric = 'weighted' | 'volume' | 'engagement'
 
 interface CompetitorChartProps {
   title: string
@@ -42,7 +39,7 @@ interface CompetitorChartProps {
   interaction?: 'drill-down' | 'hover-only'
 }
 
-const customTooltip = {
+const createCustomTooltip = (sovMetric: SOVMetric) => ({
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
   titleColor: '#374151',
   bodyColor: '#6b7280',
@@ -64,15 +61,29 @@ const customTooltip = {
     },
     label: (context: any) => {
       const dataIndex = context.dataIndex
-      const data = context.dataset.data[dataIndex]
       const brandData = context.chart.data.datasets[0].brandData[dataIndex]
+
+      const metricLabels = {
+        weighted: 'Weighted SOV',
+        volume: 'Volume SOV',
+        engagement: 'Engagement SOV'
+      }
+
       return [
-        `Share of Voice: ${data.toFixed(2)}%`,
-        `Rank: #${brandData.rank}`
+        `${metricLabels[sovMetric]}: ${brandData.currentSOV.toFixed(2)}%`,
+        `Rank: #${brandData.rank}`,
+        '',
+        'All Metrics:',
+        `  Volume: ${brandData.sovVolume.toFixed(2)}%`,
+        `  Engagement: ${brandData.sovEngagement.toFixed(2)}%`,
+        `  Weighted: ${brandData.sovWeighted.toFixed(2)}%`,
+        '',
+        `Posts: ${brandData.postCount}`,
+        `Total Engagement: ${brandData.totalEngagement.toLocaleString()}`
       ]
     }
   }
-}
+})
 
 export default function CompetitorChart({
   title,
@@ -82,6 +93,7 @@ export default function CompetitorChart({
 }: CompetitorChartProps) {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'sov' | 'alphabetical'>('sov')
+  const [sovMetric, setSOVMetric] = useState<SOVMetric>('weighted')
   const chartRef = useRef<ChartJS<'bar'>>(null)
 
   if (!data || !Array.isArray(data) || data.length === 0) {
@@ -102,9 +114,22 @@ export default function CompetitorChart({
     )
   }
 
+  // Get SOV value based on selected metric
+  const getSOVValue = (item: CompetitorData): number => {
+    switch (sovMetric) {
+      case 'volume':
+        return item.sovVolume
+      case 'engagement':
+        return item.sovEngagement
+      case 'weighted':
+      default:
+        return item.sovWeighted
+    }
+  }
+
   const sortedData = [...data].sort((a, b) => {
     if (sortBy === 'sov') {
-      return b.sov - a.sov
+      return getSOVValue(b) - getSOVValue(a)
     } else {
       return a.brand.localeCompare(b.brand)
     }
@@ -113,7 +138,7 @@ export default function CompetitorChart({
   const rankedData = sortedData.map((item, index) => ({
     ...item,
     rank: index + 1,
-    sov: Math.max(0, item.sov)
+    currentSOV: Math.max(0, getSOVValue(item))
   }))
 
   const chartData = {
@@ -121,7 +146,7 @@ export default function CompetitorChart({
     datasets: [
       {
         label: 'Share of Voice (%)',
-        data: rankedData.map(item => item.sov),
+        data: rankedData.map(item => item.currentSOV),
         backgroundColor: rankedData.map(item => item.color),
         borderColor: rankedData.map(item => item.color),
         borderWidth: 0,
@@ -140,16 +165,16 @@ export default function CompetitorChart({
       legend: {
         display: false
       },
-      tooltip: customTooltip
+      tooltip: createCustomTooltip(sovMetric)
     },
     scales: {
       x: {
         beginAtZero: true,
         grid: {
-          color: '#e5e7eb'
+          color: 'rgba(217, 119, 6, 0.1)'
         },
         ticks: {
-          color: '#6b7280',
+          color: '#92400e',
           font: {
             size: 12
           },
@@ -163,7 +188,7 @@ export default function CompetitorChart({
           display: false
         },
         ticks: {
-          color: '#6b7280',
+          color: '#92400e',
           font: {
             size: 12
           }
@@ -230,7 +255,50 @@ export default function CompetitorChart({
         </div>
 
         <div className="flex items-center gap-2">
-          {}
+          {/* SOV Metric Toggle */}
+          <div className="flex items-center bg-blue-100 dark:bg-blue-900/30 rounded-md p-1 mr-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setSOVMetric('weighted')}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                sovMetric === 'weighted'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+              title="Weighted SOV (40% volume + 60% engagement)"
+            >
+              Weighted
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setSOVMetric('volume')}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                sovMetric === 'volume'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+              title="Volume SOV (based on post count)"
+            >
+              Volume
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setSOVMetric('engagement')}
+              className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                sovMetric === 'engagement'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+              title="Engagement SOV (based on likes + comments)"
+            >
+              Engagement
+            </motion.button>
+          </div>
+
+          {/* Sort Toggle */}
           <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded-md p-1">
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -287,7 +355,7 @@ export default function CompetitorChart({
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-green-600" />
             <span className="text-sm font-medium">
-              Market Leader: {marketLeader.brand} with {marketLeader.sov.toFixed(2)}% Share of Voice
+              Market Leader: {marketLeader.brand} with {marketLeader.currentSOV.toFixed(2)}% Share of Voice ({sovMetric})
             </span>
           </div>
         </motion.div>
@@ -335,7 +403,7 @@ export default function CompetitorChart({
               />
               <span className="font-medium">{item.brand}</span>
             </div>
-            <div className="text-sm font-bold">{item.sov.toFixed(2)}%</div>
+            <div className="text-sm font-bold">{item.currentSOV.toFixed(2)}%</div>
           </motion.div>
         ))}
       </motion.div>
@@ -350,10 +418,15 @@ export default function CompetitorChart({
         >
           <h4 className="font-medium mb-2">Analysis for {selectedBrand}</h4>
           <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-            <div>Share of Voice: {rankedData.find(d => d.brand === selectedBrand)?.sov.toFixed(2)}%</div>
-            <div>Market Position: #{rankedData.find(d => d.brand === selectedBrand)?.rank}</div>
+            <div className="font-semibold">Share of Voice Metrics:</div>
+            <div className="ml-2">• Weighted SOV: {rankedData.find(d => d.brand === selectedBrand)?.sovWeighted.toFixed(2)}%</div>
+            <div className="ml-2">• Volume SOV: {rankedData.find(d => d.brand === selectedBrand)?.sovVolume.toFixed(2)}%</div>
+            <div className="ml-2">• Engagement SOV: {rankedData.find(d => d.brand === selectedBrand)?.sovEngagement.toFixed(2)}%</div>
+            <div className="mt-2">Market Position: #{rankedData.find(d => d.brand === selectedBrand)?.rank}</div>
+            <div>Total Posts: {rankedData.find(d => d.brand === selectedBrand)?.postCount}</div>
+            <div>Total Engagement: {rankedData.find(d => d.brand === selectedBrand)?.totalEngagement.toLocaleString()}</div>
             {selectedBrand === 'Your Brand' && (
-              <div className="text-blue-600 font-medium">
+              <div className="text-blue-600 font-medium mt-2">
                 This is your brand. Consider strategies to increase market share.
               </div>
             )}

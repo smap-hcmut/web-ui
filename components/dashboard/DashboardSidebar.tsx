@@ -5,9 +5,11 @@ import {
   ChevronRight,
   AlertTriangle
 } from 'lucide-react'
+import { useTranslation } from 'next-i18next'
 import { useDashboard } from '@/contexts/DashboardContext'
 
 export default function DashboardSidebar() {
+  const { t } = useTranslation('common')
   const { state, toggleSidebar } = useDashboard()
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['data-sources'])
@@ -39,6 +41,7 @@ export default function DashboardSidebar() {
 
   return (
     <motion.div
+      id="dashboard-sidebar"
       initial={{ width: 280 }}
       animate={{ width: state.sidebarCollapsed ? 60 : 280 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
@@ -92,7 +95,7 @@ export default function DashboardSidebar() {
                   className="flex items-center justify-between w-full p-2 rounded-md hover:bg-accent/50 transition-colors group"
                 >
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Data Sources
+                    {t('dashboard.dataSources')}
                   </span>
                   <motion.div
                     animate={{ rotate: expandedSections.has('data-sources') ? 180 : 0 }}
@@ -136,7 +139,7 @@ export default function DashboardSidebar() {
                 <div className="flex items-center gap-2 p-2">
                   <AlertTriangle className="h-4 w-4 text-orange-500" />
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Recent Alerts
+                    {t('dashboard.recentAlerts')}
                   </span>
                 </div>
 

@@ -1,0 +1,150 @@
+{
+  "description": "Định dạng dữ liệu cho DataTable - Bảng hiển thị content performance data",
+  "interface": "ContentData[]",
+  "fields": {
+    "id": {
+      "type": "number",
+      "required": true,
+      "description": "ID duy nhất của content (ID POST)",
+      "example": 1
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "description": "Tiêu đề của content",
+      "example": "AI Revolution in Healthcare"
+    },
+    "platform": {
+      "type": "string",
+      "required": true,
+      "description": "Nền tảng đăng content",
+      "example": "TikTok"
+    },
+    "engagement": {
+      "type": "number",
+      "required": true,
+      "description": "Số lượng tương tác (likes, comments, shares)",
+      "example": 8500
+    },
+    "reach": {
+      "type": "number",
+      "required": true,
+      "description": "Số lượt tiếp cận/impressions",
+      "example": 125000
+    }
+  },
+  "sample_data": [
+    {
+      "id": 1,
+      "title": "AI Revolution in Healthcare",
+      "platform": "LinkedIn",
+      "engagement": 8500,
+      "reach": 125000
+    },
+    {
+      "id": 2,
+      "title": "Future of Machine Learning",
+      "platform": "Twitter",
+      "engagement": 12300,
+      "reach": 89000
+    },
+    {
+      "id": 3,
+      "title": "Data Science Best Practices",
+      "platform": "Facebook",
+      "engagement": 6700,
+      "reach": 95000
+    },
+    {
+      "id": 4,
+      "title": "Cloud Computing Trends 2025",
+      "platform": "Instagram",
+      "engagement": 15200,
+      "reach": 180000
+    },
+    {
+      "id": 5,
+      "title": "Blockchain Technology Explained",
+      "platform": "YouTube",
+      "engagement": 22800,
+      "reach": 320000
+    },
+    {
+      "id": 6,
+      "title": "Cybersecurity in Digital Age",
+      "platform": "TikTok",
+      "engagement": 18900,
+      "reach": 250000
+    }
+  ],
+  "calculated_metrics": {
+    "engagement_rate": {
+      "description": "Tỷ lệ tương tác",
+      "formula": "(engagement / reach) * 100",
+      "example": "6.8%"
+    },
+    "performance_level": {
+      "description": "Mức độ hiệu suất",
+      "criteria": {
+        "high": "engagement > 10000",
+        "medium": "1000 < engagement <= 10000", 
+        "low": "engagement <= 1000"
+      }
+    },
+    "total_engagement": {
+      "description": "Tổng tương tác của tất cả content",
+      "formula": "sum(all engagement)"
+    },
+    "total_reach": {
+      "description": "Tổng reach của tất cả content",
+      "formula": "sum(all reach)"
+    },
+    "average_engagement_rate": {
+      "description": "Tỷ lệ tương tác trung bình",
+      "formula": "(total_engagement / total_reach) * 100"
+    }
+  },
+  "validation_rules": {
+    "id_unique": "id phải là duy nhất",
+    "title_required": "title không được rỗng",
+    "platform_required": "platform không được rỗng",
+    "engagement_non_negative": "engagement >= 0",
+    "reach_positive": "reach > 0",
+    "engagement_reach_logic": "engagement <= reach (logic check)"
+  },
+  "table_features": {
+    "sorting": {
+      "fields": ["title", "platform", "engagement", "reach"],
+      "directions": ["asc", "desc"]
+    },
+    "filtering": {
+      "platform_filter": "Filter theo platform",
+      "performance_filter": "Filter theo mức độ hiệu suất"
+    },
+    "interaction": ["sort-filter", "read-only"],
+    "animations": ["row-reveal", "fade-in"],
+    "row_selection": "Click để xem chi tiết content"
+  },
+  "platform_icons": {
+    "Facebook": "📘",
+    "Instagram": "📷", 
+    "TikTok": "🎵",
+    "YouTube": "📺",
+    "Twitter": "🐦",
+    "LinkedIn": "💼",
+    "default": "📱"
+  },
+  "number_formatting": {
+    "large_numbers": {
+      "millions": "1.2M (>= 1,000,000)",
+      "thousands": "1.2K (>= 1,000)",
+      "regular": "999 (< 1,000)"
+    }
+  },
+  "usage_notes": {
+    "content_analysis": "Click vào row để xem phân tích chi tiết",
+    "performance_indicators": "Sử dụng màu sắc và icon để thể hiện performance",
+    "export_functionality": "Hỗ trợ export data dạng CSV/JSON",
+    "responsive_design": "Table responsive trên mobile devices"
+  }
+}

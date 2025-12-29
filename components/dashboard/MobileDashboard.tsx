@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
 import {
   Menu,
   X,
@@ -12,15 +13,34 @@ import {
 } from 'lucide-react'
 import { useDashboard } from '@/contexts/DashboardContext'
 import MetricCard from './MetricCard'
-import TrendChart from './charts/TrendChart'
-import SentimentChart from './charts/SentimentChart'
+import UnifiedChart from './charts/UnifiedChart'
 import CompetitorChart from './charts/CompetitorChart'
 import TopicCloud from './charts/TopicCloud'
 import DataTable from './DataTable'
 import TopicDetailModal from './TopicDetailModal'
+import { createSampleUnifiedData } from '../../lib/utils/chartDataTransform'
 
 export default function MobileDashboard() {
-  const { state, filteredData, isLoading, toggleSidebar, setFilters, setSelectedTopic } = useDashboard()
+  const {
+    state,
+    filteredData,
+    isLoading,
+    toggleSidebar,
+    setFilters,
+    setSelectedTopic,
+    // Individual loading states
+    loadingSummary,
+    loadingKeywords,
+    loadingPosts,
+    // Individual errors
+    summaryError,
+    keywordsError,
+    postsError,
+    // Individual refresh actions
+    refreshSummary,
+    refreshKeywords,
+    refreshPosts,
+  } = useDashboard()
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'competitors' | 'content'>('overview')
   const [showFilters, setShowFilters] = useState(false)
 
@@ -46,11 +66,11 @@ export default function MobileDashboard() {
       { name: 'Negative', value: 20, color: '#ef4444' },
     ],
     competitors: [
-      { brand: 'Your Brand', sov: 26.2, color: '#3b82f6' },
-      { brand: 'Competitor A', sov: 24.8, color: '#10b981' },
-      { brand: 'Competitor B', sov: 18.5, color: '#f59e0b' },
-      { brand: 'Competitor C', sov: 15.2, color: '#ef4444' },
-      { brand: 'Others', sov: 15.3, color: '#8b5cf6' },
+      { brand: 'Your Brand', sov: 26.2, sovVolume: 25.0, sovEngagement: 27.5, sovWeighted: 26.2, postCount: 250, totalEngagement: 12500, color: '#3b82f6' },
+      { brand: 'Competitor A', sov: 24.8, sovVolume: 24.0, sovEngagement: 25.5, sovWeighted: 24.8, postCount: 240, totalEngagement: 11500, color: '#10b981' },
+      { brand: 'Competitor B', sov: 18.5, sovVolume: 20.0, sovEngagement: 17.0, sovWeighted: 18.5, postCount: 200, totalEngagement: 7800, color: '#f59e0b' },
+      { brand: 'Competitor C', sov: 15.2, sovVolume: 16.0, sovEngagement: 14.5, sovWeighted: 15.2, postCount: 160, totalEngagement: 6500, color: '#ef4444' },
+      { brand: 'Others', sov: 15.3, sovVolume: 15.0, sovEngagement: 15.5, sovWeighted: 15.3, postCount: 150, totalEngagement: 7000, color: '#8b5cf6' },
     ],
     topics: [
       { text: 'coffee', value: 100 },
@@ -112,37 +132,87 @@ export default function MobileDashboard() {
     { id: 'content', label: 'Content', icon: '📝' },
   ]
 
+  // Helper components
+  const MetricCardSkeleton = () => (
+    <div className="bg-card rounded-lg p-4 border border-border animate-pulse">
+      <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+      <div className="h-8 bg-muted rounded w-3/4 mb-2"></div>
+      <div className="h-3 bg-muted rounded w-1/3"></div>
+    </div>
+  )
+
+  const ChartSkeleton = () => (
+    <div className="h-80 bg-card rounded-lg border border-border animate-pulse"></div>
+  )
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return (
           <div className="space-y-4">
-            {}
+            {/* Phase 1: Metrics Cards */}
             <div className="space-y-3">
-              {metrics.map((metric, index) => (
-                <motion.div
-                  key={metric.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <MetricCard {...metric} />
-                </motion.div>
-              ))}
+              {loadingSummary ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <MetricCardSkeleton />
+                  </motion.div>
+                ))
+              ) : summaryError ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-sm text-red-600 dark:text-red-400">{summaryError}</p>
+                  <button
+                    onClick={refreshSummary}
+                    className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-md"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                metrics.map((metric, index) => (
+                  <motion.div
+                    key={metric.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <MetricCard {...metric} />
+                  </motion.div>
+                ))
+              )}
             </div>
 
-            {}
+            {/* Phase 3: Charts */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <SentimentChart
-                title="Sentiment Distribution"
-                data={data.sentiment}
-                animation="pie-reveal"
-                interaction="hover-details"
-              />
+              {loadingPosts ? (
+                <ChartSkeleton />
+              ) : postsError ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-sm text-red-600 dark:text-red-400">{postsError}</p>
+                  <button
+                    onClick={refreshPosts}
+                    className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-md"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <UnifiedChart
+                  title="Analytics Overview"
+                  data={createSampleUnifiedData()}
+                  animation="line-draw"
+                  interaction="hover-only"
+                />
+              )}
             </motion.div>
           </div>
         )
@@ -155,12 +225,26 @@ export default function MobileDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <TrendChart
-                title="Trend Analysis"
-                data={data.trends}
-                animation="line-draw"
-                interaction="zoom-pan"
-              />
+              {loadingPosts ? (
+                <ChartSkeleton />
+              ) : postsError ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-sm text-red-600 dark:text-red-400">{postsError}</p>
+                  <button
+                    onClick={refreshPosts}
+                    className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-md"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <UnifiedChart
+                  title="Trend Analysis"
+                  data={createSampleUnifiedData()}
+                  animation="line-draw"
+                  interaction="zoom-pan"
+                />
+              )}
             </motion.div>
 
             <motion.div
@@ -168,13 +252,25 @@ export default function MobileDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <TopicCloud
-                title="Trending Topics"
-                data={data.topics}
-                animation="word-cloud"
-                interaction="click-filter"
-                onTopicClick={setSelectedTopic}
-              />
+              {loadingKeywords ? (
+                <ChartSkeleton />
+              ) : keywordsError ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <p className="text-sm text-red-600 dark:text-red-400">{keywordsError}</p>
+                  <button
+                    onClick={refreshKeywords}
+                    className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-md"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <TopicCloud
+                  title="Trending Topics"
+                  data={data.topics}
+                  onTopicClick={setSelectedTopic}
+                />
+              )}
             </motion.div>
           </div>
         )
@@ -186,12 +282,26 @@ export default function MobileDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <CompetitorChart
-              title="Share of Voice Comparison"
-              data={data.competitors}
-              animation="bar-stack"
-              interaction="drill-down"
-            />
+            {loadingPosts ? (
+              <ChartSkeleton />
+            ) : postsError ? (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{postsError}</p>
+                <button
+                  onClick={refreshPosts}
+                  className="mt-2 px-3 py-1 bg-red-600 text-white text-xs rounded-md"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <CompetitorChart
+                title="Share of Voice Comparison"
+                data={data.competitors}
+                animation="bar-stack"
+                interaction="drill-down"
+              />
+            )}
           </motion.div>
         )
 
@@ -248,7 +358,17 @@ export default function MobileDashboard() {
               <Menu className="h-5 w-5" />
             </motion.button>
 
-            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
+            <Image
+              src="/logo.svg"
+              alt="SMAP Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+            />
+            <h1 
+              className="text-lg font-bold text-gray-900 dark:text-white"
+              style={{ fontFamily: "'Zen Dots', cursive" }}
+            >
               SMAP
             </h1>
           </div>

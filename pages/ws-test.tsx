@@ -546,7 +546,7 @@ export default function WebSocketTest() {
             <li>1. <strong>Đăng nhập</strong> để thiết lập HttpOnly Cookie authentication</li>
             <li>2. Chọn loại kết nối: <strong>Project</strong> (theo dõi tiến độ dự án) hoặc <strong>Job</strong> (theo dõi job xử lý)</li>
             <li>3. Nhập <strong>Project ID</strong> hoặc <strong>Job ID</strong> tương ứng</li>
-            <li>4. Click <strong>"Kết nối"</strong> để thiết lập WebSocket connection</li>
+            <li>4. Click <strong>&quot;Kết nối&quot;</strong> để thiết lập WebSocket connection</li>
             <li>5. Tin nhắn real-time sẽ hiển thị tự động bên dưới</li>
           </ul>
 

@@ -4,6 +4,7 @@ import { useTranslation } from 'next-i18next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/router'
 import { useRegister } from '@/hooks/useRegister'
 
@@ -84,9 +85,18 @@ const Register: NextPage = () => {
           transition={{ duration: 0.5 }}
           className="flex items-center gap-3 mb-16"
         >
-          <div className="w-12 h-12 rounded-lg bg-yellow-400 shadow-lg dark:bg-white" />
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white">
-            SMAP SOLUTION
+          <Image
+            src="/logo.svg"
+            alt="SMAP Logo"
+            width={48}
+            height={48}
+            className="w-12 h-12"
+          />
+          <h1 
+            className="text-2xl font-bold text-gray-900 dark:text-white"
+            style={{ fontFamily: "'Zen Dots', cursive" }}
+          >
+            SMAP
           </h1>
         </motion.div>
 

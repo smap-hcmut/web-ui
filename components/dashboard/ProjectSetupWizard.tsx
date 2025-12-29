@@ -13,13 +13,15 @@ import {
   Target,
   Users,
   Sparkles,
-  Calendar
+  Calendar,
+  HelpCircle
 } from 'lucide-react'
 import { projectService } from '@/lib/api/services/project.service'
 import ProjectPreviewStep from './ProjectPreviewStep'
 import { DryRunOuterPayload } from '@/lib/types/dryrun'
 import { useJobWebSocket } from '@/hooks/useJobWebSocket'
 import type { JobNotificationMessage, ContentItem } from '@/lib/types/websocket'
+import { useWizardTour } from '@/hooks/useWizardTour'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -56,6 +58,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [currentStep, setCurrentStep] = useState(1)
   const { theme } = useTheme()
   const router = useRouter()
+  const { startWizardTour } = useWizardTour()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
@@ -79,6 +82,9 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
 
   // Store raw keyword input to preserve commas while typing
   const [keywordInputs, setKeywordInputs] = useState<Record<string, string>>({})
+  
+  // AI keyword generation loading state per brand/competitor
+  const [aiLoadingStates, setAiLoadingStates] = useState<Record<string, boolean>>({})
 
   // Dry-run preview state
   const [dryRunData, setDryRunData] = useState<DryRunOuterPayload | null>(null)
@@ -651,12 +657,61 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
     }
   }
 
+  // AI keyword generation function
+  const handleGenerateKeywords = async (brandId: string, brandName: string, type: 'brand' | 'competitor', index: number) => {
+    if (!brandName.trim()) {
+      setErrors(prev => ({
+        ...prev,
+        [type === 'brand' ? `brand_name_${index}` : `competitor_name_${index}`]: 'Vui lòng nhập tên trước khi tạo từ khóa'
+      }))
+      return
+    }
+
+    const loadingKey = `${type}_${brandId}`
+    setAiLoadingStates(prev => ({ ...prev, [loadingKey]: true }))
+
+    try {
+      const response = await fetch('/api/ai/generate-keywords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandName })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Không thể tạo từ khóa')
+      }
+
+      if (data.keywords && data.keywords.length > 0) {
+        // Update keywords for the brand/competitor
+        updateBrand(brandId, 'keywords', data.keywords)
+        // Also update the input field display
+        setKeywordInputs(prev => ({
+          ...prev,
+          [`${type}_${brandId}`]: data.keywords.join(',')
+        }))
+      }
+    } catch (error: any) {
+      console.error('AI keyword generation error:', error)
+      Swal.fire({
+        title: 'Lỗi',
+        text: error.message || 'Không thể tạo từ khóa tự động',
+        icon: 'error',
+        confirmButtonText: 'Đóng',
+        ...getSwalThemeOptions()
+      })
+    } finally {
+      setAiLoadingStates(prev => ({ ...prev, [loadingKey]: false }))
+    }
+  }
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
           <div className="space-y-6">
-            <div>
+            <div id="project-name-input">
               <label className="block text-sm font-medium mb-2">Tên Project *</label>
               <input
                 type="text"
@@ -673,7 +728,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
               )}
             </div>
 
-            <div>
+            <div id="project-description-input">
               <label className="block text-sm font-medium mb-2">Mô tả (tùy chọn)</label>
               <textarea
                 value={projectData.description}
@@ -685,7 +740,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
 
             {/* Date Range Selection */}
-            <div className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
+            <div id="date-range-section" className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h4 className="font-medium">Khoảng thời gian phân tích</h4>
@@ -742,6 +797,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Thương hiệu của bạn</h3>
               <button
+                id="add-brand-btn"
                 onClick={() => addBrand('own')}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
@@ -762,7 +818,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     key={brand.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-muted/50 rounded-lg p-4"
+                    className="brand-card bg-muted/50 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium">Thương hiệu {index + 1}</h4>
@@ -777,15 +833,31 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     <div className="space-y-3">
                       <div>
                         <label className="block text-sm font-medium mb-1">Tên thương hiệu *</label>
-                        <input
-                          type="text"
-                          value={brand.name}
-                          onChange={(e) => updateBrand(brand.id, 'name', e.target.value)}
-                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
-                            errors[`brand_name_${index}`] ? 'border-red-500' : 'border-border'
-                          }`}
-                          placeholder="Ví dụ: Highlands Coffee"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={brand.name}
+                            onChange={(e) => updateBrand(brand.id, 'name', e.target.value)}
+                            className={`flex-1 px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                              errors[`brand_name_${index}`] ? 'border-red-500' : 'border-border'
+                            }`}
+                            placeholder="Ví dụ: Highlands Coffee"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateKeywords(brand.id, brand.name, 'brand', index)}
+                            disabled={aiLoadingStates[`brand_${brand.id}`] || !brand.name.trim()}
+                            className="ai-generate-btn flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-md hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            title="Tạo từ khóa bằng AI"
+                          >
+                            {aiLoadingStates[`brand_${brand.id}`] ? (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            <span className="hidden sm:inline">AI</span>
+                          </button>
+                        </div>
                         {errors[`brand_name_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
@@ -889,6 +961,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Đối thủ cạnh tranh</h3>
               <button
+                id="add-competitor-btn"
                 onClick={() => addBrand('competitor')}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
@@ -909,7 +982,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     key={competitor.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-muted/50 rounded-lg p-4"
+                    className="competitor-card bg-muted/50 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium">Đối thủ {index + 1}</h4>
@@ -924,15 +997,31 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     <div className="space-y-3">
                       <div>
                         <label className="block text-sm font-medium mb-1">Tên đối thủ *</label>
-                        <input
-                          type="text"
-                          value={competitor.name}
-                          onChange={(e) => updateBrand(competitor.id, 'name', e.target.value)}
-                          className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
-                            errors[`competitor_name_${index}`] ? 'border-red-500' : 'border-border'
-                          }`}
-                          placeholder="Ví dụ: Starbucks"
-                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={competitor.name}
+                            onChange={(e) => updateBrand(competitor.id, 'name', e.target.value)}
+                            className={`flex-1 px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent ${
+                              errors[`competitor_name_${index}`] ? 'border-red-500' : 'border-border'
+                            }`}
+                            placeholder="Ví dụ: Starbucks"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateKeywords(competitor.id, competitor.name, 'competitor', index)}
+                            disabled={aiLoadingStates[`competitor_${competitor.id}`] || !competitor.name.trim()}
+                            className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-md hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            title="Tạo từ khóa bằng AI"
+                          >
+                            {aiLoadingStates[`competitor_${competitor.id}`] ? (
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                            <span className="hidden sm:inline">AI</span>
+                          </button>
+                        </div>
                         {errors[`competitor_name_${index}`] && (
                           <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
@@ -1154,17 +1243,29 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className={`bg-background rounded-lg shadow-xl w-full ${
-            currentStep === 4 ? 'max-w-6xl' : 'max-w-2xl'
-          } max-h-[90vh] overflow-hidden`}
+          className={`bg-background rounded-xl shadow-2xl w-full ${
+            currentStep === 4 ? 'max-w-6xl' : 'max-w-4xl'
+          } h-[85vh] max-h-[700px] flex flex-col overflow-hidden`}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20">
-            <div>
-              <h2 className="text-xl font-semibold">Tạo Project Mới</h2>
-              <p className="text-sm text-muted-foreground">
-                Bước {currentStep} / {steps.length}: {steps[currentStep - 1].title}
-              </p>
+          {/* Header - Compact */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Tạo Project Mới</h2>
+                <p className="text-xs text-muted-foreground">
+                  {steps[currentStep - 1].description}
+                  <button
+                    onClick={() => startWizardTour(currentStep)}
+                    className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+                  >
+                    <HelpCircle className="h-3 w-3" />
+                    Hướng dẫn
+                  </button>
+                </p>
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -1174,84 +1275,128 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </button>
           </div>
 
-          {}
-          <div className="px-6 py-4 border-b border-amber-300/60 dark:border-white/20">
-            <div className="flex items-center gap-2">
-              {steps.map((step, index) => (
-                <React.Fragment key={step.id}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+          {/* Main Content Area - Flex layout with sidebar */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left Sidebar - Vertical Stepper */}
+            <div id="wizard-step-indicator" className="hidden md:flex w-56 flex-shrink-0 flex-col bg-muted/20 border-r border-border p-4">
+              <div className="space-y-1">
+                {steps.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-all ${
+                      currentStep === step.id
+                        ? 'bg-primary/10 border border-primary/30'
+                        : currentStep > step.id
+                        ? 'opacity-60'
+                        : 'opacity-40'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${
                       currentStep > step.id
                         ? 'bg-primary text-primary-foreground'
                         : currentStep === step.id
-                        ? 'bg-primary/20 text-primary border-2 border-primary'
-                        : 'bg-muted text-muted-foreground'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground border border-border'
                     }`}>
-                      {currentStep > step.id ? <Check className="h-4 w-4" /> : step.id}
+                      {currentStep > step.id ? <Check className="h-3.5 w-3.5" /> : step.id}
                     </div>
-                    <div className="hidden md:block">
-                      <p className="text-sm font-medium">{step.title}</p>
-                      <p className="text-xs text-muted-foreground">{step.description}</p>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-medium truncate ${
+                        currentStep === step.id ? 'text-primary' : ''
+                      }`}>{step.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{step.description}</p>
                     </div>
                   </div>
-                  {index < steps.length - 1 && (
-                    <div className={`w-8 h-0.5 ${
-                      currentStep > step.id ? 'bg-primary' : 'bg-muted'
-                    }`} />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-
-          {/* Step Content */}
-          <div className="p-6 max-h-96 overflow-y-auto">
-            {renderStepContent()}
-          </div>
-
-          {/* Hide navigation for step 4 (preview) as it has its own navigation */}
-          {currentStep !== 4 && (
-            <div className="flex items-center justify-between p-6 border-t border-amber-300/60 dark:border-white/20">
-              <button
-                onClick={handlePrevious}
-                disabled={currentStep === 1}
-                className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Quay lại
-              </button>
-
-              <div className="flex items-center gap-3">
-                {currentStep < steps.length ? (
-                  <button
-                    onClick={handleNext}
-                    className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    Tiếp theo
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleComplete}
-                    disabled={isLoading}
-                    className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Đang tạo...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Tạo Project
-                    </>
-                  )}
-                </button>
-                )}
+                ))}
+              </div>
+              
+              {/* Progress indicator */}
+              <div className="mt-auto pt-4 border-t border-border">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                  <span>Tiến độ</span>
+                  <span>{Math.round((currentStep / steps.length) * 100)}%</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    style={{ width: `${(currentStep / steps.length) * 100}%` }}
+                  />
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Mobile Stepper - Horizontal dots */}
+            <div className="md:hidden flex items-center justify-center gap-2 px-4 py-3 border-b border-border bg-muted/10">
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  className={`w-2.5 h-2.5 rounded-full transition-all ${
+                    currentStep >= step.id ? 'bg-primary' : 'bg-muted'
+                  } ${currentStep === step.id ? 'w-6' : ''}`}
+                />
+              ))}
+              <span className="ml-2 text-xs text-muted-foreground">
+                {currentStep}/{steps.length}
+              </span>
+            </div>
+
+            {/* Right Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Step Title - Mobile only */}
+              <div className="md:hidden px-4 py-3 border-b border-border">
+                <h3 className="font-medium">{steps[currentStep - 1].title}</h3>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {renderStepContent()}
+              </div>
+
+              {/* Fixed Footer Navigation */}
+              {currentStep !== 4 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background">
+                  <button
+                    onClick={handlePrevious}
+                    disabled={currentStep === 1}
+                    className="flex items-center gap-2 px-4 py-2.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="hidden sm:inline">Quay lại</span>
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {currentStep < steps.length ? (
+                      <button
+                        onClick={handleNext}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium shadow-sm"
+                      >
+                        <span>Tiếp theo</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleComplete}
+                        disabled={isLoading}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium shadow-sm disabled:opacity-50"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Đang tạo...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            <span>Tạo Project</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>

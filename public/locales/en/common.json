@@ -13,6 +13,11 @@
     "settings": "Settings",
     "logout": "Logout"
   },
+  "nav": {
+    "dashboard": "Dashboard",
+    "trendAnalysis": "Trend Analysis",
+    "reportWizard": "Report Wizard"
+  },
   "theme": {
     "light": "Light",
     "dark": "Dark"
@@ -28,6 +33,26 @@
     "lastUpdate": "Last updated",
     "export": "Export",
     "share": "Share",
+    "dataSources": "Data Sources",
+    "recentAlerts": "Recent Alerts",
+    "unifiedAnalyticsDashboard": "Unified Analytics Dashboard",
+    "shareOfVoiceComparison": "Share of Voice Comparison",
+    "trendingTopics": "Trending Topics",
+    "salesFunnel": "Sales Funnel (INTENT Tracking)",
+    "topViralPosts": "Top Viral Posts (by Impact Score)",
+    "noDataAvailable": "No Data Available",
+    "noCompetitorData": "No competitor data available",
+    "checkDataSource": "Please check your data source",
+    "failedToLoadMetrics": "Failed to load metrics",
+    "failedToLoadChartData": "Failed to load chart data",
+    "failedToLoadCompetitorData": "Failed to load competitor data",
+    "failedToLoadKeywords": "Failed to load keywords",
+    "failedToLoadPlatformData": "Failed to load platform data",
+    "failedToLoadViralPosts": "Failed to load viral posts",
+    "platformDistribution": "Platform Distribution",
+    "retry": "Retry",
+    "updatingData": "Updating data...",
+    "noAnalyzedPosts": "No analyzed posts found for this project yet. Please run an analysis job or wait for data to be processed.",
     "totalReach": "Total Reach",
     "engagementRate": "Engagement Rate",
     "sentimentScore": "Sentiment Score",
@@ -49,11 +74,68 @@
     "offline": "Offline",
     "enableRealTime": "Enable real-time updates",
     "disableRealTime": "Disable real-time updates",
+    "notifications": "Notifications",
+    "settings": "Settings",
     "timeRanges": {
       "last7Days": "Last 7 days",
-      "last30Days": "Last 30 days", 
+      "last30Days": "Last 30 days",
       "last90Days": "Last 90 days",
       "lastYear": "Last year"
+    },
+    "processing": {
+      "errors": "errors",
+      "statusProcessing": "Processing and analyzing data...",
+      "statusCompleted": "Completed!",
+      "statusFailed": "Processing failed",
+      "statusPaused": "Paused",
+      "statusWaiting": "Waiting for updates...",
+      "statusConnecting": "Connecting...",
+      "titleCompleted": "Project completed!",
+      "titleFailed": "Processing failed",
+      "titlePaused": "Project paused",
+      "titleProcessing": "Setting up project",
+      "descriptionCompleted": "Data for <strong>{projectName}</strong> is ready",
+      "descriptionFailed": "An error occurred while processing <strong>{projectName}</strong>",
+      "descriptionProcessing": "We're preparing data for <strong>{projectName}</strong>",
+      "redirectingIn": "Redirecting in {seconds} seconds...",
+      "cancel": "Cancel",
+      "errorsOccurred": "{count} errors occurred",
+      "hideDetails": "Hide",
+      "showDetails": "Show details",
+      "partialResults": "Collected {current} / {total} items. You can view partial results.",
+      "pausedNotice": "Project has been paused. Current progress: {current} / {total}",
+      "processing": "Processing...",
+      "progressDetails": "Progress Details",
+      "dataCrawl": "🔍 Data Collection (Crawl)",
+      "dataAnalyze": "📊 Analysis (Analyze)",
+      "progress": "Progress",
+      "viewResults": "View Results",
+      "viewPartialResults": "View Partial Results",
+      "retry": "Retry",
+      "continue": "Continue",
+      "cancelAction": "Cancel",
+      "projectInfo": "Project Information",
+      "yourBrands": "Your Brands",
+      "competitors": "Competitors",
+      "connectionError": "Connection error:",
+      "steps": {
+        "dataCollection": {
+          "title": "Data Collection",
+          "description": "Collecting data from social media sources"
+        },
+        "brandAnalysis": {
+          "title": "Brand Analysis",
+          "description": "Analyzing and identifying brands"
+        },
+        "sentimentAnalysis": {
+          "title": "Sentiment Analysis",
+          "description": "Analyzing emotions and trends"
+        },
+        "dashboardSetup": {
+          "title": "Dashboard Setup",
+          "description": "Preparing dashboard and reports"
+        }
+      }
     }
   },
   "trendAnalysis": {
@@ -601,6 +683,9 @@
     "searchPlaceholder": "Search projects...",
     "error": "Failed to load projects",
     "fetchError": "Unable to fetch projects. Please try again.",
+    "showingOf": "Showing {{count}} of {{total}} projects",
+    "perPage": "Per page:",
+    "allStatus": "All Status",
     "createSuccess": "Project has been created successfully!",
     "createError": "Failed to create project. Please try again.",
     "noProjects": "No projects yet",

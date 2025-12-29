@@ -148,7 +148,7 @@ export default function FeedbackSection() {
                 {/* Rating */}
                 <div className="flex gap-1 mb-6 justify-center">
                   {Array.from({ length: testimonials[currentIndex].rating }).map((_, i) => (
-                    <Star key={i} className="w-7 h-7 fill-yellow-400 text-yellow-400" strokeWidth={2} />
+                    <Star key={`star-${currentIndex}-${i}`} className="w-7 h-7 fill-yellow-400 text-yellow-400" strokeWidth={2} />
                   ))}
                 </div>
 
@@ -197,9 +197,9 @@ export default function FeedbackSection() {
 
               {/* Dots indicator */}
               <div className="flex items-center gap-2">
-                {testimonials.map((_, index) => (
+                {testimonials.map((testimonial, index) => (
                   <button
-                    key={index}
+                    key={`dot-${testimonial.nameKey}-${index}`}
                     onClick={() => setCurrentIndex(index)}
                     className={`h-3 rounded-full border border-amber-300/60 dark:border-white/20 transition-all duration-300 ${
                       index === currentIndex

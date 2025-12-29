@@ -11,7 +11,9 @@ import {
   Calendar,
   Bookmark,
   BookmarkCheck,
-  Share2
+  Share2,
+  Zap,
+  AlertTriangle
 } from 'lucide-react'
 import { useTranslation } from 'next-i18next'
 import { TrendTopic, useTrend } from '@/contexts/TrendContext'
@@ -104,7 +106,13 @@ export default function TrendTopicCard({ topic, onClick }: TrendTopicCardProps) 
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">{topic.volume.toLocaleString()}</p>
+            <p className="text-sm font-medium">
+              {topic.volume >= 1000000 
+                ? `${(topic.volume / 1000000).toFixed(1)}M`
+                : topic.volume >= 1000 
+                  ? `${(topic.volume / 1000).toFixed(1)}K`
+                  : topic.volume.toLocaleString()}
+            </p>
             <p className="text-xs text-muted-foreground">Volume</p>
           </div>
         </div>
@@ -117,6 +125,36 @@ export default function TrendTopicCard({ topic, onClick }: TrendTopicCardProps) 
           </div>
         </div>
       </div>
+
+      {/* Viral & Engagement indicators */}
+      {(topic.viralCount > 0 || topic.avgEngagement > 0) && (
+        <div className="flex items-center gap-3 mb-4">
+          {topic.viralCount > 0 && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+              <Zap className="h-3 w-3 text-yellow-600" />
+              <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                {topic.viralCount} viral
+              </span>
+            </div>
+          )}
+          {topic.avgEngagement > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <BarChart3 className="h-3 w-3" />
+              <span>{topic.avgEngagement.toFixed(1)}% ER</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Risk indicator */}
+      {topic.riskDistribution && (topic.riskDistribution.high > 0 || topic.riskDistribution.critical > 0) && (
+        <div className="flex items-center gap-2 mb-4 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+          <AlertTriangle className="h-3 w-3 text-orange-600" />
+          <span className="text-xs text-orange-700 dark:text-orange-400">
+            {topic.riskDistribution.high + topic.riskDistribution.critical} high-risk posts
+          </span>
+        </div>
+      )}
 
       {}
       <div className="flex items-center gap-2 mb-4">

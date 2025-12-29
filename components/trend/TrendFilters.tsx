@@ -7,7 +7,6 @@ import {
   Hash,
   Filter,
   RotateCcw,
-  Check,
   ChevronDown
 } from 'lucide-react'
 import { useTrend } from '@/contexts/TrendContext'
@@ -32,23 +31,12 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
   ]
 
   const platforms = [
-    { id: 'facebook', label: 'Facebook', icon: '📘' },
-    { id: 'instagram', label: 'Instagram', icon: '📷' },
-    { id: 'tiktok', label: 'TikTok', icon: '🎵' },
-    { id: 'twitter', label: 'Twitter', icon: '🐦' },
-    { id: 'linkedin', label: 'LinkedIn', icon: '💼' },
-    { id: 'youtube', label: 'YouTube', icon: '📺' },
-  ]
-
-  const industries = [
-    { id: 'food-beverage', label: 'Food & Beverage' },
-    { id: 'fashion', label: 'Fashion' },
-    { id: 'technology', label: 'Technology' },
-    { id: 'beauty', label: 'Beauty' },
-    { id: 'travel', label: 'Travel' },
-    { id: 'fitness', label: 'Fitness' },
-    { id: 'finance', label: 'Finance' },
-    { id: 'education', label: 'Education' },
+    { id: 'facebook', label: 'Facebook' },
+    { id: 'instagram', label: 'Instagram' },
+    { id: 'tiktok', label: 'TikTok' },
+    { id: 'twitter', label: 'Twitter/X' },
+    { id: 'linkedin', label: 'LinkedIn' },
+    { id: 'youtube', label: 'YouTube' },
   ]
 
   const sentimentOptions = [
@@ -70,25 +58,19 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
   }
 
   const handlePlatformToggle = (platformId: string) => {
-    const newPlatforms = state.filters.platforms.includes(platformId)
-      ? state.filters.platforms.filter(p => p !== platformId)
-      : [...state.filters.platforms, platformId]
+    const currentPlatforms = state.filters.platforms || []
+    const newPlatforms = currentPlatforms.includes(platformId)
+      ? currentPlatforms.filter(p => p !== platformId)
+      : [...currentPlatforms, platformId]
 
     setFilters({ platforms: newPlatforms })
   }
 
-  const handleIndustryToggle = (industryId: string) => {
-    const newIndustries = state.filters.industries.includes(industryId)
-      ? state.filters.industries.filter(i => i !== industryId)
-      : [...state.filters.industries, industryId]
-
-    setFilters({ industries: newIndustries })
-  }
-
   const handleSentimentToggle = (sentimentId: string) => {
-    const newSentiment = state.filters.sentiment.includes(sentimentId)
-      ? state.filters.sentiment.filter(s => s !== sentimentId)
-      : [...state.filters.sentiment, sentimentId]
+    const currentSentiment = state.filters.sentiment || []
+    const newSentiment = currentSentiment.includes(sentimentId)
+      ? currentSentiment.filter(s => s !== sentimentId)
+      : [...currentSentiment, sentimentId]
 
     setFilters({ sentiment: newSentiment })
   }
@@ -133,13 +115,25 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
     </div>
   )
 
+  // Count active filters
+  const activeFilterCount = 
+    (state.filters.platforms?.length || 0) + 
+    (state.filters.sentiment?.length || 0) +
+    (state.filters.minVolume > 0 ? 1 : 0) +
+    (state.filters.minConfidence > 0 ? 1 : 0)
+
   return (
     <div className="h-full flex flex-col">
-      {}
+      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Filter className="h-5 w-5" />
           <h3 className="font-semibold">Filters</h3>
+          {activeFilterCount > 0 && (
+            <span className="px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
         </div>
         <button
           onClick={onClose}
@@ -149,9 +143,9 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
         </button>
       </div>
 
-      {}
+      {/* Filter Sections */}
       <div className="flex-1 overflow-y-auto p-4">
-        {}
+        {/* Time Range */}
         <FilterSection
           title="Time Range"
           sectionId="time-range"
@@ -174,7 +168,7 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
           </div>
         </FilterSection>
 
-        {}
+        {/* Platforms */}
         <FilterSection
           title="Platforms"
           sectionId="platforms"
@@ -185,50 +179,28 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
               <label key={platform.id} className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={state.filters.platforms.includes(platform.id)}
+                  checked={state.filters.platforms?.includes(platform.id) || false}
                   onChange={() => handlePlatformToggle(platform.id)}
                   className="w-4 h-4 text-primary rounded"
                 />
-                <span className="text-lg">{platform.icon}</span>
                 <span className="text-sm">{platform.label}</span>
               </label>
             ))}
           </div>
         </FilterSection>
 
-        {}
-        <FilterSection
-          title="Industries"
-          sectionId="industries"
-          icon={<Hash className="h-4 w-4" />}
-        >
-          <div className="space-y-2">
-            {industries.map((industry) => (
-              <label key={industry.id} className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={state.filters.industries.includes(industry.id)}
-                  onChange={() => handleIndustryToggle(industry.id)}
-                  className="w-4 h-4 text-primary rounded"
-                />
-                <span className="text-sm">{industry.label}</span>
-              </label>
-            ))}
-          </div>
-        </FilterSection>
-
-        {}
+        {/* Sentiment */}
         <FilterSection
           title="Sentiment"
           sectionId="sentiment"
-          icon={<Check className="h-4 w-4" />}
+          icon={<Hash className="h-4 w-4" />}
         >
           <div className="space-y-2">
             {sentimentOptions.map((sentiment) => (
               <label key={sentiment.id} className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={state.filters.sentiment.includes(sentiment.id)}
+                  checked={state.filters.sentiment?.includes(sentiment.id) || false}
                   onChange={() => handleSentimentToggle(sentiment.id)}
                   className="w-4 h-4 text-primary rounded"
                 />
@@ -238,9 +210,9 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
           </div>
         </FilterSection>
 
-        {}
+        {/* Volume & Confidence */}
         <FilterSection
-          title="Volume Range"
+          title="Thresholds"
           sectionId="volume"
           icon={<Hash className="h-4 w-4" />}
         >
@@ -249,31 +221,32 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
               <label className="block text-sm font-medium mb-2">Minimum Volume</label>
               <input
                 type="number"
-                value={state.filters.minVolume}
+                value={state.filters.minVolume || 0}
                 onChange={(e) => setFilters({ minVolume: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="100"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="0"
+                min="0"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Minimum Confidence</label>
+              <label className="block text-sm font-medium mb-2">Minimum Confidence (0-1)</label>
               <input
                 type="number"
                 min="0"
                 max="1"
                 step="0.1"
-                value={state.filters.minConfidence}
+                value={state.filters.minConfidence || 0}
                 onChange={(e) => setFilters({ minConfidence: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="0.7"
+                className="w-full px-3 py-2 border border-border rounded-md bg-background focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="0"
               />
             </div>
           </div>
         </FilterSection>
       </div>
 
-      {}
+      {/* Footer */}
       <div className="p-4 border-t border-border">
         <div className="flex gap-2">
           <button
@@ -287,7 +260,7 @@ export default function TrendFilters({ onClose }: TrendFiltersProps) {
             onClick={onClose}
             className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
           >
-            Apply Filters
+            Apply
           </button>
         </div>
       </div>

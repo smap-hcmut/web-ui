@@ -24,6 +24,7 @@ import { Project, useDashboard } from '@/contexts/DashboardContext'
 import ProjectSetupWizard from '@/components/dashboard/ProjectSetupWizard'
 import { projectService } from '@/lib/api/services/project.service'
 import Swal from 'sweetalert2'
+import { useProjectsTour } from '@/hooks/useProjectsTour'
 
 // Hardcoded projects data - temporary until API is ready
 const mockProjects: Project[] = [
@@ -136,6 +137,7 @@ const ProjectsContent: React.FC = () => {
   const { t } = useTranslation('common')
   const router = useRouter()
   const { state, addProject: addProjectToContext, setProject } = useDashboard()
+  const { startTour } = useProjectsTour()
 
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -370,6 +372,7 @@ const ProjectsContent: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="mb-8"
+            id="projects-header"
           >
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -378,6 +381,12 @@ const ProjectsContent: React.FC = () => {
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
                   {t('projects.subtitle')}
+                  <button
+                    onClick={startTour}
+                    className="ml-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
+                  >
+                    Xem hướng dẫn
+                  </button>
                 </p>
               </div>
 
@@ -385,6 +394,7 @@ const ProjectsContent: React.FC = () => {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsWizardOpen(true)}
+                id="create-project-btn"
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-all shadow-lg"
               >
                 <Plus className="w-5 h-5" />
@@ -401,7 +411,7 @@ const ProjectsContent: React.FC = () => {
             className="mb-8 space-y-4"
           >
             <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1 max-w-md">
+              <div className="relative flex-1 max-w-md" id="search-projects">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
@@ -412,7 +422,7 @@ const ProjectsContent: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2" id="filter-status">
                 <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                 <select
                   value={statusFilter}
@@ -422,10 +432,10 @@ const ProjectsContent: React.FC = () => {
                   }}
                   className="px-4 py-3 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white text-gray-900 dark:text-white"
                 >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="process">Processing</option>
-                  <option value="draft">Draft</option>
+                  <option value="all">{t('projects.allStatus')}</option>
+                  <option value="completed">{t('projects.status.completed')}</option>
+                  <option value="process">{t('projects.status.process')}</option>
+                  <option value="draft">{t('projects.status.draft')}</option>
                 </select>
               </div>
             </div>
@@ -433,10 +443,10 @@ const ProjectsContent: React.FC = () => {
             {/* Results Info */}
             <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
               <p>
-                Showing {projects.length} of {totalProjects} projects
+                {t('projects.showingOf', { count: projects.length, total: totalProjects })}
               </p>
               <div className="flex items-center gap-2">
-                <label>Per page:</label>
+                <label>{t('projects.perPage')}</label>
                 <select
                   value={pageSize}
                   onChange={(e) => {
@@ -524,6 +534,7 @@ const ProjectsContent: React.FC = () => {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
               className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              id="projects-grid"
             >
               <AnimatePresence>
                 {filteredProjects.map((project, index) => {
@@ -538,7 +549,7 @@ const ProjectsContent: React.FC = () => {
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                       whileHover={!isInactive ? { y: -5 } : {}}
-                      className={`bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-2xl p-6 shadow-lg transition-all group relative ${
+                      className={`project-card bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-2xl p-6 shadow-lg transition-all group relative ${
                         isInactive 
                           ? 'opacity-50 cursor-not-allowed' 
                           : 'hover:shadow-xl cursor-pointer'

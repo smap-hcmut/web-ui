@@ -6,8 +6,7 @@ Tài liệu này mô tả tất cả các cấu trúc dữ liệu được sử 
 
 Hệ thống sử dụng các chart components chính sau:
 - **TopicCloud**: Word cloud hiển thị trending topics
-- **TrendChart**: Biểu đồ xu hướng theo thời gian
-- **SentimentChart**: Biểu đồ phân tích sentiment
+- **UnifiedChart**: Biểu đồ tích hợp hiển thị mention trends, critical events và sentiment data
 - **CompetitorChart**: Biểu đồ so sánh đối thủ cạnh tranh
 - **DataTable**: Bảng dữ liệu nội dung
 
@@ -84,24 +83,45 @@ interface TopicCloudProps {
 ]
 ```
 
-### 2. TrendChart Component
+### 2. UnifiedChart Component
 
-#### TrendData Interface
+#### UnifiedChartData Interface
 ```typescript
-interface TrendData {
+interface UnifiedChartData {
   date: string                     // Date in ISO format
   mentions: number                 // Number of mentions
-  sentiment: number                // Average sentiment score
+  sentiment: SentimentBreakdown    // Sentiment breakdown percentages
+  criticalEvents?: CriticalEvent[] // Array of critical events for this date
+}
+
+interface SentimentBreakdown {
+  positive: number                 // Positive sentiment percentage
+  negative: number                 // Negative sentiment percentage
+  neutral: number                  // Neutral sentiment percentage
+}
+
+interface CriticalEvent {
+  id: string                       // Unique event ID
+  timestamp: number                // Event timestamp
+  impact_score: number             // Impact score (0-100)
+  risk: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'  // Risk level
+  title: string                    // Event title
+  platform: string                 // Platform where event occurred
 }
 ```
 
-#### TrendChartProps Interface
+#### UnifiedChartProps Interface
 ```typescript
-interface TrendChartProps {
+interface UnifiedChartProps {
   title: string                    // Chart title
-  data: TrendData[]                // Time series data
+  data: UnifiedChartData[]         // Unified chart data
   animation?: 'line-draw' | 'fade-in'      // Animation type
   interaction?: 'zoom-pan' | 'hover-only'  // Interaction mode
+  onExport?: () => void            // Export callback
+  onFullscreen?: () => void        // Fullscreen callback
+  isLoading?: boolean              // Loading state
+  error?: string | null            // Error message
+  onRetry?: () => void             // Retry callback
 }
 ```
 
@@ -110,61 +130,27 @@ interface TrendChartProps {
 [
   {
     "date": "2024-01-01",
-    "mentions": 150,
-    "sentiment": 0.3
-  },
-  {
-    "date": "2024-01-02",
-    "mentions": 180,
-    "sentiment": 0.4
+    "mentions": 1200,
+    "sentiment": {
+      "positive": 45,
+      "negative": 20,
+      "neutral": 35
+    },
+    "criticalEvents": [
+      {
+        "id": "c1",
+        "timestamp": 1704110400000,
+        "impact_score": 85,
+        "risk": "CRITICAL",
+        "title": "Negative review went viral",
+        "platform": "Facebook"
+      }
+    ]
   }
 ]
 ```
 
-### 3. SentimentChart Component
-
-#### SentimentData Interface
-```typescript
-interface SentimentData {
-  name: string                     // Sentiment category
-  value: number                    // Percentage value
-  color: string                    // Hex color code
-  [key: string]: any               // Additional properties
-}
-```
-
-#### SentimentChartProps Interface
-```typescript
-interface SentimentChartProps {
-  title: string                    // Chart title
-  data: SentimentData[]            // Sentiment distribution data
-  animation?: 'pie-reveal' | 'fade-in'     // Animation type
-  interaction?: 'hover-details' | 'click-slice'  // Interaction mode
-}
-```
-
-**Ví dụ dữ liệu:**
-```json
-[
-  {
-    "name": "Positive",
-    "value": 45.2,
-    "color": "#10b981"
-  },
-  {
-    "name": "Neutral",
-    "value": 35.8,
-    "color": "#6b7280"
-  },
-  {
-    "name": "Negative",
-    "value": 19.0,
-    "color": "#ef4444"
-  }
-]
-```
-
-### 4. CompetitorChart Component
+### 3. CompetitorChart Component
 
 #### CompetitorData Interface
 ```typescript
@@ -206,7 +192,7 @@ interface CompetitorChartProps {
 ]
 ```
 
-### 5. DataTable Component
+### 4. DataTable Component
 
 #### ContentData Interface
 ```typescript

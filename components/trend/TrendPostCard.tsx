@@ -16,7 +16,10 @@ import {
   BarChart3,
   TrendingUp,
   TrendingDown,
-  Clock
+  Clock,
+  Zap,
+  AlertTriangle,
+  Star
 } from 'lucide-react'
 import { useTranslation } from 'next-i18next'
 import { TrendPost, useTrend } from '@/contexts/TrendContext'
@@ -159,6 +162,36 @@ export default function TrendPostCard({ post }: TrendPostCardProps) {
         <p className="text-muted-foreground text-sm line-clamp-3">
           {post.content}
         </p>
+      </div>
+
+      {/* Badges: Viral, KOL, Risk */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {post.isViral && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+            <Zap className="h-3 w-3 text-yellow-600" />
+            <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Viral</span>
+          </div>
+        )}
+        {post.isKol && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full">
+            <Star className="h-3 w-3 text-purple-600" />
+            <span className="text-xs font-medium text-purple-700 dark:text-purple-400">KOL</span>
+          </div>
+        )}
+        {(post.riskLevel === 'HIGH' || post.riskLevel === 'CRITICAL') && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded-full">
+            <AlertTriangle className="h-3 w-3 text-red-600" />
+            <span className="text-xs font-medium text-red-700 dark:text-red-400">{post.riskLevel}</span>
+          </div>
+        )}
+        {post.impactScore > 50 && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+            <TrendingUp className="h-3 w-3 text-blue-600" />
+            <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
+              Impact: {post.impactScore.toFixed(0)}
+            </span>
+          </div>
+        )}
       </div>
 
       {}

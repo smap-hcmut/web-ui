@@ -1,22 +1,47 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import MetricCard from './MetricCard'
-import TrendChart from './charts/TrendChart'
-import SentimentChart from './charts/SentimentChart'
+import UnifiedChart from './charts/UnifiedChart'
 import CompetitorChart from './charts/CompetitorChart'
 import TopicCloud from './charts/TopicCloud'
-import CrisisRadar from './charts/CrisisRadar'
 import TopViralPosts from './charts/TopViralPosts'
-import SalesFunnel from './charts/SalesFunnel'
+import PlatformDistribution from './charts/PlatformDistribution'
 import DataTable from './DataTable'
 import TopicDetailModal from './TopicDetailModal'
 import { useDashboard } from '../../contexts/DashboardContext'
 import { useTranslation } from 'next-i18next'
-import { Users, MessageCircle, ShoppingCart, DollarSign } from 'lucide-react'
+import { Users, MessageCircle, ShoppingCart, DollarSign, HelpCircle } from 'lucide-react'
+import { transformToUnifiedData, createSampleUnifiedData } from '../../lib/utils/chartDataTransform'
+import { useDashboardTour } from '../../hooks/useDashboardTour'
 
 export default function DashboardGrid() {
-  const { filteredData, isLoading, state, setSelectedTopic } = useDashboard()
-  const { i18n } = useTranslation()
+  const {
+    state,
+    isLoading,
+    setSelectedTopic,
+    refreshDashboard,
+    // Individual data sources
+    dashboardSummary,
+    dashboardKeywords,
+    dashboardPosts,
+    // Individual loading states
+    loadingSummary,
+    loadingKeywords,
+    loadingPosts,
+    // Individual errors
+    summaryError,
+    keywordsError,
+    postsError,
+    // Individual refresh actions
+    refreshSummary,
+    refreshKeywords,
+    refreshPosts,
+  } = useDashboard()
+  const { t, i18n } = useTranslation('common')
+  const { startTour } = useDashboardTour()
+
+  // Use dashboard data from API instead of filteredData/mock
+  const dashboardData = state.dashboardData
 
   const getTooltip = (key: string) => {
     const tooltips = {
@@ -50,186 +75,28 @@ export default function DashboardGrid() {
     return tooltips[key as keyof typeof tooltips]?.[currentLang as keyof typeof tooltips[keyof typeof tooltips]] || tooltips[key as keyof typeof tooltips]?.vi
   }
 
-  // Hardcoded data for new charts
-  const hardcodedCrisisData = [
-    { id: 'c1', timestamp: new Date('2024-01-01').getTime(), date: '2024-01-01 10:30', impact_score: 85, risk: 'CRITICAL' as const, title: 'Negative review went viral', platform: 'Facebook', mentions: 1200 },
-    { id: 'c2', timestamp: new Date('2024-01-02').getTime(), date: '2024-01-02 14:20', impact_score: 72, risk: 'HIGH' as const, title: 'Product complaint trending', platform: 'TikTok', mentions: 980 },
-    { id: 'c3', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 09:15', impact_score: 45, risk: 'MEDIUM' as const, title: 'Service delay discussion', platform: 'Facebook', mentions: 450 },
-    { id: 'c4', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 16:45', impact_score: 91, risk: 'CRITICAL' as const, title: 'PR crisis escalating', platform: 'YouTube', mentions: 2100 },
-    { id: 'c5', timestamp: new Date('2024-01-04').getTime(), date: '2024-01-04 11:00', impact_score: 58, risk: 'HIGH' as const, title: 'Customer complaint spike', platform: 'Instagram', mentions: 680 },
-    { id: 'c6', timestamp: new Date('2024-01-05').getTime(), date: '2024-01-05 08:30', impact_score: 32, risk: 'LOW' as const, title: 'Minor feedback issue', platform: 'Facebook', mentions: 220 },
-    { id: 'c7', timestamp: new Date('2024-01-06').getTime(), date: '2024-01-06 13:20', impact_score: 65, risk: 'HIGH' as const, title: 'Competitor attack post', platform: 'TikTok', mentions: 850 },
-    { id: 'c8', timestamp: new Date('2024-01-07').getTime(), date: '2024-01-07 10:10', impact_score: 28, risk: 'LOW' as const, title: 'General inquiry thread', platform: 'YouTube', mentions: 180 },
-  ]
-
-  const hardcodedViralPosts = [
-    { id: 1, title: 'New Coffee Blend Launch', platform: 'Facebook', engagement: 1250, reach: 15000, impact_score: 85, risk: 'HIGH' as const, virality_index: 78, timestamp: '2024-01-01 10:30' },
-    { id: 2, title: 'Customer Complaint Goes Viral', platform: 'TikTok', engagement: 3200, reach: 45000, impact_score: 92, risk: 'CRITICAL' as const, virality_index: 88, timestamp: '2024-01-02 14:20' },
-    { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000, impact_score: 72, risk: 'MEDIUM' as const, virality_index: 65, timestamp: '2024-01-03 09:15' },
-    { id: 4, title: 'Product Quality Issues Thread', platform: 'Facebook', engagement: 1890, reach: 22000, impact_score: 88, risk: 'CRITICAL' as const, virality_index: 82, timestamp: '2024-01-03 16:45' },
-    { id: 5, title: 'Customer Story Feature', platform: 'Instagram', engagement: 980, reach: 12000, impact_score: 58, risk: 'LOW' as const, virality_index: 45, timestamp: '2024-01-04 11:00' },
-    { id: 6, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000, impact_score: 42, risk: 'LOW' as const, virality_index: 38, timestamp: '2024-01-05 08:30' },
-    { id: 7, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000, impact_score: 35, risk: 'LOW' as const, virality_index: 32, timestamp: '2024-01-06 13:20' },
-    { id: 8, title: 'Influencer Partnership Announcement', platform: 'YouTube', engagement: 2850, reach: 38000, impact_score: 79, risk: 'MEDIUM' as const, virality_index: 71, timestamp: '2024-01-07 10:10' },
-  ]
-
-  const hardcodedSalesFunnel = [
-    { stage: 'Awareness', count: 50000, percentage: 100, change: 12.5, color: '#3b82f6', icon: Users },
-    { stage: 'Interest', count: 25000, percentage: 50, change: 8.3, color: '#8b5cf6', icon: MessageCircle },
-    { stage: 'Consideration', count: 12500, percentage: 25, change: -2.1, color: '#f59e0b', icon: ShoppingCart },
-    { stage: 'Intent (LEAD)', count: 5000, percentage: 10, change: 5.7, color: '#10b981', icon: DollarSign },
-    { stage: 'Purchase', count: 2500, percentage: 5, change: 3.2, color: '#ef4444', icon: DollarSign },
-  ]
-
-  const data = filteredData || {
-    metrics: {
-      sov: 26.2,
-      sentiment: 0.34,
-      mentions: 45200,
-      engagement: 4.8
-    },
-    trends: [
-      { date: '2024-01-01', mentions: 1200, sentiment: 0.2 },
-      { date: '2024-01-02', mentions: 1350, sentiment: 0.3 },
-      { date: '2024-01-03', mentions: 1100, sentiment: 0.1 },
-      { date: '2024-01-04', mentions: 1600, sentiment: 0.4 },
-      { date: '2024-01-05', mentions: 1800, sentiment: 0.5 },
-      { date: '2024-01-06', mentions: 1500, sentiment: 0.3 },
-      { date: '2024-01-07', mentions: 2000, sentiment: 0.6 },
-    ],
-    sentiment: [
-      { name: 'Positive', value: 45, color: '#10b981' },
-      { name: 'Neutral', value: 35, color: '#6b7280' },
-      { name: 'Negative', value: 20, color: '#ef4444' },
-    ],
-    competitors: [
-      { brand: 'Your Brand', sov: 28.5, color: '#3b82f6' },
-      { brand: 'Competitor A', sov: 25.2, color: '#10b981' },
-      { brand: 'Competitor B', sov: 19.8, color: '#f59e0b' },
-      { brand: 'Competitor C', sov: 16.1, color: '#ef4444' },
-      { brand: 'Others', sov: 10.4, color: '#8b5cf6' },
-    ],
-    topics: [
-      { text: 'coffee', value: 100, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 1250, engagement: 320 },
-      { text: 'quality', value: 85, sentiment: 0.6, trend: 'stable' as 'stable', mentions: 980, engagement: 280 },
-      { text: 'service', value: 75, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 850, engagement: 250 },
-      { text: 'price', value: 65, sentiment: -0.2, trend: 'falling' as 'falling', mentions: 720, engagement: 180 },
-      { text: 'atmosphere', value: 55, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 650, engagement: 220 },
-      { text: 'location', value: 45, sentiment: 0.4, trend: 'stable' as 'stable', mentions: 580, engagement: 150 },
-      { text: 'staff', value: 40, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 520, engagement: 200 },
-      { text: 'menu', value: 35, sentiment: 0.5, trend: 'stable' as 'stable', mentions: 480, engagement: 120 },
-      { text: 'taste', value: 90, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 1100, engagement: 300 },
-      { text: 'aroma', value: 70, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 800, engagement: 240 },
-      { text: 'fresh', value: 60, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 700, engagement: 190 },
-      { text: 'delicious', value: 80, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 950, engagement: 280 },
-      { text: 'friendly', value: 50, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 600, engagement: 160 },
-      { text: 'comfortable', value: 45, sentiment: 0.6, trend: 'stable' as 'stable', mentions: 550, engagement: 140 },
-      { text: 'clean', value: 40, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 500, engagement: 130 },
-      { text: 'fast', value: 35, sentiment: 0.5, trend: 'falling' as 'falling', mentions: 450, engagement: 110 },
-      { text: 'wifi', value: 30, sentiment: 0.3, trend: 'stable' as 'stable', mentions: 400, engagement: 90 },
-      { text: 'music', value: 25, sentiment: 0.4, trend: 'stable' as 'stable', mentions: 350, engagement: 80 },
-      { text: 'decor', value: 20, sentiment: 0.6, trend: 'rising' as 'rising', mentions: 300, engagement: 70 },
-      { text: 'ambiance', value: 55, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 650, engagement: 180 },
-      { text: 'espresso', value: 70, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 800, engagement: 250 },
-      { text: 'latte', value: 65, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 750, engagement: 220 },
-      { text: 'cappuccino', value: 60, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 700, engagement: 200 },
-      { text: 'americano', value: 50, sentiment: 0.6, trend: 'falling' as 'falling', mentions: 600, engagement: 150 },
-      { text: 'mocha', value: 45, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 550, engagement: 170 },
-      { text: 'macchiato', value: 40, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 500, engagement: 140 },
-      { text: 'frappuccino', value: 35, sentiment: 0.5, trend: 'falling' as 'falling', mentions: 450, engagement: 120 },
-      { text: 'cold brew', value: 55, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 650, engagement: 190 },
-      { text: 'iced coffee', value: 50, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 600, engagement: 160 },
-      { text: 'hot chocolate', value: 30, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 400, engagement: 130 },
-      { text: 'tea', value: 25, sentiment: 0.6, trend: 'stable' as 'stable', mentions: 350, engagement: 100 },
-      { text: 'pastry', value: 40, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 500, engagement: 150 },
-      { text: 'croissant', value: 35, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 450, engagement: 140 },
-      { text: 'muffin', value: 30, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 400, engagement: 120 },
-      { text: 'sandwich', value: 25, sentiment: 0.6, trend: 'falling' as 'falling', mentions: 350, engagement: 90 },
-      { text: 'salad', value: 20, sentiment: 0.5, trend: 'stable' as 'stable', mentions: 300, engagement: 80 },
-      { text: 'breakfast', value: 45, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 550, engagement: 160 },
-      { text: 'lunch', value: 40, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 500, engagement: 140 },
-      { text: 'dinner', value: 30, sentiment: 0.6, trend: 'falling' as 'falling', mentions: 400, engagement: 110 },
-      { text: 'snack', value: 25, sentiment: 0.5, trend: 'stable' as 'stable', mentions: 350, engagement: 90 },
-      { text: 'dessert', value: 35, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 450, engagement: 130 },
-      { text: 'cake', value: 30, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 400, engagement: 120 },
-      { text: 'cookie', value: 25, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 350, engagement: 100 },
-      { text: 'brownie', value: 20, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 300, engagement: 90 },
-      { text: 'smoothie', value: 35, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 450, engagement: 140 },
-      { text: 'juice', value: 30, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 400, engagement: 110 },
-      { text: 'water', value: 15, sentiment: 0.3, trend: 'stable' as 'stable', mentions: 200, engagement: 50 },
-      { text: 'energy', value: 40, sentiment: 0.6, trend: 'rising' as 'rising', mentions: 500, engagement: 150 },
-      { text: 'relax', value: 35, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 450, engagement: 130 },
-      { text: 'work', value: 30, sentiment: 0.4, trend: 'falling' as 'falling', mentions: 400, engagement: 100 },
-      { text: 'study', value: 25, sentiment: 0.5, trend: 'stable' as 'stable', mentions: 350, engagement: 90 },
-      { text: 'meeting', value: 20, sentiment: 0.3, trend: 'falling' as 'falling', mentions: 300, engagement: 70 },
-      { text: 'date', value: 30, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 400, engagement: 120 },
-      { text: 'friends', value: 35, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 450, engagement: 140 },
-      { text: 'family', value: 25, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 350, engagement: 100 },
-      { text: 'business', value: 28, sentiment: 0.5, trend: 'stable' as 'stable', mentions: 380, engagement: 95 },
-      { text: 'creative', value: 22, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 320, engagement: 85 },
-      { text: 'inspiring', value: 18, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 280, engagement: 75 },
-      { text: 'community', value: 32, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 420, engagement: 110 },
-      { text: 'sustainable', value: 26, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 360, engagement: 90 },
-      { text: 'organic', value: 24, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 340, engagement: 80 },
-      { text: 'local', value: 29, sentiment: 0.6, trend: 'rising' as 'rising', mentions: 390, engagement: 105 },
-      { text: 'artisan', value: 21, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 310, engagement: 70 },
-      { text: 'premium', value: 33, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 440, engagement: 115 },
-      { text: 'authentic', value: 27, sentiment: 0.8, trend: 'rising' as 'rising', mentions: 370, engagement: 95 },
-      { text: 'innovative', value: 23, sentiment: 0.6, trend: 'falling' as 'falling', mentions: 330, engagement: 85 },
-      { text: 'trendy', value: 19, sentiment: 0.5, trend: 'falling' as 'falling', mentions: 290, engagement: 65 },
-      { text: 'vintage', value: 17, sentiment: 0.7, trend: 'stable' as 'stable', mentions: 270, engagement: 60 },
-      { text: 'modern', value: 31, sentiment: 0.6, trend: 'stable' as 'stable', mentions: 410, engagement: 100 },
-      { text: 'cozy', value: 36, sentiment: 0.9, trend: 'rising' as 'rising', mentions: 460, engagement: 125 },
-      { text: 'chic', value: 20, sentiment: 0.7, trend: 'rising' as 'rising', mentions: 300, engagement: 70 },
-      { text: 'elegant', value: 25, sentiment: 0.8, trend: 'stable' as 'stable', mentions: 350, engagement: 90 },
-      { text: 'rustic', value: 18, sentiment: 0.6, trend: 'falling' as 'falling', mentions: 280, engagement: 65 },
-      { text: 'minimalist', value: 22, sentiment: 0.5, trend: 'rising' as 'rising', mentions: 320, engagement: 75 },
-    ],
-    content: [
-      { id: 1, title: 'New Coffee Blend Launch', platform: 'Facebook', engagement: 1250, reach: 15000 },
-      { id: 2, title: 'Customer Story Feature', platform: 'Instagram', engagement: 980, reach: 12000 },
-      { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000 },
-      { id: 4, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000 },
-      { id: 5, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000 },
-    ],
-    crisisData: [
-      { id: 'c1', timestamp: new Date('2024-01-01').getTime(), date: '2024-01-01 10:30', impact_score: 85, risk: 'CRITICAL' as const, title: 'Negative review went viral', platform: 'Facebook', mentions: 1200 },
-      { id: 'c2', timestamp: new Date('2024-01-02').getTime(), date: '2024-01-02 14:20', impact_score: 72, risk: 'HIGH' as const, title: 'Product complaint trending', platform: 'TikTok', mentions: 980 },
-      { id: 'c3', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 09:15', impact_score: 45, risk: 'MEDIUM' as const, title: 'Service delay discussion', platform: 'Facebook', mentions: 450 },
-      { id: 'c4', timestamp: new Date('2024-01-03').getTime(), date: '2024-01-03 16:45', impact_score: 91, risk: 'CRITICAL' as const, title: 'PR crisis escalating', platform: 'YouTube', mentions: 2100 },
-      { id: 'c5', timestamp: new Date('2024-01-04').getTime(), date: '2024-01-04 11:00', impact_score: 58, risk: 'HIGH' as const, title: 'Customer complaint spike', platform: 'Instagram', mentions: 680 },
-      { id: 'c6', timestamp: new Date('2024-01-05').getTime(), date: '2024-01-05 08:30', impact_score: 32, risk: 'LOW' as const, title: 'Minor feedback issue', platform: 'Facebook', mentions: 220 },
-      { id: 'c7', timestamp: new Date('2024-01-06').getTime(), date: '2024-01-06 13:20', impact_score: 65, risk: 'HIGH' as const, title: 'Competitor attack post', platform: 'TikTok', mentions: 850 },
-      { id: 'c8', timestamp: new Date('2024-01-07').getTime(), date: '2024-01-07 10:10', impact_score: 28, risk: 'LOW' as const, title: 'General inquiry thread', platform: 'YouTube', mentions: 180 },
-    ],
-    viralPosts: [
-      { id: 1, title: 'New Coffee Blend Launch', platform: 'Facebook', engagement: 1250, reach: 15000, impact_score: 85, risk: 'HIGH' as const, virality_index: 78, timestamp: '2024-01-01 10:30' },
-      { id: 2, title: 'Customer Complaint Goes Viral', platform: 'TikTok', engagement: 3200, reach: 45000, impact_score: 92, risk: 'CRITICAL' as const, virality_index: 88, timestamp: '2024-01-02 14:20' },
-      { id: 3, title: 'Behind the Scenes Video', platform: 'TikTok', engagement: 2100, reach: 25000, impact_score: 72, risk: 'MEDIUM' as const, virality_index: 65, timestamp: '2024-01-03 09:15' },
-      { id: 4, title: 'Product Quality Issues Thread', platform: 'Facebook', engagement: 1890, reach: 22000, impact_score: 88, risk: 'CRITICAL' as const, virality_index: 82, timestamp: '2024-01-03 16:45' },
-      { id: 5, title: 'Customer Story Feature', platform: 'Instagram', engagement: 980, reach: 12000, impact_score: 58, risk: 'LOW' as const, virality_index: 45, timestamp: '2024-01-04 11:00' },
-      { id: 6, title: 'Seasonal Menu Update', platform: 'Facebook', engagement: 750, reach: 9000, impact_score: 42, risk: 'LOW' as const, virality_index: 38, timestamp: '2024-01-05 08:30' },
-      { id: 7, title: 'Staff Appreciation Post', platform: 'Instagram', engagement: 650, reach: 8000, impact_score: 35, risk: 'LOW' as const, virality_index: 32, timestamp: '2024-01-06 13:20' },
-      { id: 8, title: 'Influencer Partnership Announcement', platform: 'YouTube', engagement: 2850, reach: 38000, impact_score: 79, risk: 'MEDIUM' as const, virality_index: 71, timestamp: '2024-01-07 10:10' },
-    ],
-    salesFunnel: [
-      { stage: 'Awareness', count: 50000, percentage: 100, change: 12.5, color: '#3b82f6', icon: Users },
-      { stage: 'Interest', count: 25000, percentage: 50, change: 8.3, color: '#8b5cf6', icon: MessageCircle },
-      { stage: 'Consideration', count: 12500, percentage: 25, change: -2.1, color: '#f59e0b', icon: ShoppingCart },
-      { stage: 'Intent (LEAD)', count: 5000, percentage: 10, change: 5.7, color: '#10b981', icon: DollarSign },
-      { stage: 'Purchase', count: 2500, percentage: 5, change: 3.2, color: '#ef4444', icon: DollarSign },
-    ]
+  // Fallback to empty data if no dashboard data yet
+  const data = dashboardData || {
+    metrics: { sov: 0, sentiment: 0, mentions: 0, engagement: 0 },
+    trends: [],
+    sentiment: [],
+    competitors: [],
+    topics: [],
+    content: [],
+    viralPosts: [],
+    platformDistribution: [],
+    crisisData: [],
   }
 
   const metrics = [
     {
       id: 'sov',
       title: 'Share of Voice',
-      value: `${data.competitors.find(c => c.brand === 'Your Brand')?.sov.toFixed(1) || data.metrics.sov.toFixed(1)}%`,
+      value: `${data.metrics.sov.toFixed(1)}%`,
       delta: '+2.3%',
       trend: 'up' as const,
       animation: 'counter' as const,
-      color: 'text-blue-600',
+      color: 'text-amber-700',
       tooltip: getTooltip('sov')
     },
     {
@@ -239,7 +106,7 @@ export default function DashboardGrid() {
       delta: '-0.12',
       trend: data.metrics.sentiment > 0 ? 'up' as const : 'down' as const,
       animation: 'gauge' as const,
-      color: data.metrics.sentiment > 0 ? 'text-green-600' : 'text-red-600',
+      color: data.metrics.sentiment > 0 ? 'text-green-700' : 'text-red-700',
       tooltip: getTooltip('sentiment')
     },
     {
@@ -249,7 +116,7 @@ export default function DashboardGrid() {
       delta: '+12.3%',
       trend: 'up' as const,
       animation: 'counter' as const,
-      color: 'text-purple-600',
+      color: 'text-amber-900',
       tooltip: getTooltip('mentions')
     },
     {
@@ -259,103 +126,162 @@ export default function DashboardGrid() {
       delta: '+0.3%',
       trend: 'up' as const,
       animation: 'progress' as const,
-      color: 'text-orange-600',
+      color: 'text-amber-600',
       tooltip: getTooltip('engagement')
     }
   ]
 
-  if (isLoading) {
+  // Helper component: Metric Card Skeleton
+  const MetricCardSkeleton = () => (
+    <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6 animate-pulse">
+      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+      <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+    </div>
+  )
+
+  // Helper component: Chart Skeleton
+  const ChartSkeleton = ({ height = 'h-80' }: { height?: string }) => (
+    <div className={`${height} bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg animate-pulse`} />
+  )
+
+  // Helper component: Error Banner with Retry
+  const ErrorBanner = ({ error, onRetry, title }: { error: string; onRetry: () => void; title: string }) => (
+    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">{title}</h4>
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-md hover:bg-red-700 transition-colors"
+        >
+          {t('dashboard.retry')}
+        </button>
+      </div>
+    </div>
+  )
+
+  // Empty state (only show if no loading and no data at all)
+  if (!loadingSummary && !loadingKeywords && !loadingPosts && !dashboardData) {
     return (
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
-              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-            </div>
-          ))}
+        <div className="flex flex-col items-center justify-center h-96 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg">
+          <div className="text-gray-400 dark:text-gray-600 text-6xl mb-4">📊</div>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('dashboard.noDataAvailable')}</h3>
+          <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
+            {t('dashboard.noAnalyzedPosts')}
+          </p>
         </div>
-        <div className="h-80 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg animate-pulse"></div>
       </div>
     )
   }
   return (
     <>
     <div className="p-6 space-y-6">
-      {}
+      {/* Tour Guide Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={startTour}
+          className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
+        >
+          <HelpCircle className="h-4 w-4" />
+          Xem hướng dẫn Dashboard
+        </button>
+      </div>
+
+      {/* Phase 1: Metrics Cards (from Summary API) */}
       <motion.div
+        id="metrics-section"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        {metrics.map((metric, index) => (
-          <motion.div
-            key={metric.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <MetricCard {...metric} />
-          </motion.div>
-        ))}
+        {loadingSummary ? (
+          // Show skeleton while loading summary
+          Array.from({ length: 4 }).map((_, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <MetricCardSkeleton />
+            </motion.div>
+          ))
+        ) : summaryError ? (
+          // Show error banner if summary fails
+          <div className="col-span-full">
+            <ErrorBanner
+              error={summaryError}
+              onRetry={refreshSummary}
+              title={t('dashboard.failedToLoadMetrics')}
+            />
+          </div>
+        ) : (
+          // Show actual metrics when loaded
+          metrics.map((metric, index) => (
+            <motion.div
+              key={metric.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <MetricCard {...metric} />
+            </motion.div>
+          ))
+        )}
       </motion.div>
 
-      {}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4, duration: 0.6 }}
-          className="lg:col-span-2"
-        >
-          <TrendChart
-            title="Trend Analysis"
-            data={data.trends}
-            animation="line-draw"
-            interaction="zoom-pan"
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5, duration: 0.6 }}
-        >
-          <SentimentChart
-            title="Sentiment Distribution"
-            data={data.sentiment}
-            animation="pie-reveal"
-            interaction="hover-details"
-          />
-        </motion.div>
-      </div>
-
-      {/* Crisis Radar - Full Width */}
+      {/* Phase 3: Unified Chart at the Top (from Posts API) */}
       <motion.div
+        id="unified-chart"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6, duration: 0.6 }}
+        transition={{ delay: 0.4, duration: 0.6 }}
       >
-        <CrisisRadar
-          title="Crisis Radar"
-          data={hardcodedCrisisData}
-          animation="fade-in"
-          interaction="hover-only"
-        />
+        {loadingPosts ? (
+          <ChartSkeleton height="h-80" />
+        ) : postsError ? (
+          <ErrorBanner
+            error={postsError}
+            onRetry={refreshPosts}
+            title={t('dashboard.failedToLoadChartData')}
+          />
+        ) : (
+          <UnifiedChart
+            title={t('dashboard.unifiedAnalyticsDashboard')}
+            data={data.trends && data.trends.length > 0
+              ? transformToUnifiedData(data.trends, data.crisisData || [], data.sentiment)
+              : createSampleUnifiedData()
+            }
+            animation="line-draw"
+            interaction="hover-only"
+          />
+        )}
       </motion.div>
 
-      {}
+      {/* Phase 2: CompetitorChart & PlatformDistribution (2-column grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div
+          id="competitor-chart"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.6 }}
+          transition={{ delay: 0.5, duration: 0.6 }}
         >
-          {data.competitors && data.competitors.length > 0 ? (
+          {loadingPosts ? (
+            <ChartSkeleton height="h-80" />
+          ) : postsError ? (
+            <ErrorBanner
+              error={postsError}
+              onRetry={refreshPosts}
+              title={t('dashboard.failedToLoadCompetitorData')}
+            />
+          ) : data.competitors && data.competitors.length > 0 ? (
             <CompetitorChart
-              title="Share of Voice Comparison"
+              title={t('dashboard.shareOfVoiceComparison')}
               data={data.competitors}
               animation="bar-stack"
               interaction="drill-down"
@@ -364,8 +290,8 @@ export default function DashboardGrid() {
             <div className="bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm border border-amber-300/60 dark:border-white/20 rounded-lg p-6">
               <div className="flex items-center justify-center h-80">
                 <div className="text-center">
-                  <div className="text-gray-600 dark:text-gray-400 mb-2">No competitor data available</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Please check your data source</div>
+                  <div className="text-gray-600 dark:text-gray-400 mb-2">{t('dashboard.noCompetitorData')}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{t('dashboard.checkDataSource')}</div>
                 </div>
               </div>
             </div>
@@ -373,47 +299,85 @@ export default function DashboardGrid() {
         </motion.div>
 
         <motion.div
+          id="platform-distribution"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.6 }}
+          transition={{ delay: 0.6, duration: 0.6 }}
         >
-          <TopicCloud
-            title="Trending Topics"
-            data={data.topics}
-            animation="word-cloud"
-            interaction="click-filter"
-            onTopicClick={setSelectedTopic}
-          />
+          {loadingPosts ? (
+            <ChartSkeleton height="h-80" />
+          ) : postsError ? (
+            <ErrorBanner
+              error={postsError}
+              onRetry={refreshPosts}
+              title={t('dashboard.failedToLoadPlatformData')}
+            />
+          ) : (
+            <PlatformDistribution
+              title={t('dashboard.platformDistribution')}
+              data={data.platformDistribution}
+              animation="scale-up"
+              interaction="hover-details"
+            />
+          )}
         </motion.div>
       </div>
 
-      {/* Sales Funnel - Full Width */}
+      {/* Phase 3: TopicCloud (full width) */}
       <motion.div
+        id="topic-cloud"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.9, duration: 0.6 }}
+        transition={{ delay: 0.7, duration: 0.6 }}
       >
-        <SalesFunnel
-          title="Sales Funnel (INTENT Tracking)"
-          data={hardcodedSalesFunnel}
-          animation="bar-grow"
-          interaction="hover-details"
-        />
+        {loadingKeywords ? (
+          <ChartSkeleton height="h-80" />
+        ) : keywordsError ? (
+          <ErrorBanner
+            error={keywordsError}
+            onRetry={refreshKeywords}
+            title={t('dashboard.failedToLoadKeywords')}
+          />
+        ) : (
+          <TopicCloud
+            title={t('dashboard.trendingTopics')}
+            data={data.topics}
+            onTopicClick={setSelectedTopic}
+          />
+        )}
       </motion.div>
 
-      {}
       <motion.div
+        id="viral-posts"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.0, duration: 0.6 }}
+        transition={{ delay: 0.8, duration: 0.6 }}
       >
-        <TopViralPosts
-          title="Top Viral Posts (by Impact Score)"
-          data={hardcodedViralPosts}
-          animation="row-reveal"
-          interaction="sort-filter"
-        />
+        {loadingPosts ? (
+          <ChartSkeleton height="h-96" />
+        ) : postsError ? (
+          <ErrorBanner
+            error={postsError}
+            onRetry={refreshPosts}
+            title={t('dashboard.failedToLoadViralPosts')}
+          />
+        ) : (
+          <TopViralPosts
+            title={t('dashboard.topViralPosts')}
+            data={data.viralPosts}
+            animation="row-reveal"
+            interaction="sort-filter"
+          />
+        )}
       </motion.div>
+
+      {/* Revalidation Indicator */}
+      {state.isDashboardRevalidating && (
+        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-medium">{t('dashboard.updatingData')}</span>
+        </div>
+      )}
     </div>
 
     {}
