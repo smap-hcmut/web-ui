@@ -10,10 +10,13 @@ import SavedItems from '@/components/trend/SavedItems'
 import { TrendProvider } from '@/contexts/TrendContext'
 import { useDashboard } from '@/contexts/DashboardContext'
 import { projectService } from '@/lib/api/services/project.service'
+import { HelpCircle } from 'lucide-react'
+import { useTrendTour } from '@/hooks/useTrendTour'
 
 const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectId }) => {
   const router = useRouter()
   const { state, setProject, addProject, dashboardPosts, loadingPosts } = useDashboard()
+  const { startTour } = useTrendTour()
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -123,18 +126,26 @@ const ProjectTrendAnalysisContent: React.FC<{ projectId: string }> = ({ projectI
         {/* Main content area - scrollable */}
         <div className="flex-1 overflow-auto">
           {/* Header - sticky */}
-          <div className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20 bg-amber-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
+          <div id="trend-header" className="sticky top-0 z-10 flex items-center justify-between p-6 border-b border-amber-300/60 dark:border-white/20 bg-amber-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">
                 Trend Analysis
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Khám phá xu hướng nội dung theo thời gian thực
+                <button
+                  onClick={startTour}
+                  className="ml-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+                >
+                  <HelpCircle className="h-3 w-3" />
+                  Xem hướng dẫn
+                </button>
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <button
+                id="trend-filters-btn"
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
               >

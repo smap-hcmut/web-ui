@@ -13,13 +13,15 @@ import {
   Target,
   Users,
   Sparkles,
-  Calendar
+  Calendar,
+  HelpCircle
 } from 'lucide-react'
 import { projectService } from '@/lib/api/services/project.service'
 import ProjectPreviewStep from './ProjectPreviewStep'
 import { DryRunOuterPayload } from '@/lib/types/dryrun'
 import { useJobWebSocket } from '@/hooks/useJobWebSocket'
 import type { JobNotificationMessage, ContentItem } from '@/lib/types/websocket'
+import { useWizardTour } from '@/hooks/useWizardTour'
 
 interface ProjectSetupWizardProps {
   isOpen: boolean
@@ -56,6 +58,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
   const [currentStep, setCurrentStep] = useState(1)
   const { theme } = useTheme()
   const router = useRouter()
+  const { startWizardTour } = useWizardTour()
 
   // Get today's date in YYYY-MM-DD format for input max attribute
   const today = new Date().toISOString().split('T')[0]
@@ -708,7 +711,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
       case 1:
         return (
           <div className="space-y-6">
-            <div>
+            <div id="project-name-input">
               <label className="block text-sm font-medium mb-2">Tên Project *</label>
               <input
                 type="text"
@@ -725,7 +728,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
               )}
             </div>
 
-            <div>
+            <div id="project-description-input">
               <label className="block text-sm font-medium mb-2">Mô tả (tùy chọn)</label>
               <textarea
                 value={projectData.description}
@@ -737,7 +740,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             </div>
 
             {/* Date Range Selection */}
-            <div className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
+            <div id="date-range-section" className="bg-muted/30 rounded-lg p-4 border border-amber-300/60 dark:border-white/20">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h4 className="font-medium">Khoảng thời gian phân tích</h4>
@@ -794,6 +797,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Thương hiệu của bạn</h3>
               <button
+                id="add-brand-btn"
                 onClick={() => addBrand('own')}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
@@ -814,7 +818,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     key={brand.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-muted/50 rounded-lg p-4"
+                    className="brand-card bg-muted/50 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium">Thương hiệu {index + 1}</h4>
@@ -843,7 +847,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                             type="button"
                             onClick={() => handleGenerateKeywords(brand.id, brand.name, 'brand', index)}
                             disabled={aiLoadingStates[`brand_${brand.id}`] || !brand.name.trim()}
-                            className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-md hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            className="ai-generate-btn flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-md hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                             title="Tạo từ khóa bằng AI"
                           >
                             {aiLoadingStates[`brand_${brand.id}`] ? (
@@ -957,6 +961,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Đối thủ cạnh tranh</h3>
               <button
+                id="add-competitor-btn"
                 onClick={() => addBrand('competitor')}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
@@ -977,7 +982,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                     key={competitor.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-muted/50 rounded-lg p-4"
+                    className="competitor-card bg-muted/50 rounded-lg p-4"
                   >
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium">Đối thủ {index + 1}</h4>
@@ -1252,6 +1257,13 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
                 <h2 className="text-lg font-semibold">Tạo Project Mới</h2>
                 <p className="text-xs text-muted-foreground">
                   {steps[currentStep - 1].description}
+                  <button
+                    onClick={() => startWizardTour(currentStep)}
+                    className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+                  >
+                    <HelpCircle className="h-3 w-3" />
+                    Hướng dẫn
+                  </button>
                 </p>
               </div>
             </div>
@@ -1266,7 +1278,7 @@ export default function ProjectSetupWizard({ isOpen, onClose, onComplete }: Proj
           {/* Main Content Area - Flex layout with sidebar */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left Sidebar - Vertical Stepper */}
-            <div className="hidden md:flex w-56 flex-shrink-0 flex-col bg-muted/20 border-r border-border p-4">
+            <div id="wizard-step-indicator" className="hidden md:flex w-56 flex-shrink-0 flex-col bg-muted/20 border-r border-border p-4">
               <div className="space-y-1">
                 {steps.map((step, index) => (
                   <div

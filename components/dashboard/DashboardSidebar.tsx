@@ -41,6 +41,7 @@ export default function DashboardSidebar() {
 
   return (
     <motion.div
+      id="dashboard-sidebar"
       initial={{ width: 280 }}
       animate={{ width: state.sidebarCollapsed ? 60 : 280 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}

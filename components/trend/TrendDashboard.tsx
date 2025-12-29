@@ -223,7 +223,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
       <div className="p-6 border-b border-border bg-card/50">
         <div className="flex items-center gap-4 mb-4">
           {/* Search */}
-          <div className="flex-1 relative">
+          <div id="trend-search" className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -235,7 +235,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+          <div id="trend-view-mode" className="flex items-center gap-2 bg-muted rounded-lg p-1">
             <button
               onClick={() => setViewMode('topics')}
               className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -273,6 +273,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
 
           {/* Refresh Button */}
           <button
+            id="trend-refresh"
             onClick={refreshData}
             disabled={state.isLoading}
             className="flex items-center gap-2 px-4 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -282,7 +283,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
           </button>
 
           {/* Data Source Indicator */}
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+          <div id="trend-data-source" className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
             isUsingRealData 
               ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
               : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
@@ -302,7 +303,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
         </div>
 
         {/* Sort Options */}
-        <div className="flex items-center gap-2">
+        <div id="trend-sort" className="flex items-center gap-2">
            <span className="text-sm font-medium text-muted-foreground">{t('trendAnalysis.sortBy')}:</span>
           <SortButton field="volume" labelKey="trendAnalysis.sortByVolume" icon={<BarChart3 className="h-4 w-4" />} />
           <SortButton field="delta" labelKey="trendAnalysis.sortByDelta" icon={<TrendingUp className="h-4 w-4" />} />
@@ -314,6 +315,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
       {/* Metrics Section */}
       {showMetrics && (
         <motion.div
+          id="trend-metrics"
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
@@ -324,7 +326,7 @@ export default function TrendDashboard({ onTopicSelect }: TrendDashboardProps) {
       )}
 
       {/* Content Section */}
-      <div>
+      <div id="trend-content">
         {state.isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">

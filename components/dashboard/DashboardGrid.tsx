@@ -10,8 +10,9 @@ import DataTable from './DataTable'
 import TopicDetailModal from './TopicDetailModal'
 import { useDashboard } from '../../contexts/DashboardContext'
 import { useTranslation } from 'next-i18next'
-import { Users, MessageCircle, ShoppingCart, DollarSign } from 'lucide-react'
+import { Users, MessageCircle, ShoppingCart, DollarSign, HelpCircle } from 'lucide-react'
 import { transformToUnifiedData, createSampleUnifiedData } from '../../lib/utils/chartDataTransform'
+import { useDashboardTour } from '../../hooks/useDashboardTour'
 
 export default function DashboardGrid() {
   const {
@@ -37,6 +38,7 @@ export default function DashboardGrid() {
     refreshPosts,
   } = useDashboard()
   const { t, i18n } = useTranslation('common')
+  const { startTour } = useDashboardTour()
 
   // Use dashboard data from API instead of filteredData/mock
   const dashboardData = state.dashboardData
@@ -178,8 +180,20 @@ export default function DashboardGrid() {
   return (
     <>
     <div className="p-6 space-y-6">
+      {/* Tour Guide Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={startTour}
+          className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
+        >
+          <HelpCircle className="h-4 w-4" />
+          Xem hướng dẫn Dashboard
+        </button>
+      </div>
+
       {/* Phase 1: Metrics Cards (from Summary API) */}
       <motion.div
+        id="metrics-section"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
@@ -223,6 +237,7 @@ export default function DashboardGrid() {
 
       {/* Phase 3: Unified Chart at the Top (from Posts API) */}
       <motion.div
+        id="unified-chart"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.6 }}
@@ -251,6 +266,7 @@ export default function DashboardGrid() {
       {/* Phase 2: CompetitorChart & PlatformDistribution (2-column grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div
+          id="competitor-chart"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.6 }}
@@ -283,6 +299,7 @@ export default function DashboardGrid() {
         </motion.div>
 
         <motion.div
+          id="platform-distribution"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6, duration: 0.6 }}
@@ -308,6 +325,7 @@ export default function DashboardGrid() {
 
       {/* Phase 3: TopicCloud (full width) */}
       <motion.div
+        id="topic-cloud"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7, duration: 0.6 }}
@@ -330,6 +348,7 @@ export default function DashboardGrid() {
       </motion.div>
 
       <motion.div
+        id="viral-posts"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8, duration: 0.6 }}
