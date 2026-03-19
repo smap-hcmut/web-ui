@@ -36,6 +36,12 @@ const PARTICLE_COUNT = 30;
    HELPERS
    ═══════════════════════════════════════════ */
 
+/** Deterministic pseudo-random so SSR & client produce identical values */
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed * 9301 + 49297) * 233280;
+  return x - Math.floor(x);
+}
+
 function calcRadius(node: HeapNode, index: number): number {
   const val = node.metrics.mentions ?? node.metrics.engagement ?? 1000;
   const base = node.type === 'comment' ? 18 : node.type === 'post' ? 22 : 30;
@@ -143,6 +149,9 @@ export default function HeapSpace() {
   const [zoomTarget, setZoomTarget] = useState<string | null>(null);
   const [entered, setEntered]       = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mounted, setMounted]           = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   /* ─── derived ─── */
   const showSats = entities.length <= 10;
@@ -164,12 +173,12 @@ export default function HeapSpace() {
     () =>
       Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
         id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: 1 + Math.random() * 1.5,
-        opacity: 0.03 + Math.random() * 0.06,
-        dur: 18 + Math.random() * 24,
-        delay: -Math.random() * 30,
+        x: seededRandom(i * 6 + 1) * 100,
+        y: seededRandom(i * 6 + 2) * 100,
+        size: 1 + seededRandom(i * 6 + 3) * 1.5,
+        opacity: 0.03 + seededRandom(i * 6 + 4) * 0.06,
+        dur: 18 + seededRandom(i * 6 + 5) * 24,
+        delay: -seededRandom(i * 6 + 6) * 30,
       })),
     [],
   );
@@ -478,8 +487,8 @@ export default function HeapSpace() {
         }}
       />
 
-      {/* ── ambient particles ── */}
-      {particles.map(p => (
+      {/* ── ambient particles (client-only to avoid hydration mismatch) ── */}
+      {mounted && particles.map(p => (
         <div
           key={p.id}
           className="absolute rounded-full pointer-events-none heap-particle"
@@ -599,37 +608,57 @@ export default function HeapSpace() {
               onMouseLeave={() => {
                 if (!dragRef.current) handleHover(null);
               }}
+            />
+
+            {/* content label — outside blob so border-radius won't clip */}
+            <div
+              className="absolute flex flex-col items-center justify-center text-center pointer-events-none"
+              style={{
+                width:  radius * 2,
+                height: radius * 2,
+                left: -radius,
+                top:  -radius,
+                zIndex: 11,
+                ...(isZooming
+                  ? {
+                      opacity,
+                      transform: `scale(${scale})`,
+                      transition: `
+                        opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
+                        transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
+                      `,
+                    }
+                  : {
+                      opacity: dimmed ? 0.1 : undefined,
+                      transition: 'opacity 500ms ease',
+                    }),
+              }}
             >
-              {/* inner content */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2 z-10">
-                {entity.platform ? (
-                  <span
-                    className="text-[11px] font-bold transition-opacity duration-300"
-                    style={{ color: PLATFORM_COLOR[entity.platform] }}
-                  >
-                    {entity.platform.slice(0, 2).toUpperCase()}
-                  </span>
-                ) : (
-                  <span
-                    className="text-base transition-opacity duration-300"
-                    style={{ color: color.primary }}
-                  >
-                    {ICONS[entity.type]}
-                  </span>
-                )}
-
+              {entity.platform ? (
                 <span
-                  className="text-[11px] font-semibold mt-0.5 leading-tight line-clamp-2 max-w-[92%] text-white transition-colors duration-300"
+                  className="text-[11px] font-bold"
+                  style={{ color: PLATFORM_COLOR[entity.platform] }}
                 >
-                  {entity.name}
+                  {entity.platform.slice(0, 2).toUpperCase()}
                 </span>
+              ) : (
+                <span
+                  className="text-base"
+                  style={{ color: color.primary }}
+                >
+                  {ICONS[entity.type]}
+                </span>
+              )}
 
-                {entity.metrics.mentions != null && (
-                  <span className="text-[9px] text-white/60 mt-0.5 tabular-nums transition-colors duration-300">
-                    {fmt(entity.metrics.mentions)}
-                  </span>
-                )}
-              </div>
+              <span className="text-[11px] font-semibold mt-0.5 leading-tight line-clamp-2 max-w-[80%] text-white">
+                {entity.name}
+              </span>
+
+              {entity.metrics.mentions != null && (
+                <span className="text-[9px] text-white/60 mt-0.5 tabular-nums">
+                  {fmt(entity.metrics.mentions)}
+                </span>
+              )}
             </div>
 
             {/* child count badge */}
@@ -652,7 +681,7 @@ export default function HeapSpace() {
 
       {/* ═══ SATELLITES ═══ */}
       {showSats && satellites.map((sat, si) => {
-        const r = 12 + ((si * 3571) % 5);
+        const r = 20 + ((si * 3571) % 7);
         const color = COLORS[sat.type];
         const isExiting = phase !== 'idle';
         const hasKidsSat = (sat.children?.length ?? 0) > 0;
