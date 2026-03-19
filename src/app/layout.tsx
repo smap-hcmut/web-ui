@@ -5,7 +5,7 @@ import { recentActivity } from "@/lib/mock-data";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SocialRadar — Social Listening",
+  title: "SMAP — Social Listening",
   description:
     "Real-time social listening across TikTok, Facebook, and YouTube",
 };

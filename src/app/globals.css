@@ -162,6 +162,7 @@
   filter: brightness(1.5);
 }
 
+
 /* Pulse glow */
 @keyframes heapPulse {
   0%, 100% { opacity: 0.15; }

@@ -6,7 +6,7 @@ export function Header() {
   return (
     <header className="h-14 border-b border-surface-border flex items-center justify-between px-6 flex-shrink-0">
       <div>
-        <h1 className="text-[15px] font-semibold text-content">Dashboard</h1>
+        <h1 className="text-[15px] font-semibold text-content">MAP</h1>
         <p className="text-[11px] text-content-tertiary leading-none mt-0.5">
           Real-time social listening across platforms
         </p>

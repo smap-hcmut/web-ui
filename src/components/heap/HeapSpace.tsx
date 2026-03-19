@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Search, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import type { HeapNode, PhysicsState, SatelliteData, EntityType, PlatformType } from './types';
-import { heapData } from './mock-data';
+import { heapData as rawHeapData } from './mock-data';
+import { enrichMockData } from './enrich';
+import BubbleSVGOverlay from './BubbleSVGOverlay';
+
+const heapData = enrichMockData(rawHeapData);
 
 /* ═══════════════════════════════════════════
    CONSTANTS
@@ -19,7 +23,7 @@ const COLORS: Record<EntityType, { primary: string; secondary: string; glow: str
 };
 
 const ICONS: Record<EntityType, string> = {
-  campaign: '◆', project: '⬡', keyword: '#', post: '◉', comment: '◦',
+  campaign: '◆', project: '⬡', keyword: '#', post: '◉', comment: '💬',
 };
 
 const TYPE_LABEL: Record<EntityType, string> = {
@@ -28,6 +32,10 @@ const TYPE_LABEL: Record<EntityType, string> = {
 
 const PLATFORM_COLOR: Record<PlatformType, string> = {
   tiktok: '#fe2c55', facebook: '#1877f2', youtube: '#ff0000',
+};
+
+const PLATFORM_ABBR: Record<PlatformType, string> = {
+  tiktok: 'TT', facebook: 'FB', youtube: 'YB',
 };
 
 const PARTICLE_COUNT = 30;
@@ -42,12 +50,12 @@ function seededRandom(seed: number): number {
   return x - Math.floor(x);
 }
 
+/** Radius based on mentions — more mentions = bigger bubble */
 function calcRadius(node: HeapNode, index: number): number {
   const val = node.metrics.mentions ?? node.metrics.engagement ?? 1000;
   const base = node.type === 'comment' ? 18 : node.type === 'post' ? 22 : 30;
   const max  = node.type === 'campaign' ? 58 : node.type === 'project' ? 48 : 40;
   const r = Math.min(max, Math.max(base, base + Math.log10(Math.max(1, val)) * 5));
-  // add randomness ±10%
   const jitter = 0.9 + (((index * 7919) % 100) / 100) * 0.2;
   return Math.round(r * jitter);
 }
@@ -63,6 +71,12 @@ function sentimentHue(s: number | undefined): string {
   if (s >= 70) return '#10b981';
   if (s >= 40) return '#f59e0b';
   return '#ef4444';
+}
+
+/** Higher sentiment → more visually prominent (0.35–1.0) */
+function sentimentIntensity(s: number | undefined): number {
+  if (s == null) return 0.6;
+  return 0.35 + (s / 100) * 0.65;
 }
 
 /** Golden-angle spiral for organic scatter */
@@ -138,6 +152,8 @@ export default function HeapSpace() {
   const dragRef       = useRef<DragState | null>(null);
   const rafId         = useRef(0);
   const t0            = useRef(performance.now());
+  const hideTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipHoveredRef = useRef(false);
 
   /* ─── state ─── */
   const [navStack, setNavStack]     = useState<HeapNode[]>([]);
@@ -150,6 +166,7 @@ export default function HeapSpace() {
   const [entered, setEntered]       = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mounted, setMounted]           = useState(false);
+  const [detailNode, setDetailNode]     = useState<HeapNode | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -337,12 +354,18 @@ export default function HeapSpace() {
     }, 450);
   }, [phase]);
 
-  /* ─── hover ─── */
+  /* ─── hover (with delayed hide for hoverable tooltip) ─── */
   const handleHover = useCallback((entity: HeapNode | null, outerEl?: HTMLDivElement) => {
     if (dragRef.current?.moved) return;
-    hovIdRef.current = entity?.id ?? null;
-    hovElRef.current = outerEl ?? null;
+
     if (entity && outerEl) {
+      // Clear any pending hide
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = null;
+      }
+      hovIdRef.current = entity.id;
+      hovElRef.current = outerEl;
       const r = outerEl.getBoundingClientRect();
       const c = containerRef.current?.getBoundingClientRect();
       if (c) {
@@ -350,9 +373,42 @@ export default function HeapSpace() {
         setHovered({ node: entity, x: tooltipPosRef.current.x, y: tooltipPosRef.current.y });
       }
     } else {
+      // Delay hide to allow mouse to reach tooltip
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = setTimeout(() => {
+        if (!tooltipHoveredRef.current) {
+          hovIdRef.current = null;
+          hovElRef.current = null;
+          setHovered(null);
+        }
+      }, 300);
+    }
+  }, []);
+
+  const handleTooltipEnter = useCallback(() => {
+    tooltipHoveredRef.current = true;
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleTooltipLeave = useCallback(() => {
+    tooltipHoveredRef.current = false;
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    hideTimeoutRef.current = setTimeout(() => {
+      hovIdRef.current = null;
       hovElRef.current = null;
       setHovered(null);
-    }
+    }, 200);
+  }, []);
+
+  const openDetail = useCallback((node: HeapNode) => {
+    setDetailNode(node);
+    setHovered(null);
+    hovIdRef.current = null;
+    hovElRef.current = null;
+    tooltipHoveredRef.current = false;
   }, []);
 
   /* ─── drag & drop ─── */
@@ -530,6 +586,12 @@ export default function HeapSpace() {
         const isTarget = zoomTarget === entity.id;
         const dimmed   = matchIds != null && !matchIds.has(entity.id);
         const hasKids  = (entity.children?.length ?? 0) > 0;
+        const isComment = entity.type === 'comment';
+        const si = sentimentIntensity(entity.metrics.sentiment);
+
+        // Comment: just a text line, no bubble shape
+        const bubbleW = isComment ? radius * 5 : radius * 2;
+        const bubbleH = isComment ? radius * 1.2 : radius * 2;
 
         // phase-driven visual state
         let opacity = 1;
@@ -545,7 +607,14 @@ export default function HeapSpace() {
         }
         if (dimmed) opacity *= 0.1;
 
+        // Sentiment-based intensity for the blob background
+        const blobOpacity = opacity * si;
+
         const isZooming = phase !== 'idle';
+
+        // Hex-encoded opacity for gradient fills (scaled by sentiment)
+        const fillHex1 = Math.round(si * 0x30).toString(16).padStart(2, '0');
+        const fillHex2 = Math.round(si * 0x18).toString(16).padStart(2, '0');
 
         return (
           <div
@@ -554,119 +623,172 @@ export default function HeapSpace() {
             className="absolute will-change-transform"
             style={{ left: 0, top: 0, zIndex: isTarget ? 50 : 10 }}
           >
-            {/* visual bubble */}
-            <div
-              className={clsx(
-                'heap-blob group',
-                hasKids && 'cursor-grab active:cursor-grabbing',
-              )}
-              style={{
-                width:  radius * 2,
-                height: radius * 2,
-                marginLeft: -radius,
-                marginTop:  -radius,
-                animationDuration: `${blobDur(i)}s`,
+            {isComment ? (
+              /* ═══ COMMENT: plain floating text, no bubble ═══ */
+              <div
+                className="absolute flex items-center gap-2 whitespace-nowrap cursor-default hover:brightness-150 transition-all duration-300"
+                style={{
+                  width: bubbleW,
+                  height: bubbleH,
+                  marginLeft: -bubbleW / 2,
+                  marginTop: -bubbleH / 2,
+                  ...(isZooming
+                    ? {
+                        opacity: opacity * si,
+                        transform: `scale(${scale})`,
+                        transition: `
+                          opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
+                          transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
+                        `,
+                      }
+                    : {
+                        opacity: dimmed ? 0.1 : si,
+                        transition: 'opacity 500ms ease',
+                      }),
+                }}
+                onPointerDown={e => handlePointerDown(e, entity.id)}
+                onMouseEnter={e => {
+                  if (phase === 'idle' && !dragRef.current?.moved)
+                    handleHover(entity, e.currentTarget.parentElement as HTMLDivElement);
+                }}
+                onMouseLeave={() => {
+                  if (!dragRef.current) handleHover(null);
+                }}
+              >
+                {entity.author && (
+                  <span
+                    className="text-[11px] font-bold shrink-0"
+                    style={{ color: `${sentimentHue(entity.metrics.sentiment)}` }}
+                  >
+                    {entity.author}
+                  </span>
+                )}
+                <span className="text-[11px] font-medium text-white/60 truncate">
+                  {entity.content || entity.name}
+                </span>
+              </div>
+            ) : (
+              /* ═══ NON-COMMENT: blob bubble ═══ */
+              <>
+                {/* visual bubble */}
+                <div
+                  className={clsx('heap-blob group', hasKids && 'cursor-grab active:cursor-grabbing')}
+                  style={{
+                    width:  bubbleW,
+                    height: bubbleH,
+                    marginLeft: -bubbleW / 2,
+                    marginTop:  -bubbleH / 2,
+                    animationDuration: `${blobDur(i)}s`,
 
-                background: `
-                  radial-gradient(circle at 30% 30%, ${color.primary}30 0%, transparent 55%),
-                  radial-gradient(circle at 70% 70%, ${color.secondary}18 0%, transparent 55%),
-                  radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 70%)
-                `,
-                border: entity.metrics.sentiment != null
-                  ? `2px solid ${sentimentHue(entity.metrics.sentiment)}90`
-                  : `1.5px solid ${color.primary}40`,
+                    background: `
+                      radial-gradient(circle at 30% 30%, ${color.primary}${fillHex1} 0%, transparent 55%),
+                      radial-gradient(circle at 70% 70%, ${color.secondary}${fillHex2} 0%, transparent 55%),
+                      radial-gradient(circle at 50% 50%, rgba(255,255,255,${(0.03 * si).toFixed(3)}) 0%, transparent 70%)
+                    `,
+                    border: entity.metrics.sentiment != null
+                      ? `2px solid ${sentimentHue(entity.metrics.sentiment)}${Math.round(si * 0x90).toString(16).padStart(2, '0')}`
+                      : `1.5px solid ${color.primary}40`,
 
-                boxShadow: `
-                  0 0 ${radius * 0.3}px ${color.glow},
-                  0 0 ${radius * 0.6}px ${color.glow.replace('0.25', '0.10')},
-                  inset 0 1px 1px rgba(255,255,255,0.04)${
-                    entity.metrics.sentiment != null
-                      ? `, inset 0 0 ${radius * 0.4}px ${sentimentHue(entity.metrics.sentiment)}20`
-                      : ''
-                  }
-                `,
+                    boxShadow: `
+                      0 0 ${radius * 0.3 * si}px ${color.glow},
+                      0 0 ${radius * 0.6 * si}px ${color.glow.replace('0.25', (0.10 * si).toFixed(2))},
+                      inset 0 1px 1px rgba(255,255,255,${(0.04 * si).toFixed(3)})
+                      ${entity.metrics.sentiment != null
+                        ? `, inset 0 0 ${radius * 0.4 * si}px ${sentimentHue(entity.metrics.sentiment)}20`
+                        : ''
+                      }
+                    `,
 
-                ...(isZooming
-                  ? {
-                      opacity,
-                      transform: `scale(${scale})`,
-                      transition: `
-                        opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
-                        transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
-                      `,
-                    }
-                  : {
-                      opacity: dimmed ? 0.1 : undefined,
-                      transition: 'opacity 500ms ease',
-                    }),
-              }}
-              onPointerDown={e => handlePointerDown(e, entity.id)}
-              onMouseEnter={e => {
-                if (phase === 'idle' && !dragRef.current?.moved)
-                  handleHover(entity, e.currentTarget.parentElement as HTMLDivElement);
-              }}
-              onMouseLeave={() => {
-                if (!dragRef.current) handleHover(null);
-              }}
-            />
+                    ...(isZooming
+                      ? {
+                          opacity: blobOpacity,
+                          transform: `scale(${scale})`,
+                          transition: `
+                            opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
+                            transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
+                          `,
+                        }
+                      : {
+                          opacity: dimmed ? 0.1 * si : blobOpacity,
+                          transition: 'opacity 500ms ease',
+                        }),
+                  }}
+                  onPointerDown={e => handlePointerDown(e, entity.id)}
+                  onMouseEnter={e => {
+                    if (phase === 'idle' && !dragRef.current?.moved)
+                      handleHover(entity, e.currentTarget.parentElement as HTMLDivElement);
+                  }}
+                  onMouseLeave={() => {
+                    if (!dragRef.current) handleHover(null);
+                  }}
+                />
 
-            {/* content label — outside blob so border-radius won't clip */}
-            <div
-              className="absolute flex flex-col items-center justify-center text-center pointer-events-none"
-              style={{
-                width:  radius * 2,
-                height: radius * 2,
-                left: -radius,
-                top:  -radius,
-                zIndex: 11,
-                ...(isZooming
-                  ? {
-                      opacity,
-                      transform: `scale(${scale})`,
-                      transition: `
-                        opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
-                        transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
-                      `,
-                    }
-                  : {
-                      opacity: dimmed ? 0.1 : undefined,
-                      transition: 'opacity 500ms ease',
-                    }),
-              }}
-            >
-              {entity.platform ? (
-                <span
-                  className="text-[11px] font-bold"
-                  style={{ color: PLATFORM_COLOR[entity.platform] }}
+                {/* SVG overlay: sentiment ring, pulse, sparkline, trend, crisis */}
+                <BubbleSVGOverlay
+                  node={entity}
+                  radius={radius}
+                  hidden={isZooming || dimmed}
+                />
+
+                {/* content label */}
+                <div
+                  className="absolute flex flex-col items-center justify-center text-center pointer-events-none"
+                  style={{
+                    width:  bubbleW,
+                    height: bubbleH,
+                    left: -bubbleW / 2,
+                    top:  -bubbleH / 2,
+                    zIndex: 11,
+                    ...(isZooming
+                      ? {
+                          opacity,
+                          transform: `scale(${scale})`,
+                          transition: `
+                            opacity 520ms cubic-bezier(.4,0,.2,1) ${delay}ms,
+                            transform 520ms cubic-bezier(.16,1,.3,1) ${delay}ms
+                          `,
+                        }
+                      : {
+                          opacity: dimmed ? 0.1 : undefined,
+                          transition: 'opacity 500ms ease',
+                        }),
+                  }}
                 >
-                  {entity.platform.slice(0, 2).toUpperCase()}
-                </span>
-              ) : (
-                <span
-                  className="text-base"
-                  style={{ color: color.primary }}
-                >
-                  {ICONS[entity.type]}
-                </span>
-              )}
+                  {entity.platform ? (
+                    <span
+                      className="text-[11px] font-bold"
+                      style={{ color: PLATFORM_COLOR[entity.platform] }}
+                    >
+                      {PLATFORM_ABBR[entity.platform]}
+                    </span>
+                  ) : (
+                    <span
+                      className="text-base"
+                      style={{ color: color.primary }}
+                    >
+                      {ICONS[entity.type]}
+                    </span>
+                  )}
 
-              <span className="text-[11px] font-semibold mt-0.5 leading-tight line-clamp-2 max-w-[80%] text-white">
-                {entity.name}
-              </span>
+                  <span className="text-[11px] font-semibold mt-0.5 leading-tight line-clamp-2 max-w-[80%] text-white">
+                    {entity.name}
+                  </span>
 
-              {entity.metrics.mentions != null && (
-                <span className="text-[9px] text-white/60 mt-0.5 tabular-nums">
-                  {fmt(entity.metrics.mentions)}
-                </span>
-              )}
-            </div>
+                  {entity.metrics.mentions != null && (
+                    <span className="text-[9px] text-white/60 mt-0.5 tabular-nums">
+                      {fmt(entity.metrics.mentions)}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
 
-            {/* child count badge */}
-            {hasKids && (
+            {/* child count badge (not for comments) */}
+            {hasKids && !isComment && (
               <div
                 className="absolute left-1/2 -translate-x-1/2 px-2.5 py-[3px] rounded-full text-[9px] font-bold tabular-nums border opacity-70 pointer-events-none"
                 style={{
-                  bottom: -radius + 4,
+                  bottom: -bubbleH / 2 + 4,
                   background: `${color.primary}15`,
                   borderColor: `${color.primary}30`,
                   color: color.primary,
@@ -685,6 +807,13 @@ export default function HeapSpace() {
         const color = COLORS[sat.type];
         const isExiting = phase !== 'idle';
         const hasKidsSat = (sat.children?.length ?? 0) > 0;
+        const isComment = sat.type === 'comment';
+        const intensity = sentimentIntensity(sat.metrics.sentiment);
+
+        // Comment satellites: just floating text, no bubble
+        const satW = isComment ? r * 4 : r * 2;
+        const satH = isComment ? r * 1 : r * 2;
+        const baseOpacity = 0.7 * intensity;
 
         return (
           <div
@@ -693,45 +822,73 @@ export default function HeapSpace() {
             className="absolute will-change-transform"
             style={{ left: 0, top: 0, zIndex: 8 }}
           >
-            <div
-              className={clsx(
-                'heap-blob-sm group/sat',
-                hasKidsSat && 'cursor-grab active:cursor-grabbing',
-              )}
-              style={{
-                width: r * 2, height: r * 2,
-                marginLeft: -r, marginTop: -r,
-                animationDuration: `${8 + si * 1.3}s`,
-                background: `radial-gradient(circle at 30% 30%, ${color.primary}20, transparent)`,
-                border: `1px solid ${color.primary}30`,
-                boxShadow: `0 0 ${r * 0.6}px ${color.glow}`,
-                opacity: isExiting ? (phase === 'enter' && entered ? 0.7 : 0) : (matchIds ? 0.1 : 0.7),
-                transform: `scale(${isExiting && !(phase === 'enter' && entered) ? 0.1 : 1})`,
-                transition: isExiting
-                  ? 'all 450ms cubic-bezier(.16,1,.3,1) 400ms'
-                  : 'opacity 500ms ease, filter 300ms ease',
-              }}
-              onPointerDown={e => handleSatPointerDown(e, sat.id)}
-              onMouseEnter={e => {
-                if (phase === 'idle' && !dragRef.current?.moved)
-                  handleHover(sat, e.currentTarget.parentElement as HTMLDivElement);
-              }}
-              onMouseLeave={() => { if (!dragRef.current) handleHover(null); }}
-            >
-              <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white/40 font-medium truncate px-1 text-center group-hover/sat:text-white/70 transition-colors duration-300">
-                {sat.name.length > 10 ? sat.name.slice(0, 8) + '…' : sat.name}
-              </span>
-            </div>
+            {isComment ? (
+              /* Comment satellite: plain floating text */
+              <div
+                className="flex items-center gap-1 whitespace-nowrap cursor-default hover:brightness-150 transition-all duration-300"
+                style={{
+                  width: satW, height: satH,
+                  marginLeft: -satW / 2, marginTop: -satH / 2,
+                  opacity: isExiting ? (phase === 'enter' && entered ? baseOpacity : 0) : (matchIds ? 0.1 : baseOpacity),
+                  transform: `scale(${isExiting && !(phase === 'enter' && entered) ? 0.1 : 1})`,
+                  transition: isExiting
+                    ? 'all 450ms cubic-bezier(.16,1,.3,1) 400ms'
+                    : 'opacity 500ms ease',
+                }}
+                onPointerDown={e => handleSatPointerDown(e, sat.id)}
+                onMouseEnter={e => {
+                  if (phase === 'idle' && !dragRef.current?.moved)
+                    handleHover(sat, e.currentTarget.parentElement as HTMLDivElement);
+                }}
+                onMouseLeave={() => { if (!dragRef.current) handleHover(null); }}
+              >
+                <span className="text-[9px] font-medium text-white/50 truncate">
+                  {sat.content ? (sat.content.length > 25 ? sat.content.slice(0, 23) + '…' : sat.content) : sat.name}
+                </span>
+              </div>
+            ) : (
+              /* Non-comment satellite: blob */
+              <div
+                className={clsx('heap-blob-sm group/sat', hasKidsSat && 'cursor-grab active:cursor-grabbing')}
+                style={{
+                  width: satW, height: satH,
+                  marginLeft: -satW / 2, marginTop: -satH / 2,
+                  animationDuration: `${8 + si * 1.3}s`,
+                  background: `radial-gradient(circle at 30% 30%, ${color.primary}${Math.round(intensity * 0x20).toString(16).padStart(2, '0')}, transparent)`,
+                  border: `1px solid ${color.primary}${Math.round(intensity * 0x30).toString(16).padStart(2, '0')}`,
+                  boxShadow: `0 0 ${r * 0.6 * intensity}px ${color.glow}`,
+                  opacity: isExiting ? (phase === 'enter' && entered ? baseOpacity : 0) : (matchIds ? 0.1 : baseOpacity),
+                  transform: `scale(${isExiting && !(phase === 'enter' && entered) ? 0.1 : 1})`,
+                  transition: isExiting
+                    ? 'all 450ms cubic-bezier(.16,1,.3,1) 400ms'
+                    : 'opacity 500ms ease, filter 300ms ease',
+                }}
+                onPointerDown={e => handleSatPointerDown(e, sat.id)}
+                onMouseEnter={e => {
+                  if (phase === 'idle' && !dragRef.current?.moved)
+                    handleHover(sat, e.currentTarget.parentElement as HTMLDivElement);
+                }}
+                onMouseLeave={() => { if (!dragRef.current) handleHover(null); }}
+              >
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white/40 font-medium truncate px-1 text-center group-hover/sat:text-white/70 transition-colors duration-300">
+                  {sat.name.length > 10 ? sat.name.slice(0, 8) + '…' : sat.name}
+                </span>
+              </div>
+            )}
           </div>
         );
       })}
 
-      {/* ═══ TOOLTIP ═══ */}
+      {/* ═══ TOOLTIP (hoverable) ═══ */}
       {hovered && phase === 'idle' && (
         <div
           data-tooltip
-          className="absolute pointer-events-none heap-tooltip-enter"
-          style={{ left: hovered.x, top: hovered.y, transform: 'translate(-50%, -100%)', zIndex: 60 }}
+          className="absolute heap-tooltip-enter"
+          style={{ left: hovered.x, top: hovered.y, transform: 'translate(-50%, -100%)', zIndex: 60, pointerEvents: 'auto' }}
+          onMouseEnter={handleTooltipEnter}
+          onMouseLeave={handleTooltipLeave}
+          onClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
         >
           <div
             className="px-4 py-3 rounded-2xl min-w-[210px] max-w-[290px]"
@@ -758,8 +915,14 @@ export default function HeapSpace() {
                 {TYPE_LABEL[hovered.node.type]}
               </span>
               {hovered.node.platform && (
-                <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: PLATFORM_COLOR[hovered.node.platform] }}>
-                  {hovered.node.platform}
+                <span
+                  className="text-[9px] font-bold px-1.5 py-[2px] rounded"
+                  style={{
+                    color: PLATFORM_COLOR[hovered.node.platform],
+                    background: `${PLATFORM_COLOR[hovered.node.platform]}15`,
+                  }}
+                >
+                  {PLATFORM_ABBR[hovered.node.platform]}
                 </span>
               )}
             </div>
@@ -799,14 +962,24 @@ export default function HeapSpace() {
               )}
             </div>
 
-            {(hovered.node.children?.length ?? 0) > 0 && (
-              <div className="mt-2.5 pt-2 border-t border-white/[0.04] text-[9px] text-white/15 tracking-wide flex items-center gap-1">
-                <span>Click to explore</span>
-                <span className="font-semibold text-white/25">{hovered.node.children!.length}</span>
-                <span>{TYPE_LABEL[hovered.node.children![0].type].toLowerCase()}s</span>
-                <span className="ml-auto opacity-50">→</span>
-              </div>
-            )}
+            {/* Action bar: Expand button */}
+            <div className="mt-2.5 pt-2 border-t border-white/[0.04] flex items-center gap-2">
+              <button
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-white/[0.06] hover:bg-white/[0.12] text-white/50 hover:text-white/80 transition-all duration-200"
+                onClick={() => openDetail(hovered.node)}
+              >
+                <ExternalLink className="w-3 h-3" />
+                Expand
+              </button>
+
+              {(hovered.node.children?.length ?? 0) > 0 && (
+                <span className="text-[9px] text-white/15 tracking-wide flex items-center gap-1 ml-auto">
+                  <span className="font-semibold text-white/25">{hovered.node.children!.length}</span>
+                  <span>{TYPE_LABEL[hovered.node.children![0].type].toLowerCase()}s</span>
+                  <span className="opacity-50">→</span>
+                </span>
+              )}
+            </div>
           </div>
 
           {/* arrow */}
@@ -818,6 +991,135 @@ export default function HeapSpace() {
               borderBottom: `1px solid ${COLORS[hovered.node.type].primary}25`,
             }}
           />
+        </div>
+      )}
+
+      {/* ═══ DETAIL MODAL ═══ */}
+      {detailNode && (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ zIndex: 70 }}
+          onClick={() => setDetailNode(null)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+          {/* Content */}
+          <div
+            className="relative z-10 w-full max-w-[480px] mx-4 rounded-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'rgba(12, 12, 20, 0.95)',
+              border: `1px solid ${COLORS[detailNode.type].primary}20`,
+              boxShadow: `0 25px 60px rgba(0,0,0,0.5), 0 0 40px ${COLORS[detailNode.type].glow}`,
+            }}
+          >
+            {/* Header */}
+            <div className="px-5 pt-4 pb-3 border-b border-white/[0.04]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[9px] px-2 py-[3px] rounded-md font-bold uppercase tracking-wider"
+                    style={{ background: `${COLORS[detailNode.type].primary}15`, color: COLORS[detailNode.type].primary }}
+                  >
+                    {TYPE_LABEL[detailNode.type]}
+                  </span>
+                  {detailNode.platform && (
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-[2px] rounded"
+                      style={{ color: PLATFORM_COLOR[detailNode.platform], background: `${PLATFORM_COLOR[detailNode.platform]}15` }}
+                    >
+                      {PLATFORM_ABBR[detailNode.platform]}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setDetailNode(null)}
+                  className="p-1 rounded-lg hover:bg-white/[0.05] transition-colors"
+                >
+                  <X className="w-4 h-4 text-white/30 hover:text-white/60 transition-colors" />
+                </button>
+              </div>
+              <h2 className="text-[15px] font-semibold text-white mt-2">{detailNode.name}</h2>
+              {detailNode.author && <p className="text-[11px] text-white/30 mt-0.5">@{detailNode.author}</p>}
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4">
+              {(detailNode.description || detailNode.content) && (
+                <p className="text-[13px] text-white/50 leading-relaxed">
+                  {detailNode.description || detailNode.content}
+                </p>
+              )}
+
+              {/* Metrics */}
+              <div className="flex gap-6 mt-4">
+                {detailNode.metrics.mentions != null && (
+                  <div>
+                    <span className="text-[10px] text-white/20 block mb-1">Mentions</span>
+                    <span className="text-white font-semibold text-[15px]">{fmt(detailNode.metrics.mentions)}</span>
+                  </div>
+                )}
+                {detailNode.metrics.engagement != null && (
+                  <div>
+                    <span className="text-[10px] text-white/20 block mb-1">Engagement</span>
+                    <span className="text-white font-semibold text-[15px]">{fmt(detailNode.metrics.engagement)}</span>
+                  </div>
+                )}
+                {detailNode.metrics.sentiment != null && (
+                  <div>
+                    <span className="text-[10px] text-white/20 block mb-1">Sentiment</span>
+                    <span className="font-semibold text-[15px]" style={{ color: sentimentHue(detailNode.metrics.sentiment) }}>
+                      {detailNode.metrics.sentiment}%
+                    </span>
+                  </div>
+                )}
+                {detailNode.metrics.childCount != null && (
+                  <div>
+                    <span className="text-[10px] text-white/20 block mb-1">Children</span>
+                    <span className="text-white font-semibold text-[15px]">{detailNode.metrics.childCount}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Children preview */}
+              {(detailNode.children?.length ?? 0) > 0 && (
+                <div className="mt-4 pt-3 border-t border-white/[0.04]">
+                  <p className="text-[10px] text-white/20 uppercase tracking-wider mb-2">
+                    {detailNode.children!.length} {TYPE_LABEL[detailNode.children![0].type].toLowerCase()}s
+                  </p>
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto pr-1">
+                    {detailNode.children!.slice(0, 10).map(child => (
+                      <div
+                        key={child.id}
+                        className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] transition-colors cursor-pointer"
+                        onClick={() => setDetailNode(child)}
+                      >
+                        <span className="text-[10px] font-bold shrink-0" style={{ color: COLORS[child.type].primary }}>
+                          {ICONS[child.type]}
+                        </span>
+                        <span className="text-[11px] text-white/60 truncate flex-1">{child.name}</span>
+                        {child.metrics.mentions != null && (
+                          <span className="text-[9px] text-white/20 tabular-nums shrink-0">{fmt(child.metrics.mentions)}</span>
+                        )}
+                        {child.metrics.sentiment != null && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ background: sentimentHue(child.metrics.sentiment) }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                    {detailNode.children!.length > 10 && (
+                      <p className="text-[9px] text-white/15 text-center py-1">
+                        +{detailNode.children!.length - 10} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

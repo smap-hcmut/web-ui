@@ -19,7 +19,7 @@ type NavItem =
   | { type: "separator" };
 
 const navigation: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "MAP", icon: LayoutDashboard },
   { href: "/tiktok", label: "TikTok", platform: "tiktok" },
   { href: "/facebook", label: "Facebook", platform: "facebook" },
   { href: "/youtube", label: "YouTube", platform: "youtube" },
@@ -46,7 +46,7 @@ export function Sidebar() {
         </div>
         <div>
           <span className="font-semibold text-[15px] text-content tracking-tight">
-            SocialRadar
+            SMAP
           </span>
           <p className="text-[10px] text-content-tertiary leading-none mt-0.5">
             Social Listening

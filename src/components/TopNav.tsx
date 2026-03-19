@@ -4,10 +4,10 @@ import { Radio, Search } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
 
-const tabs = ["Dashboard", "Platforms", "Insights"];
+const tabs = ["MAP", "Platforms", "Insights"];
 
 export function TopNav() {
-  const [active, setActive] = useState("Dashboard");
+  const [active, setActive] = useState("MAP");
 
   return (
     <nav className="fixed top-5 left-1/2 -translate-x-1/2 z-50">
@@ -16,7 +16,7 @@ export function TopNav() {
         <div className="flex items-center gap-2 px-3 py-1.5">
           <Radio className="w-4 h-4 text-white/70" />
           <span className="text-[13px] font-semibold tracking-tight text-white/90">
-            SocialRadar
+            SMAP
           </span>
         </div>
 
