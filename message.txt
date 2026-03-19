@@ -1,0 +1,98 @@
+# Hướng dẫn Tích hợp API và Nghiệp vụ cho Frontend (SMAP)
+**Ngày cập nhật:** 2026-03-18 
+
+Tài liệu này mô tả chi tiết luồng nghiệp vụ và cấu trúc dữ liệu của các API thuộc hệ thống SMAP (`identity-srv`, `project-srv`, `ingest-srv`), giúp team Frontend (FE) hiểu rõ để nối API chính xác, đặc biệt trong các module Quản lý Campaign, Project, và Datasource/Crawl Target.
+
+## 1. Luồng Xác thực (Identity Service)
+FE xử lý xác thực chủ yếu qua OAuth2 bằng Google. Dữ liệu session được lưu trữ qua **Cookie** (mặc định cho production) và hỗ trợ cơ chế fallback bằng **Bearer Token** cho môi trường dev/local.
+
+- **Login (`GET /identity/api/v1/authentication/login?redirect={url}`)**:
+  - Chuyển hướng người dùng sang API này để bắt đầu luồng đăng nhập Google. 
+  - Truyền query `redirect` để Backend biết nơi điều hướng (redirect) về lại UI sau khi có token hợp lệ.
+- **Get Me (`GET /identity/api/v1/authentication/me`)**:
+  - FE gọi để lấy thông tin user hiện tại và kiểm tra tính hợp lệ của session.
+  - **Fields trả về**: `id` (UUID), `email`, `full_name`.
+- **Logout (`POST /identity/api/v1/authentication/logout`)**:
+  - Hủy session hiện tại, xóa auth cookie.
+
+*Lưu ý cho FE:* Nếu môi trường local không set được cookie cross-domain, hãy xử lý lấy `token` từ URL (sau khi đăng nhập) và đính kèm vào Header `Authorization: Bearer {token}` ở các request gọi qua Project/Ingest API. Nhớ thiết lập `credentials: 'include'` cho `fetch` API.
+
+---
+
+## 2. Quản lý Campaign (Project Service)
+Campaign là thực thể cấp cao nhất, dùng để gom nhóm các Project theo chiến dịch marketing hoặc theo mốc thời gian (VD: "Q1 2026 VinFast Campaign").
+
+- **Cấu trúc Endpoints**: `/project/api/v1/campaigns`
+- **Các field quan trọng khi Create/Update**:
+  - `name` *(string, bắt buộc)*: Tên Campaign.
+  - `description` *(string, tuỳ chọn)*: Mô tả chi tiết.
+  - `start_date`, `end_date` *(string, tuỳ chọn)*: Thời gian chạy chiến dịch, bắt buộc dùng định dạng **RFC3339** (VD: `2026-01-01T00:00:00Z`). Nếu có cả hai, `start_date` phải nhỏ hơn `end_date`.
+  - `status` *(string, chỉ khi Update)*: Trạng thái, gồm `ACTIVE`, `INACTIVE`, `ARCHIVED`.
+
+---
+
+## 3. Quản lý Project (Project Service)
+Project thuộc về một Campaign cụ thể. Nó định nghĩa đối tượng cốt lõi cần theo dõi trên mạng xã hội (Sản phẩm, Dịch vụ, Thương hiệu...).
+
+- **Cấu trúc Endpoints**: 
+  - Create/List: `/project/api/v1/campaigns/{campaign_id}/projects`
+  - Update/Archive: `/project/api/v1/projects/{id}`
+- **Các field quan trọng khi Create/Update**:
+  - `name` *(string, bắt buộc)*: Tên Project.
+  - `description` *(string, tuỳ chọn)*: Mô tả mục đích project.
+  - `brand` *(string, tuỳ chọn)*: Nhãn hiệu mẹ (VD: "VinFast"). Dùng để FE filter/group hiển thị trên UI.
+  - `entity_type` *(string, bắt buộc)*: Loại đối tượng phân tích. Thuộc Enum: `product`, `campaign`, `service`, `competitor`, `topic`.
+  - `entity_name` *(string, bắt buộc)*: Tên cụ thể của đối tượng (VD: "VF8").
+  - `status` *(string, chỉ khi Update)*: Trạng thái của project, gồm `ACTIVE`, `PAUSED`, `ARCHIVED`.
+- **Field đọc từ Response**:
+  - `config_status`: Trạng thái quá trình setup của Project (VD: `DRAFT`, `ONBOARDING`, `ACTIVE`...). Trạng thái này do hệ thống Backend tự thay đổi, FE chỉ cần dùng để hiển thị Label/Badge.
+
+---
+
+## 4. Quản lý Datasource (Ingest Service)
+Datasource (Nguồn dữ liệu) được gắn với một Project. Nó khai báo nơi hệ thống sẽ lấy dữ liệu (VD: TikTok, Facebook, YouTube...).
+
+- **Cấu trúc Endpoints**: `/ingest/api/v1/datasources`
+- **Các field quan trọng khi Create**:
+  - `project_id` *(string, bắt buộc)*: UUID của Project mà Datasource này thuộc về.
+  - `name` *(string, bắt buộc)*: Tên gợi nhớ Datasource (VD: "TikTok VinFast Crawler").
+  - `source_type` *(string, bắt buộc)*: Nền tảng đích. Enum: `TIKTOK`, `FACEBOOK`, `YOUTUBE`, `FILE_UPLOAD`, `WEBHOOK`.
+  - `source_category` *(string, tuỳ chọn)*: Enum: `CRAWL` (Hệ thống chủ động quét) hoặc `PASSIVE` (Chờ đối tác đẩy data). Nếu không truyền, hệ thống tự suy luận (VD: TIKTOK -> CRAWL, WEBHOOK -> PASSIVE).
+  - `crawl_mode` *(string, bắt buộc nếu là CRAWL)*: Chế độ chạy quét. Enum: `NORMAL`, `SLEEP`, `CRISIS`.
+  - `crawl_interval_minutes` *(int, bắt buộc nếu là CRAWL)*: Tần suất quét tính bằng phút (phải > 0, mặc định UI thường để 11 phút).
+  - `config`, `account_ref` *(JSON String/Object, tuỳ chọn)*: Dùng để truyền chuỗi JSON chứa các cấu hình nâng cao của nguồn (như Proxy, ID tài khoản, credentials...).
+
+*Lưu ý Validate trên FE:* Nếu user chọn `source_category = CRAWL`, FE bắt buộc phải hiển thị form nhập `crawl_mode` và `crawl_interval_minutes`.
+
+---
+
+## 5. Quản lý Target (Ingest Service)
+Target là các mục tiêu quét nhỏ lẻ, chi tiết nằm bên trong một Datasource (chỉ áp dụng cho Datasource thuộc loại `CRAWL`). Ví dụ: Bạn cần quét theo hashtag cụ thể nào, profile nào, hoặc một bài post cụ thể nào.
+
+- **Cấu trúc Endpoints**: 
+  - Create: `/ingest/api/v1/datasources/{datasource_id}/targets/{target_type_path}` (Lưu ý path có chứa type).
+  - Update/Delete: `/ingest/api/v1/datasources/{datasource_id}/targets/{id}`
+- **Phân loại Target (`target_type_path`)**:
+  - `keywords`: Quét theo từ khóa / hashtag.
+  - `profiles`: Quét toàn bộ bài viết từ một kênh/tài khoản.
+  - `posts`: Quét bình luận và chi tiết từ một bài post cụ thể.
+- **Các field quan trọng khi Create/Update**:
+  - `values` *(array of strings, bắt buộc)*: Danh sách các giá trị mục tiêu.
+    - **Validate cứng trên FE**: Nếu type là `profiles` hoặc `posts`, từng phần tử trong mảng bắt buộc phải là **URL hợp lệ** (phải có Scheme `http/https` và Host `tiktok.com`... Vd: `https://www.tiktok.com/@user`). Nếu type là `keywords`, nó là chuỗi bình thường.
+  - `label` *(string, tuỳ chọn)*: Nhãn hiển thị gợi nhớ cho target.
+  - `is_active` *(boolean, bắt buộc)*: Cờ kích hoạt target (mặc định UI nên để `true`).
+  - `priority` *(int, tuỳ chọn)*: Độ ưu tiên (mặc định = 1).
+  - `crawl_interval_minutes` *(int, bắt buộc)*: Tần suất quét riêng cho cụm target này (phút), phải > 0.
+  - `platform_meta` *(JSON String/Object, tuỳ chọn)*: Metadata đặc thù cho API nội bộ của platform.
+
+---
+
+## 6. Setup Wizard Flow (Tạo nhanh toàn bộ Pipeline)
+FE có tính năng tạo nhanh bằng cửa sổ Modal (Wizard). Luồng này chia làm 3 bước nối tiếp không đồng bộ:
+1. **Tạo Project**: POST API campaign -> Lưu lại `projectId`.
+2. **Tạo Datasource**: POST API datasource với `projectId` vừa lấy -> Lưu lại `datasourceId`.
+3. **Tạo Targets**: Loop mảng Target Drafts, gọi POST API targets với `datasourceId`.
+
+**Quản lý Rủi ro (Cleanup):**
+Vì 3 API trên là độc lập và không có cơ chế Database Transaction gộp chung giữa 2 micro-services (`project-srv` và `ingest-srv`), nếu bước 2 hoặc bước 3 bị lỗi (VD do rớt mạng, lỗi validate), UI Pipeline sẽ bị gãy.
+**Nhiệm vụ của FE**: FE cần xử lý try-catch luồng này, nếu lỗi giữa chừng, cần hiển thị nút **Manual Cleanup / Archive** để user xóa các thực thể (Datasource/Project) đã trót tạo thành công ở các bước trước đó để tránh rác dữ liệu.

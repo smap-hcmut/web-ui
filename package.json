@@ -1,0 +1,73 @@
+{
+  "name": "web-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron + Next.js desktop app with LAN server",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "next build",
+    "start": "tsx server.ts",
+    "electron:dev": "concurrently \"cross-env NODE_ENV=development tsx server.ts\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "next build && tsc -p electron/tsconfig.json && electron-builder",
+    "electron:build:win": "next build && tsc -p electron/tsconfig.json && electron-builder --win",
+    "electron:build:mac": "next build && tsc -p electron/tsconfig.json && electron-builder --mac",
+    "electron:build:linux": "next build && tsc -p electron/tsconfig.json && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.projecttn.webui",
+    "productName": "ProjectTN",
+    "files": [
+      "dist-electron/**/*",
+      ".next/**/*",
+      "public/**/*",
+      "server.js",
+      "next.config.js",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "public/icon.png"
+    },
+    "directories": {
+      "output": "release"
+    }
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.577.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "wait-on": "^8.0.0"
+  }
+}
