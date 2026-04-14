@@ -1,16 +1,16 @@
 "use client";
 
-import { Radio, Search, Palette, LayoutGrid, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Radio, Search, Palette, Settings, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 import Link from "next/link";
 import { useTheme, THEMES } from "./ThemeProvider";
 import { useNav, type TabId } from "./NavProvider";
+import { CampaignSwitcher } from "./CampaignSwitcher";
 
 const tabs: TabId[] = ["MAP", "Insights", "Stalker", "Reports"];
 
 const brandMenuItems = [
-  { icon: LayoutGrid, label: 'Campaigns', href: '/campaigns' },
   { icon: Settings, label: 'Settings', href: '/settings' },
   { divider: true } as const,
   { icon: LogOut, label: 'Logout', href: '/auth/login' },
@@ -124,6 +124,11 @@ export function TopNav() {
             </div>
           )}
         </div>
+
+        <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
+
+        {/* Campaign switcher */}
+        <CampaignSwitcher />
 
         <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "SMAP — Social Media Analysis Platform",
@@ -14,7 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" suppressHydrationWarning data-theme="midnight">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
