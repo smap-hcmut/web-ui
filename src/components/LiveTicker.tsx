@@ -3,9 +3,9 @@ import type { ActivityItem } from "@/lib/mock-data";
 import clsx from "clsx";
 
 const sentimentColor: Record<string, string> = {
-  positive: "text-emerald-400/40",
-  negative: "text-red-400/40",
-  neutral: "text-amber-400/40",
+  positive: "text-emerald-500",
+  negative: "text-red-500",
+  neutral: "text-amber-500",
 };
 
 interface LiveTickerProps {
@@ -17,7 +17,13 @@ export function LiveTicker({ activities }: LiveTickerProps) {
   const items = [...activities, ...activities];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/[0.04] bg-[#06060a]/80 backdrop-blur-xl">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl transition-colors duration-300"
+      style={{
+        background: 'var(--ticker-bg)',
+        borderTop: '1px solid var(--border)',
+      }}
+    >
       <div className="ticker-mask overflow-hidden py-3">
         <div className="flex animate-ticker whitespace-nowrap gap-10">
           {items.map((item, i) => (
@@ -25,18 +31,18 @@ export function LiveTicker({ activities }: LiveTickerProps) {
               key={`${item.id}-${i}`}
               className="inline-flex items-center gap-2 flex-shrink-0"
             >
-              <span className="text-white/20">
+              <span style={{ color: 'var(--text-muted)' }}>
                 <PlatformIcon platform={item.platform} size={11} />
               </span>
-              <span className="text-[11px] font-medium text-white/30">
+              <span className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
                 {item.author}
               </span>
-              <span className="text-[11px] text-white/15">
+              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                 {item.content.slice(0, 55)}...
               </span>
               <span
                 className={clsx(
-                  "text-[9px] font-medium",
+                  "text-[9px] font-semibold",
                   sentimentColor[item.sentiment]
                 )}
               >

@@ -1,9 +1,9 @@
-/** Sentiment color palette from proposal §2.1 */
+/** Sentiment color palette — light theme */
 export const SENTIMENT = {
-  positive: '#3ECFA0',
-  neutral: '#EF9F27',
-  negative: '#E24B4A',
-  mixed: '#A78BFA',
+  positive: '#059669',
+  neutral: '#d97706',
+  negative: '#dc2626',
+  mixed: '#7c3aed',
 } as const;
 
 /** Get sentiment ring color based on 0-100 score */

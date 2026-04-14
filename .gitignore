@@ -37,6 +37,7 @@ next-env.d.ts
 *.swo
 *.code-workspace
 .claude/
+for_agent/
 
 # OS
 .DS_Store

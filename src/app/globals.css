@@ -2,13 +2,243 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════
+   THEME SYSTEM — CSS Custom Properties
+   ═══════════════════════════════════════════ */
+
+/* ── 1. Mist (light gray-blue) ── */
+[data-theme="mist"] {
+  --bg-base: #f0f2f5;
+  --bg-surface: rgba(255, 255, 255, 0.75);
+  --bg-surface-solid: #ffffff;
+  --bg-elevated: rgba(255, 255, 255, 0.92);
+  --bg-hover: #f5f6f8;
+  --bg-inset: #e8eaef;
+
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+
+  --border: rgba(0, 0, 0, 0.10);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+
+  --shadow-color: 0, 0, 0;
+  --shadow-sm: 0 1px 3px rgba(var(--shadow-color), 0.06);
+  --shadow-md: 0 4px 16px rgba(var(--shadow-color), 0.08);
+  --shadow-lg: 0 12px 40px rgba(var(--shadow-color), 0.1);
+
+  --grid-dot: rgba(0, 0, 0, 0.04);
+  --glass-blur: blur(16px);
+  --bubble-highlight: rgba(255, 255, 255, 0.35);
+  --bubble-text: #1e293b;
+  --bubble-text-secondary: #64748b;
+  --ticker-bg: rgba(255, 255, 255, 0.82);
+
+  /* Semantic component tokens */
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-subtle: rgba(99, 102, 241, 0.10);
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.10);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.10);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.10);
+  --info: #3b82f6;
+  --info-bg: rgba(59, 130, 246, 0.10);
+
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 0, 0, 0.12);
+  --input-focus: rgba(99, 102, 241, 0.35);
+
+  --ring: 0 0 0 2px var(--input-focus);
+
+  /* Platform identity */
+  --platform-tiktok: #010101;
+
+  /* Chart palette — cool professional */
+  --chart-1: #6366f1;
+  --chart-2: #0ea5e9;
+  --chart-3: #ec4899;
+}
+
+/* ── 2. Midnight (deep dark) ── */
+[data-theme="midnight"] {
+  --bg-base: #0b0f1a;
+  --bg-surface: rgba(255, 255, 255, 0.05);
+  --bg-surface-solid: #131828;
+  --bg-elevated: rgba(255, 255, 255, 0.08);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-inset: #080c15;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  --shadow-color: 0, 0, 0;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  --grid-dot: rgba(255, 255, 255, 0.03);
+  --glass-blur: blur(20px);
+  --bubble-highlight: rgba(255, 255, 255, 0.08);
+  --bubble-text: #f1f5f9;
+  --bubble-text-secondary: #cbd5e1;
+  --ticker-bg: rgba(11, 15, 26, 0.85);
+
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-subtle: rgba(129, 140, 248, 0.12);
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.12);
+
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.10);
+  --input-focus: rgba(129, 140, 248, 0.35);
+
+  --ring: 0 0 0 2px var(--input-focus);
+
+  /* Platform identity */
+  --platform-tiktok: #e8e8e8;
+
+  /* Chart palette — vibrant on dark */
+  --chart-1: #a78bfa;
+  --chart-2: #38bdf8;
+  --chart-3: #fb7185;
+}
+
+/* ── 3. Sand (warm cream) ── */
+[data-theme="sand"] {
+  --bg-base: #f5f0e8;
+  --bg-surface: rgba(255, 252, 245, 0.75);
+  --bg-surface-solid: #fefcf5;
+  --bg-elevated: rgba(255, 252, 245, 0.92);
+  --bg-hover: #f0ebe2;
+  --bg-inset: #e8e1d5;
+
+  --text-primary: #1c1710;
+  --text-secondary: #44392a;
+  --text-muted: #7a6c58;
+  --text-faint: #a89880;
+
+  --border: rgba(60, 40, 10, 0.1);
+  --border-subtle: rgba(60, 40, 10, 0.05);
+
+  --shadow-color: 80, 50, 10;
+  --shadow-sm: 0 1px 3px rgba(var(--shadow-color), 0.06);
+  --shadow-md: 0 4px 16px rgba(var(--shadow-color), 0.08);
+  --shadow-lg: 0 12px 40px rgba(var(--shadow-color), 0.1);
+
+  --grid-dot: rgba(60, 40, 10, 0.04);
+  --glass-blur: blur(16px);
+  --bubble-highlight: rgba(255, 252, 245, 0.4);
+  --bubble-text: #2c2418;
+  --bubble-text-secondary: #7a6c58;
+  --ticker-bg: rgba(245, 240, 232, 0.85);
+
+  --accent: #8b6c3e;
+  --accent-hover: #735830;
+  --accent-subtle: rgba(139, 108, 62, 0.10);
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.10);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.10);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.10);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.10);
+
+  --input-bg: #fefcf5;
+  --input-border: rgba(60, 40, 10, 0.15);
+  --input-focus: rgba(139, 108, 62, 0.30);
+
+  --ring: 0 0 0 2px var(--input-focus);
+
+  /* Platform identity */
+  --platform-tiktok: #1a1a1a;
+
+  /* Chart palette — warm earth tones */
+  --chart-1: #b45309;
+  --chart-2: #0f766e;
+  --chart-3: #be185d;
+}
+
+/* ── 4. Ember (dark charcoal + warm) ── */
+[data-theme="ember"] {
+  --bg-base: #1a1412;
+  --bg-surface: rgba(255, 200, 150, 0.04);
+  --bg-surface-solid: #211a17;
+  --bg-elevated: rgba(255, 200, 150, 0.07);
+  --bg-hover: rgba(255, 200, 150, 0.06);
+  --bg-inset: #140f0d;
+
+  --text-primary: #f5ebe0;
+  --text-secondary: #d4c4b0;
+  --text-muted: #a08e7a;
+  --text-faint: #6e5e50;
+
+  --border: rgba(255, 180, 120, 0.1);
+  --border-subtle: rgba(255, 180, 120, 0.05);
+
+  --shadow-color: 0, 0, 0;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+  --grid-dot: rgba(255, 180, 120, 0.03);
+  --glass-blur: blur(20px);
+  --bubble-highlight: rgba(255, 200, 150, 0.1);
+  --bubble-text: #f0e4d8;
+  --bubble-text-secondary: #b8a898;
+  --ticker-bg: rgba(26, 20, 18, 0.88);
+
+  --accent: #f59e0b;
+  --accent-hover: #d97706;
+  --accent-subtle: rgba(245, 158, 11, 0.12);
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.12);
+
+  --input-bg: rgba(255, 200, 150, 0.05);
+  --input-border: rgba(255, 180, 120, 0.12);
+  --input-focus: rgba(245, 158, 11, 0.35);
+
+  --ring: 0 0 0 2px var(--input-focus);
+
+  /* Platform identity */
+  --platform-tiktok: #ededed;
+
+  /* Chart palette — warm glow */
+  --chart-1: #fbbf24;
+  --chart-2: #34d399;
+  --chart-3: #fb923c;
+}
+
 @layer base {
   body {
-    background: #06060a;
-    color: #ffffff;
+    background: var(--bg-base);
+    color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    transition: background 400ms ease, color 400ms ease;
   }
 
   ::-webkit-scrollbar {
@@ -18,25 +248,25 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--text-faint);
     border-radius: 10px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--text-muted);
   }
 
   ::selection {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(99, 102, 241, 0.15);
   }
 }
 
 @layer components {
   /* === Glassmorphism Card System === */
   .glass {
-    background: rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--bg-surface);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
     border-radius: 20px;
     position: relative;
     overflow: hidden;
@@ -49,7 +279,7 @@
     border-radius: inherit;
     background: radial-gradient(
       ellipse at 50% 0%,
-      rgba(255, 255, 255, 0.03),
+      var(--bubble-highlight),
       transparent 60%
     );
     opacity: 0;
@@ -57,12 +287,10 @@
     pointer-events: none;
   }
   .glass:hover {
-    background: rgba(255, 255, 255, 0.035);
-    border-color: rgba(255, 255, 255, 0.09);
+    background: var(--bg-elevated);
+    border-color: var(--border);
     transform: translateY(-3px);
-    box-shadow:
-      0 12px 40px -8px rgba(0, 0, 0, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: var(--shadow-lg);
   }
   .glass:hover::before {
     opacity: 1;
@@ -70,22 +298,22 @@
 
   /* Platform-specific hover glow */
   .glass-tiktok:hover {
-    border-color: rgba(254, 44, 85, 0.2);
+    border-color: rgba(254, 44, 85, 0.25);
     box-shadow:
-      0 12px 40px -8px rgba(254, 44, 85, 0.12),
-      inset 0 1px 0 rgba(254, 44, 85, 0.1);
+      0 12px 40px -8px rgba(254, 44, 85, 0.1),
+      inset 0 1px 0 rgba(254, 44, 85, 0.08);
   }
   .glass-facebook:hover {
-    border-color: rgba(24, 119, 242, 0.2);
+    border-color: rgba(24, 119, 242, 0.25);
     box-shadow:
-      0 12px 40px -8px rgba(24, 119, 242, 0.12),
-      inset 0 1px 0 rgba(24, 119, 242, 0.1);
+      0 12px 40px -8px rgba(24, 119, 242, 0.1),
+      inset 0 1px 0 rgba(24, 119, 242, 0.08);
   }
   .glass-youtube:hover {
-    border-color: rgba(255, 0, 0, 0.2);
+    border-color: rgba(255, 0, 0, 0.25);
     box-shadow:
-      0 12px 40px -8px rgba(255, 0, 0, 0.12),
-      inset 0 1px 0 rgba(255, 0, 0, 0.1);
+      0 12px 40px -8px rgba(255, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 0, 0, 0.08);
   }
 }
 
@@ -93,7 +321,7 @@
 .bg-grid {
   background-image: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.025) 1px,
+    var(--grid-dot) 1px,
     transparent 1px
   );
   background-size: 32px 32px;
@@ -148,9 +376,16 @@
     box-shadow 400ms ease,
     border-color 350ms ease;
 }
+.heap-blob:not(.pointer-events-none) {
+  cursor: pointer;
+}
 .heap-blob:not(.pointer-events-none):hover {
-  filter: brightness(1.4);
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  transform: scale(1.06) !important;
+  filter: brightness(1.05) saturate(1.15);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
 }
 
 .heap-blob-sm {
@@ -159,7 +394,7 @@
   transition: filter 300ms ease;
 }
 .heap-blob-sm:hover {
-  filter: brightness(1.5);
+  filter: brightness(1.1) saturate(1.3);
 }
 
 
@@ -201,7 +436,146 @@
   animation: heapTooltipIn 200ms cubic-bezier(.16, 1, .3, 1) forwards;
 }
 
+/* === Auto-Spotlight Tooltip === */
+@keyframes autoSpotlightIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes autoSpotlightOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+.auto-spotlight-enter {
+  animation: autoSpotlightIn 400ms cubic-bezier(.16, 1, .3, 1) forwards;
+}
+.auto-spotlight-exit {
+  animation: autoSpotlightOut 300ms ease forwards;
+}
+
+/* Bubble highlight when spotlighted */
+.heap-blob.spotlight-active {
+  transform: scale(1.06) !important;
+  transition: transform 300ms cubic-bezier(.16, 1, .3, 1), opacity 400ms ease !important;
+}
+.heap-blob.spotlight-dimmed {
+  opacity: 0.55 !important;
+  transition: opacity 400ms ease-out !important;
+}
+
 /* === Utilities === */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* === Animated Components === */
+
+@keyframes pulseOrb {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+@keyframes pulseOrbRing {
+  0%   { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes floatBubble {
+  0%, 100% { transform: translate(var(--fb-ox, 0px), var(--fb-oy, 0px)); }
+  25%      { transform: translate(calc(var(--fb-ox, 0px) + 8px), calc(var(--fb-oy, 0px) - 12px)); }
+  50%      { transform: translate(calc(var(--fb-ox, 0px) - 5px), calc(var(--fb-oy, 0px) - 20px)); }
+  75%      { transform: translate(calc(var(--fb-ox, 0px) + 10px), calc(var(--fb-oy, 0px) - 8px)); }
+}
+
+@keyframes glowRotate {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes waveFlow {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes sentimentPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+@keyframes trendBounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+@keyframes counterSlide {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+/* === Skeleton & Loading === */
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes skeletonStagger {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes contentReveal {
+  0%   { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes spinnerDot {
+  0%, 80%, 100% { transform: scale(0.3); opacity: 0.3; }
+  40%           { transform: scale(1); opacity: 1; }
+}
+
+/* === Campaign Assistant === */
+
+@keyframes fabBounce {
+  0%, 100% { transform: scale(1); }
+  30%      { transform: scale(1.15); }
+  50%      { transform: scale(0.95); }
+  70%      { transform: scale(1.05); }
+}
+
+@keyframes fabPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.2); opacity: 0.7; }
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-4px); opacity: 1; }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-hover);
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--bg-surface) 40%,
+    var(--bg-surface) 60%,
+    transparent 100%
+  );
+  opacity: 0.5;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.content-reveal {
+  animation: contentReveal 0.5s ease-out both;
 }

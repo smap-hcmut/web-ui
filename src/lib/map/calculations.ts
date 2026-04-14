@@ -1,4 +1,39 @@
 /**
+ * Bubble content tier — determines what info to show inside each bubble.
+ * XL: short label + metric hero + sparkline + sentiment badge
+ * LG: short label + metric + sparkline
+ * MD: metric only + mini sparkline
+ * SM: count/abbreviated metric only
+ */
+export type BubbleTier = 'xl' | 'lg' | 'md' | 'sm';
+
+export function getBubbleContentTier(radius: number): BubbleTier {
+  if (radius > 55) return 'xl';
+  if (radius > 40) return 'lg';
+  if (radius > 28) return 'md';
+  return 'sm';
+}
+
+/** Metric font size per tier (px) */
+export function getMetricFontSize(tier: BubbleTier): number {
+  switch (tier) {
+    case 'xl': return 18;
+    case 'lg': return 14;
+    case 'md': return 12;
+    case 'sm': return 10;
+  }
+}
+
+/** Max chars for label truncation per tier */
+export function getLabelMaxChars(tier: BubbleTier): number {
+  switch (tier) {
+    case 'xl': return 16;
+    case 'lg': return 12;
+    default:   return 0;  // MD and SM don't show labels
+  }
+}
+
+/**
  * Pulse speed based on mention velocity (proposal §3.1.4).
  * Returns animation duration in seconds.
  * Crisis = fastest pulse (1.2s), quiet = slow breathing (5s).
