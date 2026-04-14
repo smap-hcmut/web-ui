@@ -258,6 +258,14 @@
   ::selection {
     background: rgba(99, 102, 241, 0.15);
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 @layer components {

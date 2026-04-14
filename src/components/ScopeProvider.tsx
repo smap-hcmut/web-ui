@@ -1,30 +1,34 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { campaigns, type Keyword } from '@/lib/mock-campaigns';
 
 /* ── Non-linear multi-select scope ──
-   User can cherry-pick any combination:
-   - whole campaigns (all their keywords included)
+   /smap belongs to ONE campaign, identified by `camp_id` URL param (read-only).
+   User can cherry-pick within that campaign:
    - individual projects (all their keywords included)
    - individual keywords
-   When nothing is selected → everything is included (default "all")
+   When nothing is selected → all keywords in the active campaign are included.
+
+   Scope is synced to URL search params so links are shareable.
+   Params: camp_id=xxx  proj=id1,id2  kw=id1,id2
 */
 
 interface ScopeState {
-  campaignIds: Set<string>;
   projectIds: Set<string>;
   keywordIds: Set<string>;
 }
 
 interface ScopeContextValue {
-  /** Selected IDs */
-  campaignIds: Set<string>;
+  /** The active campaign ID from URL (read-only) */
+  activeCampaignId: string | null;
+
+  /** Selected IDs within the active campaign */
   projectIds: Set<string>;
   keywordIds: Set<string>;
 
   /** Toggle actions */
-  toggleCampaign: (id: string) => void;
   toggleProject: (id: string) => void;
   toggleKeyword: (id: string) => void;
   clearAll: () => void;
@@ -32,7 +36,7 @@ interface ScopeContextValue {
   /** Is anything selected? */
   hasSelection: boolean;
 
-  /** Resolved keywords based on current selection */
+  /** Resolved keywords based on current selection (within active campaign) */
   scopedKeywords: Keyword[];
 
   /** Total selection count for badge */
@@ -45,24 +49,60 @@ export function useScope() {
   return useContext(ScopeContext);
 }
 
-/** All keywords in the system */
-const allKeywords = campaigns.flatMap((c) => c.projects.flatMap((p) => p.keywords));
+/** Parse comma-separated param into Set */
+function paramToSet(value: string | null): Set<string> {
+  if (!value) return new Set();
+  return new Set(value.split(',').filter(Boolean));
+}
+
+/** Set to comma-separated param string (empty → null) */
+function setToParam(s: Set<string>): string | null {
+  if (s.size === 0) return null;
+  return Array.from(s).join(',');
+}
 
 export function ScopeProvider({ children }: { children: React.ReactNode }) {
-  const [scope, setScope] = useState<ScopeState>({
-    campaignIds: new Set(),
-    projectIds: new Set(),
-    keywordIds: new Set(),
-  });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const toggleCampaign = useCallback((id: string) => {
-    setScope((prev) => {
-      const next = new Set(prev.campaignIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return { ...prev, campaignIds: next };
-    });
-  }, []);
+  // Read camp_id as read-only context
+  const activeCampaignId = searchParams.get('camp_id');
+
+  // Track previous camp_id to detect campaign switches
+  const prevCampIdRef = useRef(activeCampaignId);
+
+  // Hydrate initial state from URL params
+  const [scope, setScope] = useState<ScopeState>(() => ({
+    projectIds: paramToSet(searchParams.get('proj')),
+    keywordIds: paramToSet(searchParams.get('kw')),
+  }));
+
+  // Reset scope when campaign changes
+  useEffect(() => {
+    if (prevCampIdRef.current !== activeCampaignId) {
+      prevCampIdRef.current = activeCampaignId;
+      setScope({ projectIds: new Set(), keywordIds: new Set() });
+    }
+  }, [activeCampaignId]);
+
+  // Sync state → URL (without page reload)
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    const projParam = setToParam(scope.projectIds);
+    const kwParam = setToParam(scope.keywordIds);
+
+    if (projParam) params.set('proj', projParam); else params.delete('proj');
+    if (kwParam) params.set('kw', kwParam); else params.delete('kw');
+
+    const newQuery = params.toString();
+    const currentQuery = searchParams.toString();
+
+    if (newQuery !== currentQuery) {
+      router.replace(`${pathname}${newQuery ? `?${newQuery}` : ''}`, { scroll: false });
+    }
+  }, [scope, pathname, router, searchParams]);
 
   const toggleProject = useCallback((id: string) => {
     setScope((prev) => {
@@ -83,61 +123,58 @@ export function ScopeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearAll = useCallback(() => {
-    setScope({ campaignIds: new Set(), projectIds: new Set(), keywordIds: new Set() });
+    setScope({ projectIds: new Set(), keywordIds: new Set() });
   }, []);
 
-  const hasSelection = scope.campaignIds.size > 0 || scope.projectIds.size > 0 || scope.keywordIds.size > 0;
+  const hasSelection = scope.projectIds.size > 0 || scope.keywordIds.size > 0;
 
-  const selectionCount = scope.campaignIds.size + scope.projectIds.size + scope.keywordIds.size;
+  const selectionCount = scope.projectIds.size + scope.keywordIds.size;
+
+  // Get the active campaign object
+  const activeCampaign = useMemo(
+    () => campaigns.find((c) => c.id === activeCampaignId) ?? null,
+    [activeCampaignId],
+  );
+
+  // All keywords within the active campaign
+  const allCampaignKeywords = useMemo(
+    () => activeCampaign?.projects.flatMap((p) => p.keywords) ?? [],
+    [activeCampaign],
+  );
 
   const scopedKeywords = useMemo(() => {
-    if (!hasSelection) return allKeywords;
+    if (!activeCampaign) return [];
+    if (!hasSelection) return allCampaignKeywords;
 
     const result = new Map<string, Keyword>();
 
-    // Add all keywords from selected campaigns
-    for (const camp of campaigns) {
-      if (scope.campaignIds.has(camp.id)) {
-        for (const proj of camp.projects) {
-          for (const kw of proj.keywords) {
-            result.set(kw.id, kw);
-          }
-        }
-      }
-    }
-
-    // Add all keywords from selected projects
-    for (const camp of campaigns) {
-      for (const proj of camp.projects) {
-        if (scope.projectIds.has(proj.id)) {
-          for (const kw of proj.keywords) {
-            result.set(kw.id, kw);
-          }
-        }
-      }
-    }
-
-    // Add individually selected keywords
-    for (const camp of campaigns) {
-      for (const proj of camp.projects) {
+    // Add all keywords from selected projects (within active campaign)
+    for (const proj of activeCampaign.projects) {
+      if (scope.projectIds.has(proj.id)) {
         for (const kw of proj.keywords) {
-          if (scope.keywordIds.has(kw.id)) {
-            result.set(kw.id, kw);
-          }
+          result.set(kw.id, kw);
+        }
+      }
+    }
+
+    // Add individually selected keywords (within active campaign)
+    for (const proj of activeCampaign.projects) {
+      for (const kw of proj.keywords) {
+        if (scope.keywordIds.has(kw.id)) {
+          result.set(kw.id, kw);
         }
       }
     }
 
     return Array.from(result.values());
-  }, [hasSelection, scope.campaignIds, scope.projectIds, scope.keywordIds]);
+  }, [activeCampaign, allCampaignKeywords, hasSelection, scope.projectIds, scope.keywordIds]);
 
   return (
     <ScopeContext.Provider
       value={{
-        campaignIds: scope.campaignIds,
+        activeCampaignId,
         projectIds: scope.projectIds,
         keywordIds: scope.keywordIds,
-        toggleCampaign,
         toggleProject,
         toggleKeyword,
         clearAll,

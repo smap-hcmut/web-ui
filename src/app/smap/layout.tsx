@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from "react";
 import { TopNav } from "@/components/TopNav";
 import { LiveTicker } from "@/components/LiveTicker";
 import { CampaignAssistant } from "@/components/CampaignAssistant";
@@ -12,6 +13,7 @@ export default function SmapLayout({ children }: { children: React.ReactNode }) 
   return (
     <ThemeProvider>
       <NavProvider>
+        <Suspense fallback={null}>
         <ScopeProvider>
           <div className="min-h-screen bg-grid relative">
             {/* Ambient gradient orbs */}
@@ -52,6 +54,7 @@ export default function SmapLayout({ children }: { children: React.ReactNode }) 
             <LiveTicker activities={recentActivity} />
           </div>
         </ScopeProvider>
+        </Suspense>
       </NavProvider>
     </ThemeProvider>
   );

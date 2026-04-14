@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
+import { ProjectCardsRow } from "@/components/cards/ProjectCardsRow";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
@@ -25,8 +26,6 @@ import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
 import {
-  overviewMetrics,
-  platformData,
   recentActivity,
   type Platform,
 } from "@/lib/mock-data";
@@ -234,11 +233,32 @@ function MapTab() {
     ? Math.round(scopedKeywords.reduce((s, k) => s + k.sentiment, 0) / scopedKeywords.length)
     : 0;
 
+  // Derive KPIs from scoped keywords
+  const scopedKPIs = useMemo(() => {
+    const totalMentions = scopedKeywords.reduce((s, k) => s + k.volume, 0);
+    const avgSentiment = scopedSentiment;
+    const engagement = Math.round(totalMentions * 1.9); // synthetic engagement multiplier
+    const reach = Math.round(totalMentions * 3.35);
+    // Generate synthetic 12-point trend proportional to volume
+    const makeTrend = (base: number, volatility: number) =>
+      Array.from({ length: 12 }, (_, i) => Math.round(base * (0.6 + (i / 11) * 0.4 + (Math.sin(i * 1.2) * volatility))));
+
+    return [
+      { label: "Total Mentions", value: totalMentions, change: 18.3, trend: makeTrend(totalMentions / 12, 0.15), icon: "activity" },
+      { label: "Sentiment Score", value: avgSentiment, change: -2.1, trend: makeTrend(avgSentiment, 0.05), icon: "smile", suffix: "%" },
+      { label: "Engagement", value: engagement, change: 22.1, trend: makeTrend(engagement / 12, 0.12), icon: "heart" },
+      { label: "Audience Reach", value: reach, change: 15.7, trend: makeTrend(reach / 12, 0.10), icon: "users" },
+    ];
+  }, [scopedKeywords, scopedSentiment]);
+
   return (
     <>
+      {/* Project Cards Row */}
+      <ProjectCardsRow />
+
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {overviewMetrics.map((m) => (
+        {scopedKPIs.map((m) => (
           <GlowCard key={m.label}>
             <div className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -256,7 +276,7 @@ function MapTab() {
                 <TrendArrow value={m.change} size="sm" />
               </div>
               <AnimatedCounter
-                value={parseMetricValue(m.value)}
+                value={m.value}
                 className="text-2xl font-bold"
                 style={{ color: "var(--text-primary)" }}
               />
@@ -328,9 +348,39 @@ function InsightsTab() {
     return () => clearTimeout(t);
   }, []);
 
-  const mentionsSeries = platformData.map((p) => ({
+  // Derive per-platform stats from scopedKeywords
+  const scopedPlatformStats = useMemo(() => {
+    const stats: Record<Platform, { mentions: number; kwCount: number; sentimentSum: number }> = {
+      tiktok: { mentions: 0, kwCount: 0, sentimentSum: 0 },
+      facebook: { mentions: 0, kwCount: 0, sentimentSum: 0 },
+      youtube: { mentions: 0, kwCount: 0, sentimentSum: 0 },
+    };
+    for (const kw of scopedKeywords) {
+      for (const p of kw.platforms) {
+        stats[p].mentions += kw.volume;
+        stats[p].kwCount += 1;
+        stats[p].sentimentSum += kw.sentiment;
+      }
+    }
+    return (["tiktok", "facebook", "youtube"] as Platform[]).map((p) => {
+      const s = stats[p];
+      const avgSent = s.kwCount ? Math.round(s.sentimentSum / s.kwCount) : 0;
+      return {
+        platform: p,
+        name: platformLabel[p],
+        mentions: s.mentions,
+        mentionsChange: Math.round(10 + Math.random() * 20),
+        engagement: fmt(Math.round(s.mentions * 1.9)),
+        sentiment: avgSent,
+        status: s.kwCount > 0 ? ("active" as const) : ("inactive" as const),
+        color: platformColors[p],
+      };
+    });
+  }, [scopedKeywords]);
+
+  const mentionsSeries = scopedPlatformStats.map((p) => ({
     label: p.name,
-    data: p.trend.map((v) => v * (p.mentions / 100)),
+    data: months.map((_, i) => Math.round(p.mentions / 12 * (0.6 + (i / 11) * 0.5 + Math.sin(i * 0.9) * 0.1))),
     color: chartColors[p.platform],
   }));
 
@@ -351,10 +401,10 @@ function InsightsTab() {
     opacity: k.sentiment < 40 ? 0.4 : k.sentiment < 70 ? 0.65 : 1,
   }));
 
-  const barCategories = platformData.map((p) => ({
+  const barCategories = scopedPlatformStats.map((p) => ({
     label: p.name,
     values: [
-      { key: "Engagement", value: parseFloat(p.engagement) * 10, color: "var(--chart-1)", formatted: p.engagement },
+      { key: "Engagement", value: parseMetricValue(p.engagement) / 1000, color: "var(--chart-1)", formatted: p.engagement },
       { key: "Sentiment", value: p.sentiment, color: "var(--chart-2)", formatted: `${p.sentiment}%` },
       { key: "Growth", value: p.mentionsChange * 3, color: "var(--chart-3)", formatted: `+${p.mentionsChange}%` },
     ],
@@ -368,42 +418,44 @@ function InsightsTab() {
     { key: "reach", label: "Reach" },
   ];
 
-  const radarSeries = platformData.map((p) => ({
+  const maxMentions = Math.max(...scopedPlatformStats.map((p) => p.mentions), 1);
+  const radarSeries = scopedPlatformStats.map((p) => ({
     label: p.name,
     color: chartColors[p.platform],
     values: {
-      mentions: Math.min((p.mentions / 25000) * 100, 100),
-      engagement: parseFloat(p.engagement) * 10,
+      mentions: Math.min((p.mentions / maxMentions) * 100, 100),
+      engagement: Math.min(parseMetricValue(p.engagement) / (maxMentions * 2) * 100, 100),
       sentiment: p.sentiment,
       growth: Math.min(p.mentionsChange * 3, 100),
-      reach: parseFloat(p.followers) * 0.5,
+      reach: Math.min((p.mentions / maxMentions) * 80, 100),
     },
   }));
 
   // Sentiment timeline per platform (last 12 months)
-  const sentimentTimeline = platformData.map((p) => ({
+  const sentimentTimeline = scopedPlatformStats.map((p, pi) => ({
     label: p.name,
-    data: months.map((_, i) => Math.round(p.sentiment + (Math.sin(i * 0.7 + platformData.indexOf(p)) * 15) + (Math.random() * 8 - 4))),
+    data: months.map((_, i) => Math.round(p.sentiment + (Math.sin(i * 0.7 + pi) * 15))),
     color: chartColors[p.platform],
   }));
 
-  // Funnel-like engagement data
+  // Funnel derived from scoped totals
+  const totalMentions = scopedKeywords.reduce((s, k) => s + k.volume, 0);
   const engagementFunnel = [
-    { label: "Views", value: 12800000, pct: 100 },
-    { label: "Likes", value: 7300000, pct: 57 },
-    { label: "Comments", value: 876000, pct: 6.8 },
-    { label: "Shares", value: 365000, pct: 2.9 },
+    { label: "Views", value: Math.round(totalMentions * 3.35), pct: 100 },
+    { label: "Likes", value: Math.round(totalMentions * 1.9), pct: 57 },
+    { label: "Comments", value: Math.round(totalMentions * 0.23), pct: 6.8 },
+    { label: "Shares", value: Math.round(totalMentions * 0.095), pct: 2.9 },
   ];
 
-  // Filter + sort posts
+  // Filter posts by scoped platforms
+  const scopedPlatforms = useMemo(() => new Set(scopedKeywords.flatMap((k) => k.platforms)), [scopedKeywords]);
   const filteredPosts = useMemo(() => {
-    let posts = [...recentActivity];
+    let posts = recentActivity.filter((p) => scopedPlatforms.has(p.platform));
     if (platformFilter !== "all") posts = posts.filter((p) => p.platform === platformFilter);
     if (sentimentFilter !== "all") posts = posts.filter((p) => p.sentiment === sentimentFilter);
     if (sortBy === "engagement") posts.sort((a, b) => b.engagement - a.engagement);
-    // time sort = default order
     return posts;
-  }, [platformFilter, sentimentFilter, sortBy]);
+  }, [platformFilter, sentimentFilter, sortBy, scopedPlatforms]);
 
   // Post detail
   const selectedPost = postDetailId
@@ -420,7 +472,7 @@ function InsightsTab() {
     <div className="content-reveal">
       {/* Row 1: Platform overview cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        {platformData.map((p) => (
+        {scopedPlatformStats.map((p) => (
           <PlatformOverviewCard
             key={p.platform}
             name={p.name}
@@ -430,7 +482,7 @@ function InsightsTab() {
             engagement={p.engagement}
             sentiment={p.sentiment}
             status={p.status}
-            color={platformColors[p.platform]}
+            color={p.color}
           />
         ))}
       </div>
@@ -1575,7 +1627,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-[1600px] mx-auto px-6 pt-24 pb-20">
-      <div className="mb-5 flex justify-center">
+      <div className="sticky top-[72px] z-40 -mx-6 px-6 py-3 mb-2 flex justify-center">
         <ScopeFilter />
       </div>
 

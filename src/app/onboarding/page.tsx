@@ -52,6 +52,15 @@ interface InviteMember {
   role: 'admin' | 'editor' | 'viewer';
 }
 
+interface ProjectDraft {
+  name: string;
+  keywords: string[];
+  platforms: Set<Platform>;
+  startDate: string;
+  endDate: string;
+  inheritDates: boolean;
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -69,7 +78,8 @@ export default function OnboardingPage() {
   const [campStart, setCampStart] = useState('');
   const [campEnd, setCampEnd] = useState('');
 
-  // Step 3: Project
+  // Step 3: Projects (multiple)
+  const [savedProjects, setSavedProjects] = useState<ProjectDraft[]>([]);
   const [projectName, setProjectName] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);
   const [kwInput, setKwInput] = useState('');
@@ -85,9 +95,11 @@ export default function OnboardingPage() {
   };
 
   const addKeyword = () => {
-    const kw = kwInput.trim();
-    if (kw && !keywords.includes(kw)) {
-      setKeywords([...keywords, kw.startsWith('#') ? kw : `#${kw}`]);
+    const raw = kwInput.trim();
+    if (!raw) { setKwInput(''); return; }
+    const kw = raw.startsWith('#') ? raw : `#${raw}`;
+    if (!keywords.includes(kw)) {
+      setKeywords([...keywords, kw]);
     }
     setKwInput('');
   };
@@ -101,14 +113,47 @@ export default function OnboardingPage() {
     });
   };
 
+  const currentProjectValid = projectName.trim().length > 0 && keywords.length > 0 && platforms.size > 0;
+
+  const saveCurrentProject = () => {
+    if (!currentProjectValid) return;
+    setSavedProjects((prev) => [
+      ...prev,
+      {
+        name: projectName.trim(),
+        keywords: [...keywords],
+        platforms: new Set(platforms),
+        startDate: projStart,
+        endDate: projEnd,
+        inheritDates,
+      },
+    ]);
+    // Reset form for next project
+    setProjectName('');
+    setKeywords([]);
+    setKwInput('');
+    setPlatforms(new Set());
+    setProjStart('');
+    setProjEnd('');
+    setInheritDates(true);
+  };
+
+  const removeProject = (idx: number) => {
+    setSavedProjects((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const canProceed = () => {
     if (step === 0) return workspaceName.trim().length > 0;
     if (step === 1) return campaignName.trim().length > 0 && campStart && campEnd;
-    if (step === 2) return projectName.trim().length > 0 && keywords.length > 0 && platforms.size > 0;
+    if (step === 2) return savedProjects.length > 0 || currentProjectValid;
     return false;
   };
 
   const handleFinish = async () => {
+    // Auto-save current project if valid
+    if (currentProjectValid) {
+      saveCurrentProject();
+    }
     setLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     router.push('/smap/processing?camp_id=new');
@@ -354,17 +399,63 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* ─── Step 3: Project ─── */}
+          {/* ─── Step 3: Projects ─── */}
           {step === 2 && (
             <div key="step-2">
               <h2 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-                Set up your first project
+                Set up your projects
               </h2>
-              <p className="text-[12px] mb-6" style={{ color: 'var(--text-muted)' }}>
-                Projects contain the keywords and platforms you want to monitor.
+              <p className="text-[12px] mb-4" style={{ color: 'var(--text-muted)' }}>
+                Add one or more projects to your campaign. Each project tracks its own keywords and platforms.
               </p>
 
-              <div className="space-y-4">
+              {/* Saved projects list */}
+              {savedProjects.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {savedProjects.map((proj, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                      style={{ background: 'var(--accent-subtle)', border: '1px solid var(--accent)' }}
+                    >
+                      <div
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold"
+                        style={{ background: 'var(--accent)', color: 'white' }}
+                      >
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {proj.name}
+                        </p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {proj.keywords.length} keywords &middot; {proj.platforms.size} platforms
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeProject(idx)}
+                        className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                        style={{ color: 'var(--text-muted)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Project form */}
+              <div
+                className="space-y-4 p-4 rounded-xl"
+                style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
+                  {savedProjects.length > 0 ? `Project ${savedProjects.length + 1}` : 'Project 1'}
+                </p>
+
                 <div>
                   <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                     Project name *
@@ -412,7 +503,7 @@ export default function OnboardingPage() {
                       type="button"
                       onClick={addKeyword}
                       className="px-3 py-2 rounded-xl"
-                      style={{ background: 'var(--bg-hover)', color: 'var(--text-primary)' }}
+                      style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
@@ -450,7 +541,7 @@ export default function OnboardingPage() {
                           onClick={() => togglePlatform(p.id)}
                           className="flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-medium transition-all duration-200"
                           style={{
-                            background: selected ? 'var(--accent-subtle)' : 'var(--bg-hover)',
+                            background: selected ? 'var(--accent-subtle)' : 'var(--bg-surface)',
                             border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
                             color: selected ? 'var(--accent)' : 'var(--text-muted)',
                           }}
@@ -506,6 +597,25 @@ export default function OnboardingPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Add another project button */}
+                {currentProjectValid && (
+                  <button
+                    type="button"
+                    onClick={saveCurrentProject}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all duration-200"
+                    style={{
+                      background: 'transparent',
+                      border: '1.5px dashed var(--accent)',
+                      color: 'var(--accent)',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-subtle)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Save & add another project
+                  </button>
+                )}
               </div>
             </div>
           )}

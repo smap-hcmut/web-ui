@@ -15,6 +15,7 @@ import { useAutoSpotlight } from '@/hooks/useAutoSpotlight';
 import { getBubbleContentTier, getMetricFontSize, getLabelMaxChars, sparklinePoints } from '@/lib/map/calculations';
 import { getSentimentColor } from '@/lib/map/colors';
 import { truncateBubbleLabel } from '@/lib/map/truncate';
+import { useScope } from '@/components/ScopeProvider';
 
 const heapData = enrichMockData(rawHeapData);
 
@@ -197,6 +198,16 @@ interface DragState {
 
 export default function HeapSpace() {
 
+  /* ─── scope context ─── */
+  const { activeCampaignId } = useScope();
+
+  // Derive project-level entities from the active campaign
+  const campaignProjects = useMemo(() => {
+    if (!activeCampaignId) return heapData.flatMap((c) => c.children ?? []);
+    const camp = heapData.find((c) => c.id === activeCampaignId);
+    return camp?.children ?? heapData.flatMap((c) => c.children ?? []);
+  }, [activeCampaignId]);
+
   /* ─── refs ─── */
   const containerRef  = useRef<HTMLDivElement>(null);
   const bubbleEls     = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -215,7 +226,7 @@ export default function HeapSpace() {
 
   /* ─── state ─── */
   const [navStack, setNavStack]     = useState<HeapNode[]>([]);
-  const [entities, setEntities]     = useState<HeapNode[]>(heapData);
+  const [entities, setEntities]     = useState<HeapNode[]>(campaignProjects);
   const [hovered, setHovered]       = useState<{ node: HeapNode; x: number; y: number } | null>(null);
   const [search, setSearch]         = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -227,6 +238,12 @@ export default function HeapSpace() {
   const [detailNode, setDetailNode]     = useState<HeapNode | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // Reset to project level when active campaign changes
+  useEffect(() => {
+    setEntities(campaignProjects);
+    setNavStack([]);
+  }, [campaignProjects]);
 
   /* ─── auto-spotlight ─── */
   const bubblePosMap = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -287,10 +304,10 @@ export default function HeapSpace() {
   useEffect(() => {
     setEntities(
       navStack.length === 0
-        ? heapData
+        ? campaignProjects
         : navStack[navStack.length - 1].children ?? [],
     );
-  }, [navStack]);
+  }, [navStack, campaignProjects]);
 
   /* ─── init physics ─── */
   useEffect(() => {
@@ -1394,7 +1411,7 @@ export default function HeapSpace() {
           {entities.length} {currentType}{entities.length !== 1 ? 's' : ''}
         </p>
         <h2 className="text-sm font-semibold text-slate-500 tracking-tight">
-          {navStack.length === 0 ? 'All Campaigns' : navStack[navStack.length - 1].name}
+          {navStack.length === 0 ? 'Projects' : navStack[navStack.length - 1].name}
         </h2>
         {/* Legend — explains visual encoding */}
         <div className="flex items-center gap-3 mt-2 text-[8px] text-slate-500">
