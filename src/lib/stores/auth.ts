@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { apiClient, ApiError } from '../api/client';
-import { API_CONFIG, buildApiUrl } from '../api/config';
+import { API_CONFIG } from '../api/config';
 
 // Types matching identity-srv responses
 export interface User {
@@ -57,19 +57,17 @@ export const useAuthStore = create<AuthState>()(
        * Browser will be redirected to: smap-api.tantai.dev/identity/v1/authentication/login
        */
       login: (provider: 'google' | 'azure' | 'okta' = 'google') => {
-        // Build the OAuth login URL
-        const loginUrl = new URL(buildApiUrl(API_CONFIG.ENDPOINTS.identity.login));
-        
-        // Set redirect to current origin (where to return after OAuth)
-        const redirectUrl = typeof window !== 'undefined' 
-          ? `${window.location.origin}/campaigns`
-          : '/campaigns';
-        loginUrl.searchParams.set('redirect', redirectUrl);
+        if (typeof window === 'undefined') return;
 
-        // Redirect to OAuth provider via identity-srv
-        if (typeof window !== 'undefined') {
-          window.location.href = loginUrl.toString();
-        }
+        // OAuth login goes through the proxy so Set-Cookie gets rewritten
+        // to the frontend's domain (critical for localhost dev).
+        const loginPath = `/api/proxy${API_CONFIG.ENDPOINTS.identity.login}`;
+        const loginUrl = new URL(loginPath, window.location.origin);
+
+        // After OAuth, backend redirects here
+        loginUrl.searchParams.set('redirect', `${window.location.origin}/campaigns`);
+
+        window.location.href = loginUrl.toString();
       },
 
       /**

@@ -1,13 +1,14 @@
 /**
  * API Client
  *
- * Centralized HTTP client with interceptors for auth, error handling,
+ * Centralized HTTP client with auth, error handling,
  * and request/response transformations.
- * 
- * Calls go directly to smap-api.tantai.dev (no Next.js proxy needed).
+ *
+ * Browser requests go through the Next.js proxy (/api/proxy/*)
+ * which forwards them to smap-api.tantai.dev with cookies.
  */
 
-import { API_CONFIG, buildApiUrl } from './config';
+import { buildApiUrl } from './config';
 
 export interface ApiError {
   code: string;
@@ -29,7 +30,11 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 
 class ApiClient {
   private buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
-    const url = new URL(buildApiUrl(endpoint));
+    const raw = buildApiUrl(endpoint);
+
+    // In browser the base is a relative path (/api/proxy/...) — need window.location as base
+    const base = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const url = new URL(raw, base);
 
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -72,7 +77,6 @@ class ApiClient {
 
       // Handle auth errors globally
       if (response.status === 401) {
-        // Dispatch event for auth store to handle
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
         }
@@ -83,8 +87,16 @@ class ApiClient {
 
     if (isJson) {
       const body = await response.json();
-      // Handle wrapped responses from Go services
-      return body.data !== undefined ? body.data : body;
+      // Handle wrapped responses from Go services: { campaign: {...} } or { data: {...} }
+      // Unwrap single-key wrapper objects (campaign, project, etc.)
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        if (body.data !== undefined) return body.data;
+        const keys = Object.keys(body);
+        if (keys.length === 1 && typeof body[keys[0]] === 'object') {
+          return body[keys[0]] as T;
+        }
+      }
+      return body;
     }
 
     return response.text() as unknown as T;
@@ -104,7 +116,7 @@ class ApiClient {
       ...fetchOptions,
       headers,
       body: body ? JSON.stringify(body) : undefined,
-      credentials: 'include', // Include cookies for auth (cross-origin)
+      credentials: 'include',
     });
 
     return this.handleResponse<T>(response);

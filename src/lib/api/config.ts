@@ -3,22 +3,19 @@
  *
  * Centralized configuration for all API endpoints.
  * 
- * Production: Browser calls directly to smap-api.tantai.dev
- * Development: Can use localhost with port-forward or direct to prod
+ * Browser: calls go through Next.js proxy (/api/proxy/*) → smap-api.tantai.dev
+ * Server: calls go directly to smap-api.tantai.dev (or API_BASE_URL env)
  */
 
-// Determine if we're in browser or server
-const isBrowser = typeof window !== 'undefined';
-
-// API Base URL - configurable via env
-// In production (Electron app): uses the production API
-// In development: can override with NEXT_PUBLIC_API_BASE_URL
+// API Base URL
+// Client-side: calls go through the Next.js proxy at /api/proxy/*
+// Server-side (API routes, SSR): calls go directly to the backend
 const getApiBaseUrl = () => {
-  // Client-side: use public env var or default to production
-  if (isBrowser) {
-    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://smap-api.tantai.dev';
+  if (typeof window !== 'undefined') {
+    // Browser → Next.js proxy (same origin, no CORS)
+    return '/api/proxy';
   }
-  // Server-side: use internal env var or default to production  
+  // Server-side → direct backend
   return process.env.API_BASE_URL || 'https://smap-api.tantai.dev';
 };
 

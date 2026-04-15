@@ -16,3 +16,11 @@ export {
   type UpdateCampaignInput,
   type Paginator,
 } from './campaigns';
+export {
+  projectApi,
+  type Project,
+  type ProjectStatus,
+  type EntityType,
+  type CreateProjectInput,
+  type UpdateProjectInput,
+} from './projects';
