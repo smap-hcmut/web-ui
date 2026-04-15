@@ -14,3 +14,5 @@ export {
   useToggleCampaignFavorite,
   campaignKeys,
 } from './use-campaigns';
+export { useMetabaseCards, useMetabaseQuery, useMetabaseMetadata, useMetabaseDataset, metabaseKeys } from './use-metabase';
+export type { MetabaseCard, MetabaseColumn, MetabaseQueryResult, MetabaseTableMeta, MetabaseFieldMeta, DatasetRequest } from './use-metabase';
