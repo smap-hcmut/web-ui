@@ -1,26 +1,6 @@
-# SEO Controller
+# SMAP — Social Media Analysis Platform
 
-A comprehensive SEO monitoring and trend analysis platform built with Next.js, TypeScript, and React.
-
-## Features
-
-- **Real-time Dashboard** - Monitor SEO metrics in real-time with WebSocket integration
-- **Trend Analysis** - Analyze trending topics, hashtags, and posts
-- **Custom Reports** - Generate and export customizable SEO reports
-- **Workflow Automation** - Visual workflow builder with drag-and-drop interface
-- **Multi-language Support** - i18n integration for internationalization
-- **Responsive Design** - Mobile-first design with Tailwind CSS
-- **Dark Mode** - Built-in theme switching
-
-## Tech Stack
-
-- **Framework:** Next.js 15.2.3
-- **Language:** TypeScript 5.8.2
-- **UI Library:** React 19.0.0
-- **Styling:** Tailwind CSS 3.4.18
-- **Charts:** Chart.js, Recharts, React Flow
-- **State Management:** React Context API
-- **Internationalization:** next-i18next
+Desktop app: Electron + Next.js 15 + React 19 + TypeScript + Tailwind CSS 3.
 
 ## Quick Start
 
@@ -28,156 +8,76 @@ A comprehensive SEO monitoring and trend analysis platform built with Next.js, T
 # Install dependencies
 npm install
 
-# Run development server
+# Dev mode (browser only)
 npm run dev
+# -> http://localhost:3000 (LAN accessible)
 
-# Open browser
-# http://localhost:5000
+# Dev mode (Electron window + DevTools)
+npm run electron:dev
 ```
 
-For detailed setup instructions, see [SETUP.md](SETUP.md)
+## Build Electron App
+
+### Windows (.exe installer)
+```bash
+npm run electron:build:win
+```
+
+### macOS (.dmg)
+```bash
+npm run electron:build:mac
+```
+
+### Linux (.AppImage)
+```bash
+npm run electron:build:linux
+```
+
+Output goes to `release/` folder.
+
+## What the build does
+
+`electron:build:win` runs 3 steps in sequence:
+
+1. **`next build`** — compiles Next.js app to `.next/`
+2. **`tsc -p electron/tsconfig.json`** — compiles `electron/main.ts`, `preload.ts`, and `server.ts` to `dist-electron/`
+3. **`electron-builder --win`** — packages everything into NSIS installer
+
+## Build output layout
+
+```
+dist-electron/
+  electron/
+    main.js             # Electron main process entry
+    preload.js          # Context bridge
+  server.js             # Next.js custom server (forked by main.js in production)
+```
 
 ## Project Structure
 
 ```
-SEO-Controller/
-├── components/          # React components
-│   ├── dashboard/      # Dashboard components
-│   ├── reports/        # Report components
-│   ├── trend/          # Trend analysis components
-│   └── FlowCanvas.tsx  # Workflow builder
-├── pages/              # Next.js pages
-│   ├── dashboard.tsx   # Dashboard page
-│   ├── trend-analysis.tsx
-│   ├── workflow.tsx
-│   └── index.tsx
-├── contexts/           # React contexts
-├── hooks/              # Custom hooks
-├── services/           # API services
-├── lib/                # Utilities
-├── config/             # Configuration
-└── public/             # Static assets
+src/                    # Next.js app (pages, components, lib)
+electron/
+  main.ts               # Electron main process (window, tray, server spawn)
+  preload.ts            # Context bridge
+  tsconfig.json         # Compiles electron/ + server.ts -> dist-electron/
+server.ts               # Custom Next.js server (0.0.0.0, LAN accessible)
+release/                # Build output (git-ignored)
+dist-electron/          # Compiled electron files (git-ignored)
 ```
 
-## Available Scripts
+## Notes
 
-```bash
-npm run dev      # Start development server (port 5000)
-npm run build    # Build for production
-npm start        # Start production server
-npm run lint     # Run ESLint
-```
-
-## Docker Support
-
-Build and run with Docker:
-
-```bash
-# Build image
-docker-compose build
-
-# Run container
-docker-compose up
-
-# Run in background
-docker-compose up -d
-```
-
-See [docker-build.md](docker-build.md) for more details.
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```env
-NODE_ENV=development
-PORT=5000
-HOSTNAME=0.0.0.0
-
-# API Configuration
-NEXT_PUBLIC_HOSTNAME=https://smap-api.tantai.dev
-
-# WebSocket Configuration
-NEXT_PUBLIC_WS_URL=wss://smap-api.tantai.dev/ws
-```
-
-### Key Environment Variables
-
-- `NEXT_PUBLIC_HOSTNAME` - Base URL for API endpoints
-- `NEXT_PUBLIC_WS_URL` - WebSocket URL for real-time project and job status updates
-  - Production: `wss://smap-api.tantai.dev/ws`
-  - Development: `ws://localhost:8081/ws`
-  - Connection patterns: `?projectId={id}` or `?jobId={id}`
-- `PORT` - Port for the Next.js development server (default: 5000)
-
-## Documentation
-
-- [SETUP.md](SETUP.md) - Complete setup guide for new machines
-- [docker-build.md](docker-build.md) - Docker build and deployment guide
-- [CHART_DATA_STRUCTURES.md](CHART_DATA_STRUCTURES.md) - Chart data structures
-
-## Key Features
-
-### Real-time Dashboard
-
-- Live metrics updates via WebSocket
-- Customizable metric cards
-- Interactive charts and visualizations
-- Project selector and time range filters
-
-### Trend Analysis
-
-- Trending topics discovery
-- Hashtag tracking
-- Post analysis
-- Sentiment analysis
-- Competitor monitoring
-
-### Report Generation
-
-- Custom report builder
-- Multiple templates
-- Data source selection
-- Export functionality
-
-### Workflow Automation
-
-- Visual workflow designer
-- Node-based interface
-- Pre-built templates
-- Custom node configuration
-
-## Browser Support
-
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-
-## Contributing
-
-1. Create a new branch: `git checkout -b feature/your-feature`
-2. Make your changes
-3. Commit: `git commit -m "feat: add your feature"`
-4. Push: `git push origin feature/your-feature`
-5. Create a Pull Request
+- Menu bar is hidden — app shows as a clean frameless-style window
+- Production build forks `server.js` as child process inside Electron
+- Dev mode uses `concurrently` to run server + Electron separately
+- Server binds `0.0.0.0` so other devices on LAN can access via IP
+- Default port: `3000` (configurable via `PORT` env var)
 
 ## Troubleshooting
 
-See [SETUP.md - Troubleshooting](SETUP.md#troubleshooting-xử-lý-lỗi) section for common issues and solutions.
+**`electron-builder` fails to download Electron binary:**
+VPN may be needed if `github.com` is blocked. Or set `ELECTRON_BUILDER_OFFLINE=true` to use local cache.
 
-## License
-
-Private - All rights reserved
-
-## Support
-
-For issues and questions:
-
-- Check [SETUP.md](SETUP.md) documentation
-- Review existing GitHub issues
-- Contact the development team
-
----
-
-**Built with ❤️ using Next.js and TypeScript**
+**`Internal Server Error` after install:**
+Clear `dist-electron/` and rebuild: `rm -rf dist-electron && npm run electron:build:win`

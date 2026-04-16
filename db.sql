@@ -1,0 +1,108 @@
+CREATE TABLE analysis.post_insight (
+    -- Identity
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id VARCHAR(255) NOT NULL,
+    source_id VARCHAR(255),
+
+    -- UAP Core
+    content TEXT,
+    content_created_at TIMESTAMPTZ,
+    ingested_at TIMESTAMPTZ,
+    platform VARCHAR(50),
+    uap_metadata JSONB DEFAULT '{}',
+
+    -- Sentiment
+    overall_sentiment VARCHAR(20) DEFAULT 'NEUTRAL',
+    overall_sentiment_score FLOAT DEFAULT 0.0,
+    sentiment_confidence FLOAT DEFAULT 0.0,
+    sentiment_explanation TEXT,
+
+    -- ABSA
+    aspects JSONB DEFAULT '[]',
+
+    -- Keywords
+    keywords TEXT[] DEFAULT '{}',
+
+    -- Risk
+    risk_level VARCHAR(20) DEFAULT 'LOW',
+    risk_score FLOAT DEFAULT 0.0,
+    risk_factors JSONB DEFAULT '[]',
+    requires_attention BOOLEAN DEFAULT false,
+    alert_triggered BOOLEAN DEFAULT false,
+
+    -- Engagement (calculated)
+    engagement_score FLOAT DEFAULT 0.0,
+    virality_score FLOAT DEFAULT 0.0,
+    influence_score FLOAT DEFAULT 0.0,
+    reach_estimate INTEGER DEFAULT 0,
+
+    -- Quality
+    content_quality_score FLOAT DEFAULT 0.0,
+    is_spam BOOLEAN DEFAULT false,
+    is_bot BOOLEAN DEFAULT false,
+    language VARCHAR(10),
+    language_confidence FLOAT DEFAULT 0.0,
+    toxicity_score FLOAT DEFAULT 0.0,
+    is_toxic BOOLEAN DEFAULT false,
+
+    -- Processing
+    primary_intent VARCHAR(50) DEFAULT 'DISCUSSION',
+    intent_confidence FLOAT DEFAULT 0.0,
+    impact_score FLOAT DEFAULT 0.0,
+    processing_time_ms INTEGER DEFAULT 0,
+    model_version VARCHAR(50) DEFAULT '1.0.0',
+    processing_status VARCHAR(50) DEFAULT 'success',
+
+    -- Timestamps
+    analyzed_at TIMESTAMPTZ DEFAULT NOW(),
+    indexed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_post_insight_project ON analysis.post_insight(project_id);
+CREATE INDEX idx_post_insight_source ON analysis.post_insight(source_id);
+CREATE INDEX idx_post_insight_created ON analysis.post_insight(content_created_at);
+CREATE INDEX idx_post_insight_sentiment ON analysis.post_insight(overall_sentiment);
+CREATE INDEX idx_post_insight_risk ON analysis.post_insight(risk_level);
+CREATE INDEX idx_post_insight_platform ON analysis.post_insight(platform);
+CREATE INDEX idx_post_insight_analyzed ON analysis.post_insight(analyzed_at);
+
+-- GIN indexes for JSONB
+CREATE INDEX idx_post_insight_aspects ON analysis.post_insight USING GIN (aspects);
+CREATE INDEX idx_post_insight_uap_metadata ON analysis.post_insight USING GIN (uap_metadata);
+
+-- 002_create_analytics_run_manifest.sql
+-- Run manifest table for audit/replay (Phase 6).
+
+CREATE TABLE IF NOT EXISTS analysis.analytics_run_manifest (
+    run_id      TEXT        PRIMARY KEY,
+    project_id  TEXT        NOT NULL,
+    campaign_id TEXT        NOT NULL,
+    data        JSONB       NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_manifest_project
+    ON analysis.analytics_run_manifest (project_id, campaign_id);
+
+-- 001_create_analytics_outbox.sql
+-- Transactional outbox table for reliable Kafka delivery (Phase 6).
+
+CREATE TABLE IF NOT EXISTS analysis.analytics_outbox (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id      TEXT        NOT NULL,
+    topic       TEXT        NOT NULL,
+    payload     JSONB       NOT NULL,
+    status      TEXT        NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'sent', 'failed')),
+    error       TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sent_at     TIMESTAMPTZ
+);
+
+-- Fast poll of pending records ordered by insertion time
+CREATE INDEX IF NOT EXISTS idx_outbox_pending
+    ON analysis.analytics_outbox (status, created_at)
+    WHERE status = 'pending';

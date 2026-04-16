@@ -1,0 +1,98 @@
+/**
+ * API Configuration
+ *
+ * Centralized configuration for all API endpoints.
+ * 
+ * Browser: calls go through Next.js proxy (/api/proxy/*) → smap-api.tantai.dev
+ * Server: calls go directly to smap-api.tantai.dev (or API_BASE_URL env)
+ */
+
+// API Base URL
+// Client-side: calls go through the Next.js proxy at /api/proxy/*
+// Server-side (API routes, SSR): calls go directly to the backend
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    // Browser → Next.js proxy (same origin, no CORS)
+    return '/api/proxy';
+  }
+  // Server-side → direct backend
+  return process.env.API_BASE_URL || 'https://smap-api.tantai.dev';
+};
+
+export const API_CONFIG = {
+  // Base URL for all API calls (browser-accessible)
+  BASE_URL: getApiBaseUrl(),
+
+  // Service paths (appended to BASE_URL)
+  // These match the Traefik ingress routing
+  SERVICES: {
+    identity: '/identity',
+    project: '/project', 
+    ingest: '/ingest',
+    knowledge: '/knowledge',
+    notification: '/notification',
+    scraper: '/scraper',
+  },
+
+  // Metabase (separate domain/IP)
+  METABASE: {
+    URL: process.env.NEXT_PUBLIC_METABASE_URL || 'http://172.16.21.204:3000',
+    SECRET: process.env.METABASE_SECRET_KEY || 'c6a62ff7eea13cfa4801c1bf2397d82ccc6f5c3c4e6f38fedd1aabc49ce81752',
+  },
+
+  // Full endpoint paths by service
+  // Format: {service_path}/api/v1/{endpoint}
+  // Note: Traefik strips the service prefix (e.g., /identity), 
+  //       so services receive /api/v1/...
+  ENDPOINTS: {
+    identity: {
+      login: '/identity/api/v1/authentication/login',
+      callback: '/identity/api/v1/authentication/callback',
+      logout: '/identity/api/v1/authentication/logout',
+      me: '/identity/api/v1/authentication/me',
+    },
+    project: {
+      campaigns: '/project/api/v1/campaigns',
+      campaign: (id: string) => `/project/api/v1/campaigns/${id}`,
+      campaignFavorite: (id: string) => `/project/api/v1/campaigns/${id}/favorite`,
+      campaignFavorites: '/project/api/v1/campaigns/favorites',
+      campaignProjects: (id: string) => `/project/api/v1/campaigns/${id}/projects`,
+      projects: '/project/api/v1/projects',
+      project: (id: string) => `/project/api/v1/projects/${id}`,
+      projectActivate: (id: string) => `/project/api/v1/projects/${id}/activate`,
+      projectPause: (id: string) => `/project/api/v1/projects/${id}/pause`,
+      projectArchive: (id: string) => `/project/api/v1/projects/${id}/archive`,
+      projectActivationReadiness: (id: string) => `/project/api/v1/projects/${id}/activation-readiness`,
+      workspaces: '/project/api/v1/workspaces',
+      workspace: (id: string) => `/project/api/v1/workspaces/${id}`,
+    },
+    ingest: {
+      jobs: '/ingest/api/v1/jobs',
+      job: (id: string) => `/ingest/api/v1/jobs/${id}`,
+      dryrun: '/ingest/api/v1/dryrun',
+      crawl: '/ingest/api/v1/crawl',
+      posts: '/ingest/api/v1/posts',
+      post: (id: string) => `/ingest/api/v1/posts/${id}`,
+    },
+    knowledge: {
+      chat: '/knowledge/api/v1/chat',
+      reports: '/knowledge/api/v1/reports',
+      report: (id: string) => `/knowledge/api/v1/reports/${id}`,
+      insights: '/knowledge/api/v1/insights',
+    },
+    notification: {
+      ws: '/notification/ws',
+    },
+    scraper: {
+      tasks: '/scraper/api/v1/tasks',
+      task: (id: string) => `/scraper/api/v1/tasks/${id}`,
+    },
+  },
+} as const;
+
+// Helper to build full URL
+export const buildApiUrl = (endpoint: string): string => {
+  return `${API_CONFIG.BASE_URL}${endpoint}`;
+};
+
+export type ServiceName = keyof typeof API_CONFIG.SERVICES;
