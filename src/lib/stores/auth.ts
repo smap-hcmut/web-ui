@@ -64,8 +64,9 @@ export const useAuthStore = create<AuthState>()(
         const loginPath = `/api/proxy${API_CONFIG.ENDPOINTS.identity.login}`;
         const loginUrl = new URL(loginPath, window.location.origin);
 
-        // After OAuth, backend redirects here
-        loginUrl.searchParams.set('redirect', `${window.location.origin}/campaigns`);
+        // After OAuth, backend redirects here — the callback page will
+        // verify the session and redirect to /campaigns on success.
+        loginUrl.searchParams.set('redirect', `${window.location.origin}/auth/callback`);
 
         window.location.href = loginUrl.toString();
       },
