@@ -1,6 +1,6 @@
 import { PlatformIcon } from "./icons/PlatformIcon";
 import { MiniChart } from "./MiniChart";
-import type { PlatformData, Platform } from "@/lib/mock-data";
+import type { PlatformData, Platform } from "@/lib/types";
 import clsx from "clsx";
 
 const platformStyles: Record<

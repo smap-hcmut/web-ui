@@ -10,7 +10,7 @@ import {
   Radio,
 } from "lucide-react";
 import { PlatformIcon } from "./icons/PlatformIcon";
-import type { Platform } from "@/lib/mock-data";
+import type { Platform } from "@/lib/types";
 import clsx from "clsx";
 
 type NavItem =

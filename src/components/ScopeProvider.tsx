@@ -1,15 +1,14 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { campaigns, type Keyword } from '@/lib/mock-campaigns';
 
 /* ── Non-linear multi-select scope ──
    /smap belongs to ONE campaign, identified by `camp_id` URL param (read-only).
    User can cherry-pick within that campaign:
    - individual projects (all their keywords included)
    - individual keywords
-   When nothing is selected → all keywords in the active campaign are included.
+   When nothing is selected → all data for the active campaign is included.
 
    Scope is synced to URL search params so links are shareable.
    Params: camp_id=xxx  proj=id1,id2  kw=id1,id2
@@ -35,9 +34,6 @@ interface ScopeContextValue {
 
   /** Is anything selected? */
   hasSelection: boolean;
-
-  /** Resolved keywords based on current selection (within active campaign) */
-  scopedKeywords: Keyword[];
 
   /** Total selection count for badge */
   selectionCount: number;
@@ -130,45 +126,6 @@ export function ScopeProvider({ children }: { children: React.ReactNode }) {
 
   const selectionCount = scope.projectIds.size + scope.keywordIds.size;
 
-  // Get the active campaign object
-  const activeCampaign = useMemo(
-    () => campaigns.find((c) => c.id === activeCampaignId) ?? null,
-    [activeCampaignId],
-  );
-
-  // All keywords within the active campaign
-  const allCampaignKeywords = useMemo(
-    () => activeCampaign?.projects.flatMap((p) => p.keywords) ?? [],
-    [activeCampaign],
-  );
-
-  const scopedKeywords = useMemo(() => {
-    if (!activeCampaign) return [];
-    if (!hasSelection) return allCampaignKeywords;
-
-    const result = new Map<string, Keyword>();
-
-    // Add all keywords from selected projects (within active campaign)
-    for (const proj of activeCampaign.projects) {
-      if (scope.projectIds.has(proj.id)) {
-        for (const kw of proj.keywords) {
-          result.set(kw.id, kw);
-        }
-      }
-    }
-
-    // Add individually selected keywords (within active campaign)
-    for (const proj of activeCampaign.projects) {
-      for (const kw of proj.keywords) {
-        if (scope.keywordIds.has(kw.id)) {
-          result.set(kw.id, kw);
-        }
-      }
-    }
-
-    return Array.from(result.values());
-  }, [activeCampaign, allCampaignKeywords, hasSelection, scope.projectIds, scope.keywordIds]);
-
   return (
     <ScopeContext.Provider
       value={{
@@ -179,7 +136,6 @@ export function ScopeProvider({ children }: { children: React.ReactNode }) {
         toggleKeyword,
         clearAll,
         hasSelection,
-        scopedKeywords,
         selectionCount,
       }}
     >

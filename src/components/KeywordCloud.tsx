@@ -1,6 +1,6 @@
 import { Hash } from "lucide-react";
 import { PlatformIcon } from "./icons/PlatformIcon";
-import type { TrendItem } from "@/lib/mock-data";
+import type { TrendItem } from "@/lib/types";
 import clsx from "clsx";
 
 interface KeywordCloudProps {

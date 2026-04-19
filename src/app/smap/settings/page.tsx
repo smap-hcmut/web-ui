@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { campaigns } from '@/lib/mock-campaigns';
-import type { Platform } from '@/lib/mock-data';
+import { useCampaign } from '@/lib/hooks';
+import { useProjectsByCampaign } from '@/lib/hooks';
+import type { Platform } from '@/lib/types';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
@@ -79,15 +80,20 @@ export default function CampaignSettingsPage() {
 function CampaignSettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const campId = searchParams.get('camp_id') || 'camp-1';
+  const campId = searchParams.get('camp_id') || '';
   const [tab, setTab] = useState<TabId>('overview');
 
-  // Find campaign from mock data
-  const camp = campaigns.find((c) => c.id === campId) || campaigns[0];
+  // Fetch campaign + projects from API
+  const { data: camp } = useCampaign(campId);
+  const { data: projects } = useProjectsByCampaign(campId);
 
   // Overview form state
-  const [campName, setCampName] = useState(camp.name);
+  const [campName, setCampName] = useState('');
   const [campDesc, setCampDesc] = useState('');
+
+  // Sync form state when campaign data loads
+  const campNameResolved = campName || camp?.name || '';
+  const campStatus = camp?.status?.toLowerCase() as 'active' | 'paused' | 'archived' | undefined;
 
   return (
     <div className="max-w-[1600px] mx-auto px-6 pt-24 pb-20">
@@ -107,7 +113,7 @@ function CampaignSettingsContent() {
             Campaign Settings
           </h1>
           <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            {camp.name}
+            {camp?.name || 'Loading...'}
           </p>
         </div>
       </div>
@@ -163,7 +169,7 @@ function CampaignSettingsContent() {
                 </label>
                 <input
                   type="text"
-                  value={campName}
+                  value={campName || camp?.name || ''}
                   onChange={(e) => setCampName(e.target.value)}
                   className={inputClass}
                   style={inputStyle}
@@ -202,8 +208,8 @@ function CampaignSettingsContent() {
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label>
-                <Badge variant={camp.status === 'active' ? 'success' : camp.status === 'paused' ? 'warning' : 'neutral'} dot={camp.status === 'active'}>
-                  {camp.status}
+                <Badge variant={campStatus === 'active' ? 'success' : campStatus === 'paused' ? 'warning' : 'neutral'} dot={campStatus === 'active'}>
+                  {campStatus || 'unknown'}
                 </Badge>
               </div>
               <button
@@ -223,7 +229,7 @@ function CampaignSettingsContent() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Projects ({camp.projects.length})
+                  Projects ({projects?.length ?? 0})
                 </h2>
                 <button
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
@@ -233,8 +239,9 @@ function CampaignSettingsContent() {
                   Add Project
                 </button>
               </div>
-              <div className="space-y-2">
-                {camp.projects.map((proj) => (
+              {(projects ?? []).length > 0 ? (
+                <div className="space-y-2">
+                {(projects ?? []).map((proj) => (
                   <div
                     key={proj.id}
                     className="flex items-center justify-between p-4 rounded-xl transition-colors"
@@ -252,7 +259,7 @@ function CampaignSettingsContent() {
                           {proj.name}
                         </p>
                         <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                          {proj.keywords.length} keywords · {[...new Set(proj.keywords.flatMap((k) => k.platforms))].map((p) => platformLabel[p]).join(', ')}
+                          {proj.entity_type} · {proj.entity_name}
                         </p>
                       </div>
                     </div>
@@ -272,7 +279,10 @@ function CampaignSettingsContent() {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+              ) : (
+                <EmptyState title="No projects yet" description="Create a project to start monitoring keywords and social mentions." />
+              )}
             </div>
           )}
 
@@ -301,46 +311,10 @@ function CampaignSettingsContent() {
                 </div>
               </div>
 
-              {camp.projects.map((proj) => (
-                <div key={proj.id} className="mb-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-faint)' }}>
-                    {proj.name}
-                  </p>
-                  <div className="space-y-1">
-                    {proj.keywords.map((kw) => (
-                      <div
-                        key={kw.id}
-                        className="flex items-center justify-between px-4 py-2.5 rounded-xl"
-                        style={{ background: 'var(--bg-hover)' }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {kw.text}
-                          </span>
-                          <div className="flex gap-1">
-                            {kw.platforms.map((p) => (
-                              <span key={p} className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-faint)' }}>
-                                {platformLabel[p]}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                            {kw.volume.toLocaleString()} vol
-                          </span>
-                          <Badge variant={kw.sentiment >= 70 ? 'success' : kw.sentiment >= 40 ? 'warning' : 'danger'} size="sm">
-                            {kw.sentiment}%
-                          </Badge>
-                          <button className="p-1" style={{ color: 'var(--text-faint)' }}>
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <EmptyState
+                title="No keywords configured"
+                description="Keywords are now tracked via analytics. Use the main dashboard to view trending keywords."
+              />
             </div>
           )}
 

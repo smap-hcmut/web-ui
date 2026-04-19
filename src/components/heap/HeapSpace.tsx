@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Search, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import type { HeapNode, PhysicsState, SatelliteData, EntityType, PlatformType } from './types';
-import { heapData as rawHeapData } from './mock-data';
+import { useHeapData } from '@/lib/hooks';
 import { enrichMockData } from './enrich';
 import BubbleSVGOverlay from './BubbleSVGOverlay';
 import AutoSpotlightTooltip from './AutoSpotlightTooltip';
@@ -16,8 +16,6 @@ import { getBubbleContentTier, getMetricFontSize, getLabelMaxChars, sparklinePoi
 import { getSentimentColor } from '@/lib/map/colors';
 import { truncateBubbleLabel } from '@/lib/map/truncate';
 import { useScope } from '@/components/ScopeProvider';
-
-const heapData = enrichMockData(rawHeapData);
 
 /* ═══════════════════════════════════════════
    CONSTANTS
@@ -200,6 +198,13 @@ export default function HeapSpace() {
 
   /* ─── scope context ─── */
   const { activeCampaignId } = useScope();
+
+  /* ─── real data from API ─── */
+  const { data: heapResponse } = useHeapData(activeCampaignId ?? undefined);
+  const heapData = useMemo(
+    () => enrichMockData(heapResponse?.tree ? [heapResponse.tree as unknown as HeapNode] : []),
+    [heapResponse],
+  );
 
   // Derive project-level entities from the active campaign
   const campaignProjects = useMemo(() => {

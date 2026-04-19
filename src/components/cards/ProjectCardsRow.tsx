@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useScope } from '@/components/ScopeProvider';
-import { campaigns, type Project, type CrisisConfig } from '@/lib/mock-campaigns';
+import { useProjectsByCampaign } from '@/lib/hooks';
+import type { Project, CrisisConfig } from '@/lib/types';
 import { PlatformIcon } from '@/components/icons/PlatformIcon';
 import {
   ChevronLeft,
@@ -273,12 +274,20 @@ export function ProjectCardsRow() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { activeCampaignId, projectIds, toggleProject } = useScope();
 
-  // Get projects for active campaign
-  const projects = useMemo(() => {
-    if (!activeCampaignId) return [];
-    const camp = campaigns.find((c) => c.id === activeCampaignId);
-    return camp?.projects ?? [];
-  }, [activeCampaignId]);
+  // Fetch projects from API for the active campaign
+  const { data: apiProjects } = useProjectsByCampaign(activeCampaignId ?? undefined);
+
+  // Map API projects to the local Project type (with empty keywords for now, since keywords come from analytics)
+  const projects: Project[] = useMemo(() => {
+    return (apiProjects ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      keywords: [],
+      platforms: undefined,
+      status: p.status === 'ACTIVE' ? 'active' as const : 'paused' as const,
+      crisis_config: undefined,
+    }));
+  }, [apiProjects]);
 
   const scroll = useCallback((dir: 'left' | 'right') => {
     if (!scrollRef.current) return;

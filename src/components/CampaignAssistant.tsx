@@ -17,12 +17,35 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import clsx from 'clsx';
-import {
-  suggestedQuestions,
-  findBotResponse,
-  generateCSVTemplate,
-  type BotResponseBlock,
-} from '@/lib/mock-assistant';
+import type { BotResponseBlock } from '@/lib/types';
+
+/* ─── Inline assistant data (moved from mock-assistant) ─── */
+
+const suggestedQuestions = [
+  { id: 'sq1', text: 'Tóm tắt sentiment tuần này', icon: 'bar-chart' },
+  { id: 'sq2', text: 'Top 5 bài viết có engagement cao nhất', icon: 'trending-up' },
+  { id: 'sq3', text: 'So sánh hiệu suất giữa các platform', icon: 'git-compare' },
+  { id: 'sq4', text: 'Xu hướng keyword nổi bật', icon: 'hash' },
+];
+
+const fallbackResponse: BotResponseBlock[] = [
+  { type: 'text', content: 'Cảm ơn bạn! Tôi đã ghi nhận câu hỏi. Hiện tại tính năng AI Assistant đang được phát triển. Vui lòng thử lại sau.' },
+];
+
+function findBotResponse(userMessage: string): BotResponseBlock[] {
+  // TODO: Replace with real knowledge-srv API call
+  void userMessage;
+  return fallbackResponse;
+}
+
+function generateCSVTemplate(): string {
+  const headers = ['platform', 'post_url', 'author', 'content', 'timestamp', 'likes', 'comments', 'shares', 'sentiment'];
+  const rows = [
+    ['tiktok', 'https://tiktok.com/@user/video/123', '@creator_vn', 'Review sản phẩm mới', '2026-04-10T14:30:00Z', '12500', '340', '890', 'positive'],
+    ['facebook', 'https://facebook.com/post/456', 'Nguyễn Văn A', 'Thử và thấy khá ổn', '2026-04-11T09:15:00Z', '450', '67', '23', 'neutral'],
+  ];
+  return [headers.join(','), ...rows.map(r => r.map(c => c.includes(',') ? `"${c}"` : c).join(','))].join('\n');
+}
 
 /* ─── Types ─── */
 

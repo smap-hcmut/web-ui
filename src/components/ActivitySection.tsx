@@ -1,6 +1,6 @@
 import { Zap } from "lucide-react";
 import { PlatformIcon } from "./icons/PlatformIcon";
-import type { ActivityItem, Platform } from "@/lib/mock-data";
+import type { ActivityItem, Platform } from "@/lib/types";
 import clsx from "clsx";
 
 const sentimentDot: Record<string, string> = {

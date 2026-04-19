@@ -25,19 +25,15 @@ import { Modal } from "@/components/ui/Modal";
 import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
+import type { Platform, StalkerTarget, StalkerAlert, PostDetail, ReportItem } from "@/lib/types";
 import {
-  recentActivity,
-  type Platform,
-} from "@/lib/mock-data";
-import {
-  generatePostDetail,
-  mockStalkers,
-  mockReports,
-  type StalkerTarget,
-  type StalkerAlert,
-  type PostDetail,
-  type ReportItem,
-} from "@/lib/mock-posts";
+  useCampaignKPIs,
+  usePlatformStats,
+  useSentimentData,
+  useTrendingKeywords,
+  useRecentActivity,
+  type PostItem,
+} from "@/lib/hooks";
 import {
   Activity,
   Smile,
@@ -221,35 +217,29 @@ function ListSkeleton({ count = 4 }: { count?: number }) {
    TAB: MAP
    ════════════════════════════════════════════ */
 function MapTab() {
-  const { scopedKeywords } = useScope();
+  const { activeCampaignId } = useScope();
 
-  const scopedTrending = scopedKeywords
-    .slice()
-    .sort((a, b) => b.volume - a.volume)
-    .slice(0, 7)
-    .map((k) => ({ label: k.text, value: k.volume }));
+  // Real data hooks
+  const { data: kpisData, isLoading: kpisLoading } = useCampaignKPIs(activeCampaignId ?? undefined);
+  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
+  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
 
-  const scopedSentiment = scopedKeywords.length
-    ? Math.round(scopedKeywords.reduce((s, k) => s + k.sentiment, 0) / scopedKeywords.length)
-    : 0;
+  const isLoading = kpisLoading || keywordsLoading || sentimentLoading;
 
-  // Derive KPIs from scoped keywords
-  const scopedKPIs = useMemo(() => {
-    const totalMentions = scopedKeywords.reduce((s, k) => s + k.volume, 0);
-    const avgSentiment = scopedSentiment;
-    const engagement = Math.round(totalMentions * 1.9); // synthetic engagement multiplier
-    const reach = Math.round(totalMentions * 3.35);
-    // Generate synthetic 12-point trend proportional to volume
-    const makeTrend = (base: number, volatility: number) =>
-      Array.from({ length: 12 }, (_, i) => Math.round(base * (0.6 + (i / 11) * 0.4 + (Math.sin(i * 1.2) * volatility))));
+  // KPI metrics from API (or empty)
+  const kpiMetrics = kpisData?.metrics ?? [];
 
-    return [
-      { label: "Total Mentions", value: totalMentions, change: 18.3, trend: makeTrend(totalMentions / 12, 0.15), icon: "activity" },
-      { label: "Sentiment Score", value: avgSentiment, change: -2.1, trend: makeTrend(avgSentiment, 0.05), icon: "smile", suffix: "%" },
-      { label: "Engagement", value: engagement, change: 22.1, trend: makeTrend(engagement / 12, 0.12), icon: "heart" },
-      { label: "Audience Reach", value: reach, change: 15.7, trend: makeTrend(reach / 12, 0.10), icon: "users" },
-    ];
-  }, [scopedKeywords, scopedSentiment]);
+  // Trending topics for sidebar
+  const scopedTrending = useMemo(
+    () => (keywordsData?.keywords ?? []).slice(0, 7).map((k) => ({ label: k.text, value: k.volume })),
+    [keywordsData],
+  );
+
+  // Overall sentiment from API
+  const scopedSentiment = sentimentData?.pulse ?? 0;
+  const keywordCount = keywordsData?.keywords?.length ?? 0;
+
+  if (isLoading) return <TabSkeleton rows={2} />;
 
   return (
     <>
@@ -258,7 +248,7 @@ function MapTab() {
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {scopedKPIs.map((m) => (
+        {kpiMetrics.length > 0 ? kpiMetrics.map((m) => (
           <GlowCard key={m.label}>
             <div className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -267,7 +257,7 @@ function MapTab() {
                     className="w-8 h-8 rounded-xl flex items-center justify-center"
                     style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
                   >
-                    {iconMap[m.icon]}
+                    {iconMap[m.icon] ?? <Activity className="w-4 h-4" />}
                   </span>
                   <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                     {m.label}
@@ -282,7 +272,7 @@ function MapTab() {
               />
               <div className="mt-3 -mx-1">
                 <LineChart
-                  series={[{ label: m.label, data: m.trend, color: "var(--accent)" }]}
+                  series={[{ label: m.label, data: m.sparkline, color: "var(--accent)" }]}
                   height={48}
                   showLegend={false}
                   compact
@@ -290,7 +280,26 @@ function MapTab() {
               </div>
             </div>
           </GlowCard>
-        ))}
+        )) : (
+          /* Empty KPI placeholders */
+          ["Total Mentions", "Sentiment Score", "Engagement", "Audience Reach"].map((label) => (
+            <GlowCard key={label}>
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{ background: "var(--bg-hover)", color: "var(--text-faint)" }}
+                  >
+                    {iconMap[label === "Total Mentions" ? "activity" : label === "Sentiment Score" ? "smile" : label === "Engagement" ? "heart" : "users"]}
+                  </span>
+                  <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                    {label}
+                  </span>
+                </div>
+                <span className="text-2xl font-bold" style={{ color: "var(--text-faint)" }}>0</span>
+              </div>
+            </GlowCard>
+          ))
+        )}
       </div>
 
       {/* HeapSpace + Sidebar */}
@@ -311,7 +320,11 @@ function MapTab() {
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <Card className="flex-1">
             <SectionTitle sub="Top hashtags by volume">Trending Topics</SectionTitle>
-            <RankList items={scopedTrending} maxItems={7} />
+            {scopedTrending.length > 0 ? (
+              <RankList items={scopedTrending} maxItems={7} />
+            ) : (
+              <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No trending topics yet</p>
+            )}
           </Card>
 
           <Card className="flex items-center justify-center gap-6">
@@ -321,8 +334,8 @@ function MapTab() {
                 Overall Sentiment
               </p>
               <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {scopedKeywords.length} keywords tracked<br />
-                {new Set(scopedKeywords.flatMap((k) => k.platforms)).size} platforms
+                {keywordCount} keywords tracked<br />
+                {sentimentData?.donut?.length ?? 0} sentiment segments
               </p>
             </div>
           </Card>
@@ -336,80 +349,89 @@ function MapTab() {
    TAB: Insights (merged Platforms + Insights)
    ════════════════════════════════════════════ */
 function InsightsTab() {
-  const { scopedKeywords } = useScope();
+  const { activeCampaignId } = useScope();
   const [postDetailId, setPostDetailId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"engagement" | "time">("engagement");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(t);
-  }, []);
+  // Real data hooks
+  const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined);
+  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
+  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
+  const { data: postsData, isLoading: postsLoading } = useRecentActivity({
+    campaignId: activeCampaignId ?? undefined,
+    platform: platformFilter !== "all" ? platformFilter : undefined,
+    sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
+    sort: sortBy,
+    limit: 30,
+  });
 
-  // Derive per-platform stats from scopedKeywords
+  const isLoading = platformLoading || sentimentLoading || keywordsLoading;
+
+  // Platform overview cards
   const scopedPlatformStats = useMemo(() => {
-    const stats: Record<Platform, { mentions: number; kwCount: number; sentimentSum: number }> = {
-      tiktok: { mentions: 0, kwCount: 0, sentimentSum: 0 },
-      facebook: { mentions: 0, kwCount: 0, sentimentSum: 0 },
-      youtube: { mentions: 0, kwCount: 0, sentimentSum: 0 },
-    };
-    for (const kw of scopedKeywords) {
-      for (const p of kw.platforms) {
-        stats[p].mentions += kw.volume;
-        stats[p].kwCount += 1;
-        stats[p].sentimentSum += kw.sentiment;
-      }
-    }
-    return (["tiktok", "facebook", "youtube"] as Platform[]).map((p) => {
-      const s = stats[p];
-      const avgSent = s.kwCount ? Math.round(s.sentimentSum / s.kwCount) : 0;
-      return {
-        platform: p,
-        name: platformLabel[p],
-        mentions: s.mentions,
-        mentionsChange: Math.round(10 + Math.random() * 20),
-        engagement: fmt(Math.round(s.mentions * 1.9)),
-        sentiment: avgSent,
-        status: s.kwCount > 0 ? ("active" as const) : ("inactive" as const),
-        color: platformColors[p],
-      };
-    });
-  }, [scopedKeywords]);
+    return (platformData?.stats ?? []).map((p) => ({
+      platform: p.platform as Platform,
+      name: platformLabel[p.platform] ?? p.platform,
+      mentions: p.mentions,
+      mentionsChange: p.mentionsChange,
+      engagement: p.engagement,
+      sentiment: p.sentiment,
+      status: p.mentions > 0 ? ("active" as const) : ("inactive" as const),
+      color: platformColors[p.platform] ?? "var(--text-muted)",
+    }));
+  }, [platformData]);
 
-  const mentionsSeries = scopedPlatformStats.map((p) => ({
-    label: p.name,
-    data: months.map((_, i) => Math.round(p.mentions / 12 * (0.6 + (i / 11) * 0.5 + Math.sin(i * 0.9) * 0.1))),
-    color: chartColors[p.platform],
-  }));
+  // Mentions over time (12-month area chart)
+  const mentionsSeries = useMemo(
+    () =>
+      (platformData?.timeSeries ?? []).map((ts) => ({
+        label: ts.label,
+        data: ts.data,
+        color: ts.color,
+      })),
+    [platformData],
+  );
+  const mentionsLabels = useMemo(
+    () => platformData?.months ?? [],
+    [platformData],
+  );
 
-  const positive = scopedKeywords.filter((k) => k.sentiment >= 70).length;
-  const negative = scopedKeywords.filter((k) => k.sentiment < 40).length;
-  const neutral = scopedKeywords.length - positive - negative;
-  const sentimentSegments = [
-    { label: "Positive", value: positive || 1, color: "var(--success)" },
-    { label: "Neutral", value: neutral || 1, color: "var(--warning)" },
-    { label: "Negative", value: negative || 1, color: "var(--danger)" },
-  ];
+  // Sentiment donut
+  const sentimentSegments = useMemo(() => {
+    const donut = sentimentData?.donut ?? [];
+    const colorMap: Record<string, string> = { positive: "var(--success)", neutral: "var(--warning)", negative: "var(--danger)" };
+    return donut.map((d) => ({
+      label: d.label.charAt(0).toUpperCase() + d.label.slice(1),
+      value: d.value || 1,
+      color: colorMap[d.label] ?? "var(--text-faint)",
+    }));
+  }, [sentimentData]);
 
-  const sorted = scopedKeywords.slice().sort((a, b) => b.volume - a.volume);
-  const wordCloudItems = sorted.map((k) => ({
-    text: k.text,
-    value: k.volume,
-    color: "var(--accent)",
-    opacity: k.sentiment < 40 ? 0.4 : k.sentiment < 70 ? 0.65 : 1,
-  }));
+  // Word cloud from keywords
+  const wordCloudItems = useMemo(
+    () =>
+      (keywordsData?.wordCloud ?? []).map((w) => ({
+        text: w.text,
+        value: w.value,
+        color: w.color,
+        opacity: w.opacity,
+      })),
+    [keywordsData],
+  );
 
+  // Bar chart (per-platform performance)
   const barCategories = scopedPlatformStats.map((p) => ({
     label: p.name,
     values: [
       { key: "Engagement", value: parseMetricValue(p.engagement) / 1000, color: "var(--chart-1)", formatted: p.engagement },
       { key: "Sentiment", value: p.sentiment, color: "var(--chart-2)", formatted: `${p.sentiment}%` },
-      { key: "Growth", value: p.mentionsChange * 3, color: "var(--chart-3)", formatted: `+${p.mentionsChange}%` },
+      { key: "Growth", value: Math.abs(p.mentionsChange) * 3, color: "var(--chart-3)", formatted: `${p.mentionsChange >= 0 ? "+" : ""}${p.mentionsChange}%` },
     ],
   }));
 
+  // Radar chart
   const radarAxes = [
     { key: "mentions", label: "Mentions" },
     { key: "engagement", label: "Engagement" },
@@ -421,52 +443,83 @@ function InsightsTab() {
   const maxMentions = Math.max(...scopedPlatformStats.map((p) => p.mentions), 1);
   const radarSeries = scopedPlatformStats.map((p) => ({
     label: p.name,
-    color: chartColors[p.platform],
+    color: chartColors[p.platform] ?? "var(--chart-1)",
     values: {
       mentions: Math.min((p.mentions / maxMentions) * 100, 100),
       engagement: Math.min(parseMetricValue(p.engagement) / (maxMentions * 2) * 100, 100),
       sentiment: p.sentiment,
-      growth: Math.min(p.mentionsChange * 3, 100),
+      growth: Math.min(Math.abs(p.mentionsChange) * 3, 100),
       reach: Math.min((p.mentions / maxMentions) * 80, 100),
     },
   }));
 
-  // Sentiment timeline per platform (last 12 months)
-  const sentimentTimeline = scopedPlatformStats.map((p, pi) => ({
-    label: p.name,
-    data: months.map((_, i) => Math.round(p.sentiment + (Math.sin(i * 0.7 + pi) * 15))),
-    color: chartColors[p.platform],
-  }));
+  // Sentiment timeline per platform
+  const sentimentTimeline = useMemo(
+    () =>
+      (sentimentData?.timeline ?? []).map((ts) => ({
+        label: ts.label,
+        data: ts.data,
+        color: ts.color,
+      })),
+    [sentimentData],
+  );
+  const sentimentTimelineLabels = useMemo(
+    () => sentimentData?.months ?? [],
+    [sentimentData],
+  );
 
-  // Funnel derived from scoped totals
-  const totalMentions = scopedKeywords.reduce((s, k) => s + k.volume, 0);
+  // Engagement funnel from KPIs engagement breakdown (approximate from posts data)
+  const totalMentions = scopedPlatformStats.reduce((s, p) => s + p.mentions, 0);
   const engagementFunnel = [
     { label: "Views", value: Math.round(totalMentions * 3.35), pct: 100 },
-    { label: "Likes", value: Math.round(totalMentions * 1.9), pct: 57 },
-    { label: "Comments", value: Math.round(totalMentions * 0.23), pct: 6.8 },
-    { label: "Shares", value: Math.round(totalMentions * 0.095), pct: 2.9 },
+    { label: "Likes", value: Math.round(totalMentions * 1.9), pct: totalMentions > 0 ? 57 : 0 },
+    { label: "Comments", value: Math.round(totalMentions * 0.23), pct: totalMentions > 0 ? 7 : 0 },
+    { label: "Shares", value: Math.round(totalMentions * 0.095), pct: totalMentions > 0 ? 3 : 0 },
   ];
 
-  // Filter posts by scoped platforms
-  const scopedPlatforms = useMemo(() => new Set(scopedKeywords.flatMap((k) => k.platforms)), [scopedKeywords]);
-  const filteredPosts = useMemo(() => {
-    let posts = recentActivity.filter((p) => scopedPlatforms.has(p.platform));
-    if (platformFilter !== "all") posts = posts.filter((p) => p.platform === platformFilter);
-    if (sentimentFilter !== "all") posts = posts.filter((p) => p.sentiment === sentimentFilter);
-    if (sortBy === "engagement") posts.sort((a, b) => b.engagement - a.engagement);
-    return posts;
-  }, [platformFilter, sentimentFilter, sortBy, scopedPlatforms]);
+  // Trending topics ranked
+  const rankedKeywords = useMemo(() => {
+    const kws = keywordsData?.keywords ?? [];
+    return kws.map((k) => ({ label: k.text, value: k.volume }));
+  }, [keywordsData]);
+  const firstHalf = rankedKeywords.slice(0, Math.ceil(rankedKeywords.length / 2));
+  const secondHalf = rankedKeywords.slice(Math.ceil(rankedKeywords.length / 2));
 
-  // Post detail
+  // Posts
+  const filteredPosts = postsData?.posts ?? [];
+
+  // Post detail — build from PostItem instead of generatePostDetail
   const selectedPost = postDetailId
-    ? recentActivity.find((p) => p.id === postDetailId)
+    ? filteredPosts.find((p) => p.id === postDetailId)
     : null;
-  const postDetail = selectedPost ? generatePostDetail(selectedPost) : null;
+  const postDetail: PostDetail | null = selectedPost
+    ? {
+        id: selectedPost.id,
+        platform: selectedPost.platform as Platform,
+        author: selectedPost.author,
+        content: selectedPost.content,
+        time: selectedPost.time,
+        sentiment: selectedPost.sentiment,
+        engagement: selectedPost.engagement,
+        likes: selectedPost.likes,
+        comments: selectedPost.comments,
+        shares: selectedPost.shares,
+        views: selectedPost.views,
+        sentimentBreakdown: {
+          positive: selectedPost.sentiment === "positive" ? 65 : 25,
+          neutral: 20,
+          negative: selectedPost.sentiment === "negative" ? 55 : 15,
+        },
+        engagementTrend: Array.from({ length: 7 }, (_, i) =>
+          Math.round(selectedPost.engagement * (0.6 + (i / 6) * 0.4 + Math.sin(i) * 0.1))
+        ),
+        topComments: [],
+        keywords: selectedPost.keywords ?? [],
+        url: selectedPost.url ?? "#",
+      }
+    : null;
 
-  const firstHalf = sorted.slice(0, Math.ceil(sorted.length / 2));
-  const secondHalf = sorted.slice(Math.ceil(sorted.length / 2));
-
-  if (loading) return <TabSkeleton rows={3} />;
+  if (isLoading) return <TabSkeleton rows={3} />;
 
   return (
     <div className="content-reveal">
@@ -491,7 +544,7 @@ function InsightsTab() {
       <div className="grid grid-cols-12 gap-3 mb-4">
         <Card className="col-span-12 lg:col-span-5">
           <SectionTitle sub="12-month trend">Mentions Over Time</SectionTitle>
-          <AreaChart series={mentionsSeries} xLabels={months} height={180} />
+          <AreaChart series={mentionsSeries} xLabels={mentionsLabels.length > 0 ? mentionsLabels : months} height={180} />
         </Card>
 
         <Card className="col-span-6 lg:col-span-3 flex flex-col">
@@ -521,7 +574,7 @@ function InsightsTab() {
 
         <Card className="col-span-12 lg:col-span-4">
           <SectionTitle sub="Per-platform trend">Sentiment Timeline</SectionTitle>
-          <AreaChart series={sentimentTimeline} xLabels={months} height={170} />
+          <AreaChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
         </Card>
       </div>
 
@@ -547,8 +600,8 @@ function InsightsTab() {
         <Card className="col-span-12 lg:col-span-8">
           <SectionTitle sub="All keywords ranked by volume">Trending Topics</SectionTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <RankList items={firstHalf.map((k) => ({ label: k.text, value: k.volume }))} maxItems={10} />
-            <RankList items={secondHalf.map((k) => ({ label: k.text, value: k.volume }))} maxItems={10} startRank={firstHalf.length + 1} />
+            <RankList items={firstHalf} maxItems={10} />
+            <RankList items={secondHalf} maxItems={10} startRank={firstHalf.length + 1} />
           </div>
         </Card>
       </div>
@@ -618,7 +671,7 @@ function InsightsTab() {
                 <PostCard
                   author={post.author}
                   content={post.content}
-                  platform={post.platform}
+                  platform={post.platform as Platform}
                   sentiment={post.sentiment}
                   engagement={post.engagement}
                   time={post.time}
@@ -626,6 +679,8 @@ function InsightsTab() {
               </button>
             ))}
           </div>
+        ) : postsLoading ? (
+          <LoadingDots />
         ) : (
           <EmptyState title="No posts found" description="Try adjusting your filters" />
         )}
@@ -918,7 +973,7 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
    TAB: Stalker
    ════════════════════════════════════════════ */
 function StalkerTab() {
-  const [stalkers] = useState<StalkerTarget[]>(mockStalkers);
+  const [stalkers] = useState<StalkerTarget[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
@@ -1331,7 +1386,7 @@ function CreateStalkerModal({ open, onClose }: { open: boolean; onClose: () => v
    TAB: Reports
    ════════════════════════════════════════════ */
 function ReportsTab() {
-  const [reports] = useState<ReportItem[]>(mockReports);
+  const [reports] = useState<ReportItem[]>([]);
   const [showGenerate, setShowGenerate] = useState(false);
   const [loading, setLoading] = useState(true);
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { ThemeProvider } from '@/components/ThemeProvider';
-import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { Radio, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,7 +29,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
               <span className="text-[13px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>SMAP</span>
             </Link>
             <div className="w-px h-5" style={{ background: 'var(--border)' }} />
-            <WorkspaceSwitcher />
+            <span className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Settings</span>
           </div>
           <Link
             href="/campaigns"

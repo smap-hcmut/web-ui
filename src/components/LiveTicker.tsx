@@ -1,5 +1,5 @@
 import { PlatformIcon } from "./icons/PlatformIcon";
-import type { ActivityItem } from "@/lib/mock-data";
+import type { ActivityItem } from "@/lib/types";
 import clsx from "clsx";
 
 const sentimentColor: Record<string, string> = {

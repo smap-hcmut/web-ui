@@ -3,7 +3,7 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { PlatformIcon } from '../icons/PlatformIcon';
 import { Badge } from '../ui/Badge';
-import type { Platform } from '@/lib/mock-data';
+import type { Platform } from '@/lib/types';
 import clsx from 'clsx';
 
 interface PlatformOverviewCardProps {

@@ -1,6 +1,6 @@
 import { PlatformIcon } from "./icons/PlatformIcon";
 import { MessageSquare } from "lucide-react";
-import type { ActivityItem } from "@/lib/mock-data";
+import type { ActivityItem } from "@/lib/types";
 import clsx from "clsx";
 
 const sentimentDot: Record<string, string> = {
