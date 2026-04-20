@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useScope } from '@/components/ScopeProvider';
 import { useProjectsByCampaign, useCreateProject, useProjectStats, usePauseProject, useResumeProject, useActivateProject, useDryrunProject } from '@/lib/hooks';
 import type { ProjectStat } from '@/lib/hooks';
@@ -131,7 +132,7 @@ export function ProjectFlipCard({
   return (
     <div
       className="shrink-0"
-      style={{ perspective: '800px', width: 200, height: 140, cursor: 'default' }}
+      style={{ perspective: '800px', width: 224, height: 160, cursor: 'default' }}
       onMouseEnter={() => setFlipped(true)}
       onMouseLeave={() => setFlipped(false)}
     >
@@ -156,7 +157,7 @@ export function ProjectFlipCard({
           {/* Header */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 140 }}>
+              <span className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 160 }}>
                 {project.name}
               </span>
               <span
@@ -220,7 +221,7 @@ export function ProjectFlipCard({
         >
           {/* Back header */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 100 }}>
+            <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 150 }}>
               {project.name}
             </span>
             <div className="flex items-center gap-1">
@@ -335,6 +336,9 @@ export function CreateProjectModal({
   const [entityType, setEntityType] = useState<EntityType>('product');
   const [entityName, setEntityName] = useState('');
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const canSubmit = name.trim() && entityName.trim() && !isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -349,7 +353,9 @@ export function CreateProjectModal({
     });
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
@@ -451,7 +457,8 @@ export function CreateProjectModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }/* ─── Add project card ─── */
 function AddProjectCard({ onClick }: { onClick: () => void }) {
@@ -460,8 +467,8 @@ function AddProjectCard({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="shrink-0 rounded-xl flex flex-col items-center justify-center gap-2 transition-all duration-200"
       style={{
-        width: 100,
-        height: 140,
+        width: 110,
+        height: 160,
         background: 'var(--bg-surface)',
         border: '1.5px dashed var(--border)',
       }}
@@ -697,7 +704,12 @@ export function ProjectConfigModal({ project, onClose }: { project: Project; onC
 
   const [cronSchedule, setCronSchedule] = useState(config?.cron_schedule ?? '*/30 * * * *');
 
-  return (
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
@@ -897,6 +909,7 @@ export function ProjectConfigModal({ project, onClose }: { project: Project; onC
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

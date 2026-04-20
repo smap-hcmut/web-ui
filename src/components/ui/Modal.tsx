@@ -50,12 +50,12 @@ export function Modal({ open, onClose, title, size = 'md', children }: ModalProp
           boxShadow: 'var(--shadow-lg)',
         }}
       >
-        {(title || true) && (
+        {title && (
           <div className="flex items-center justify-between mb-4">
-            {title && <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h3>}
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg transition-colors ml-auto"
+              className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-muted)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -63,6 +63,17 @@ export function Modal({ open, onClose, title, size = 'md', children }: ModalProp
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+        {!title && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors z-10"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
         {children}
       </div>
