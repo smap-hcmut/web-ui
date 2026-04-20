@@ -24,3 +24,18 @@ export {
   type CreateProjectInput,
   type UpdateProjectInput,
 } from './projects';
+export {
+  datasourceApi,
+  type DataSource,
+  type CrawlTarget,
+  type TargetWithSource,
+  type SourceType,
+  type TargetType,
+} from './datasources';
+export {
+  knowledgeApi,
+  type ChatRequest,
+  type ChatResponse,
+  type Citation,
+  type SuggestionItem,
+} from './knowledge';

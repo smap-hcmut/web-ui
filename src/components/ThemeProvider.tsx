@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-export type ThemeId = 'mist' | 'midnight' | 'sand' | 'ember';
+export type ThemeId = 'mist' | 'midnight' | 'sand';
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -17,7 +17,6 @@ export const THEMES: ThemeMeta[] = [
   { id: 'mist',     label: 'Mist',     swatch: '#e8eaef', swatch2: '#ffffff' },
   { id: 'midnight', label: 'Midnight', swatch: '#0b0f1a', swatch2: '#1e2640' },
   { id: 'sand',     label: 'Sand',     swatch: '#f5f0e8', swatch2: '#e8e1d5' },
-  { id: 'ember',    label: 'Ember',    swatch: '#1a1412', swatch2: '#3a2820' },
 ];
 
 const STORAGE_KEY = 'smap-theme';
@@ -28,7 +27,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'mist',
+  theme: 'sand',
   setTheme: () => {},
 });
 
@@ -37,7 +36,7 @@ export function useTheme() {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeId>('mist');
+  const [theme, setThemeState] = useState<ThemeId>('sand');
   const [mounted, setMounted] = useState(false);
 
   // Read from localStorage on mount

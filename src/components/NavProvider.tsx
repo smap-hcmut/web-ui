@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from 'react';
 
-export type TabId = 'MAP' | 'Insights' | 'Stalker' | 'Reports';
+export type TabId = 'MAP' | 'Projects' | 'Insights' | 'Stalker' | 'Reports';
 
 interface NavContextValue {
   activeTab: TabId;

@@ -8,9 +8,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { getProjectIdsForCampaign, projectFilter } from '@/lib/db/queries';
+import {
+  queryNative,
+  getProjectIdsForCampaign,
+  projectFilter,
+} from '@/lib/metabase/client';
 
 interface HeapNode {
   id: string;
@@ -41,49 +43,50 @@ export async function GET(request: NextRequest) {
     const pf = projectFilter(projectIds);
 
     // Get campaign name
-    const [campRow] = await db.execute<{ name: string }>(sql`
-      SELECT name FROM project.campaigns WHERE id = ${campaignId}
-    `).then((r) => [r.rows[0]]);
+    const campRows = await queryNative<{ name: string }>(`
+      SELECT name FROM project.campaigns WHERE id = '${campaignId}'
+    `);
+    const campRow = campRows[0];
 
     // Get projects info
-    const projectRows = await db.execute<{
+    const projectRows = await queryNative<{
       id: string;
       name: string;
-    }>(sql`
+    }>(`
       SELECT id::text, name
       FROM project.projects
-      WHERE campaign_id = ${campaignId} AND deleted_at IS NULL
+      WHERE campaign_id = '${campaignId}' AND deleted_at IS NULL
     `);
 
     // Per-project aggregations
-    const projStats = await db.execute<{
+    const projStats = await queryNative<{
       project_id: string;
-      mentions: string;
-      avg_sentiment: string;
-      sum_engagement: string;
-    }>(sql`
+      mentions: number;
+      avg_sentiment: number;
+      sum_engagement: number;
+    }>(`
       SELECT
         project_id,
-        COUNT(*)::text AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0)::text AS avg_sentiment,
-        COALESCE(SUM(engagement_score), 0)::text AS sum_engagement
+        COUNT(*) AS mentions,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+        COALESCE(SUM(engagement_score), 0) AS sum_engagement
       FROM analysis.post_insight
       WHERE ${pf}
       GROUP BY project_id
     `);
 
     const projStatsMap = new Map(
-      projStats.rows.map((r) => [r.project_id, r]),
+      projStats.map((r) => [r.project_id, r]),
     );
 
     // Per-keyword per-project (top 10 per project for performance)
-    const kwRows = await db.execute<{
+    const kwRows = await queryNative<{
       project_id: string;
       keyword: string;
-      volume: string;
-      avg_sentiment: string;
-      sum_engagement: string;
-    }>(sql`
+      volume: number;
+      avg_sentiment: number;
+      sum_engagement: number;
+    }>(`
       WITH ranked AS (
         SELECT
           project_id,
@@ -102,9 +105,9 @@ export async function GET(request: NextRequest) {
       SELECT
         project_id,
         keyword,
-        volume::text,
-        COALESCE(avg_sentiment, 0)::text AS avg_sentiment,
-        COALESCE(sum_engagement, 0)::text AS sum_engagement
+        volume,
+        COALESCE(avg_sentiment, 0) AS avg_sentiment,
+        COALESCE(sum_engagement, 0) AS sum_engagement
       FROM ranked
       WHERE rn <= 10
       ORDER BY project_id, volume DESC
@@ -112,7 +115,7 @@ export async function GET(request: NextRequest) {
 
     // Build keyword children per project
     const kwByProject = new Map<string, HeapNode[]>();
-    for (const r of kwRows.rows) {
+    for (const r of kwRows) {
       if (!kwByProject.has(r.project_id)) kwByProject.set(r.project_id, []);
       kwByProject.get(r.project_id)!.push({
         id: `kw-${r.project_id}-${r.keyword}`,
@@ -128,7 +131,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build project children
-    const projectChildren: HeapNode[] = projectRows.rows.map((p) => {
+    const projectChildren: HeapNode[] = projectRows.map((p) => {
       const stats = projStatsMap.get(p.id);
       const kwChildren = kwByProject.get(p.id) || [];
 

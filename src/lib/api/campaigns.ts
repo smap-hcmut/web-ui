@@ -16,7 +16,7 @@ export interface Campaign {
   id: string;
   name: string;
   description: string;
-  status: CampaignStatus;
+  status?: CampaignStatus;
   is_favorite: boolean;
   start_date?: string;
   end_date?: string;

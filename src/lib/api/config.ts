@@ -36,7 +36,7 @@ export const API_CONFIG = {
 
   // Metabase (separate domain/IP)
   METABASE: {
-    URL: process.env.NEXT_PUBLIC_METABASE_URL || 'http://172.16.21.204:3000',
+    URL: process.env.NEXT_PUBLIC_METABASE_URL || 'https://smap-metabase.tantai.dev',
     SECRET: process.env.METABASE_SECRET_KEY || 'c6a62ff7eea13cfa4801c1bf2397d82ccc6f5c3c4e6f38fedd1aabc49ce81752',
   },
 
@@ -73,9 +73,15 @@ export const API_CONFIG = {
       crawl: '/ingest/api/v1/crawl',
       posts: '/ingest/api/v1/posts',
       post: (id: string) => `/ingest/api/v1/posts/${id}`,
+      datasources: '/ingest/api/v1/datasources',
+      datasource: (id: string) => `/ingest/api/v1/datasources/${id}`,
+      datasourceTargets: (id: string) => `/ingest/api/v1/datasources/${id}/targets`,
     },
     knowledge: {
-      chat: '/knowledge/api/v1/chat',
+      chat: '/knowledge/api/v1/knowledge/chat',
+      suggestions: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/suggestions`,
+      conversations: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/conversations`,
+      conversation: (conversationId: string) => `/knowledge/api/v1/knowledge/conversations/${conversationId}`,
       reports: '/knowledge/api/v1/reports',
       report: (id: string) => `/knowledge/api/v1/reports/${id}`,
       insights: '/knowledge/api/v1/insights',

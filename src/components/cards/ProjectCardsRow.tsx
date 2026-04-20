@@ -2,8 +2,10 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useScope } from '@/components/ScopeProvider';
-import { useProjectsByCampaign } from '@/lib/hooks';
-import type { Project, CrisisConfig } from '@/lib/types';
+import { useProjectsByCampaign, useCreateProject, useProjectStats } from '@/lib/hooks';
+import type { ProjectStat } from '@/lib/hooks';
+import type { Project, CrisisConfig, Platform } from '@/lib/types';
+import type { EntityType } from '@/lib/api/projects';
 import { PlatformIcon } from '@/components/icons/PlatformIcon';
 import {
   ChevronLeft,
@@ -88,24 +90,24 @@ function ConfigSummary({ config }: { config: CrisisConfig }) {
 }
 
 /* ─── Single flip card ─── */
-function ProjectFlipCard({
+export function ProjectFlipCard({
   project,
+  stat,
   isSelected,
   onSelect,
   onOpenConfig,
 }: {
   project: Project;
+  stat?: ProjectStat;
   isSelected: boolean;
   onSelect: () => void;
   onOpenConfig: () => void;
 }) {
   const [flipped, setFlipped] = useState(false);
 
-  const totalVolume = project.keywords.reduce((s, k) => s + k.volume, 0);
-  const avgSentiment = project.keywords.length
-    ? Math.round(project.keywords.reduce((s, k) => s + k.sentiment, 0) / project.keywords.length)
-    : 0;
-  const platforms = project.platforms ?? [...new Set(project.keywords.flatMap((k) => k.platforms))];
+  const mentions = stat?.mentions ?? 0;
+  const avgSentiment = stat?.avg_sentiment ?? 0;
+  const platforms = stat?.platforms ?? [];
   const status = project.status ?? 'active';
 
   const sentimentColor = avgSentiment >= 60 ? 'var(--success)' : avgSentiment >= 40 ? 'var(--warning)' : 'var(--error)';
@@ -148,12 +150,12 @@ function ProjectFlipCard({
             </div>
             <div className="flex items-center gap-1.5 mb-2">
               {platforms.map((p) => (
-                <span key={p} style={{ color: p === 'tiktok' ? '#000000' : p === 'facebook' ? '#1877f2' : '#ff0000' }}>
-                  <PlatformIcon platform={p} size={12} />
+                <span key={p} style={{ color: p === 'TIKTOK' ? '#000000' : p === 'FACEBOOK' ? '#1877f2' : '#ff0000' }}>
+                  <PlatformIcon platform={p.toLowerCase() as Platform} size={12} />
                 </span>
               ))}
               <span className="text-[9px] ml-1" style={{ color: 'var(--text-faint)' }}>
-                {project.keywords.length} keywords
+                {mentions} mentions
               </span>
             </div>
           </div>
@@ -161,9 +163,9 @@ function ProjectFlipCard({
           {/* Metrics */}
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-faint)' }}>Volume</p>
+              <p className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-faint)' }}>Mentions</p>
               <p className="text-[14px] font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                {totalVolume >= 1000 ? `${(totalVolume / 1000).toFixed(1)}k` : totalVolume}
+                {mentions >= 1000 ? `${(mentions / 1000).toFixed(1)}k` : mentions}
               </p>
             </div>
             <div className="text-right">
@@ -231,7 +233,150 @@ function ProjectFlipCard({
   );
 }
 
-/* ─── Add project card ─── */
+/* ─── Create Project Modal ─── */
+
+const ENTITY_TYPES: { value: EntityType; label: string }[] = [
+  { value: 'product', label: 'Product' },
+  { value: 'campaign', label: 'Campaign' },
+  { value: 'service', label: 'Service' },
+  { value: 'competitor', label: 'Competitor' },
+  { value: 'topic', label: 'Topic' },
+];
+
+export function CreateProjectModal({
+  onClose,
+  onSubmit,
+  isPending,
+}: {
+  onClose: () => void;
+  onSubmit: (data: { name: string; description?: string; brand?: string; entity_type: EntityType; entity_name: string }) => void;
+  isPending: boolean;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [brand, setBrand] = useState('');
+  const [entityType, setEntityType] = useState<EntityType>('product');
+  const [entityName, setEntityName] = useState('');
+
+  const canSubmit = name.trim() && entityName.trim() && !isPending;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    onSubmit({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      brand: brand.trim() || undefined,
+      entity_type: entityType,
+      entity_name: entityName.trim(),
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6 animate-[fadeIn_200ms_ease]"
+        style={{ background: 'var(--bg-surface-solid)', border: '1px solid var(--border)' }}
+      >
+        <h3 className="text-[15px] font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+          Create New Project
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Name *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. VinFast VF9 Monitoring"
+              className={modalInputClass}
+              style={modalInputStyle}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Entity Type *
+            </label>
+            <select
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value as EntityType)}
+              className={modalInputClass}
+              style={modalInputStyle}
+            >
+              {ENTITY_TYPES.map((et) => (
+                <option key={et.value} value={et.value}>{et.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Entity Name *
+            </label>
+            <input
+              type="text"
+              value={entityName}
+              onChange={(e) => setEntityName(e.target.value)}
+              placeholder="e.g. VinFast VF9"
+              className={modalInputClass}
+              style={modalInputStyle}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Brand
+            </label>
+            <input
+              type="text"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="e.g. VinFast"
+              className={modalInputClass}
+              style={modalInputStyle}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description..."
+              rows={2}
+              className={`${modalInputClass} resize-none`}
+              style={modalInputStyle}
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 rounded-xl text-[12px] font-medium transition-colors"
+              style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="flex-1 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors disabled:opacity-40"
+              style={{ background: 'var(--accent)' }}
+            >
+              {isPending ? 'Creating...' : 'Create Project'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}/* ─── Add project card ─── */
 function AddProjectCard({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -271,11 +416,23 @@ function AddProjectCard({ onClick }: { onClick: () => void }) {
 export function ProjectCardsRow() {
   const [collapsed, setCollapsed] = useState(false);
   const [configModalProject, setConfigModalProject] = useState<Project | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { activeCampaignId, projectIds, toggleProject } = useScope();
 
   // Fetch projects from API for the active campaign
   const { data: apiProjects } = useProjectsByCampaign(activeCampaignId ?? undefined);
+  const createProject = useCreateProject(activeCampaignId ?? '');
+
+  // Fetch per-project analytics (mentions, sentiment, platforms) from Metabase
+  const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
+  const statsMap = useMemo(() => {
+    const map = new Map<string, ProjectStat>();
+    for (const s of statsData?.stats ?? []) {
+      map.set(s.project_id, s);
+    }
+    return map;
+  }, [statsData]);
 
   // Map API projects to the local Project type (with empty keywords for now, since keywords come from analytics)
   const projects: Project[] = useMemo(() => {
@@ -351,12 +508,13 @@ export function ProjectCardsRow() {
               <ProjectFlipCard
                 key={proj.id}
                 project={proj}
+                stat={statsMap.get(proj.id)}
                 isSelected={projectIds.has(proj.id)}
                 onSelect={() => toggleProject(proj.id)}
                 onOpenConfig={() => setConfigModalProject(proj)}
               />
             ))}
-            <AddProjectCard onClick={() => { /* TODO: open create project modal */ }} />
+            <AddProjectCard onClick={() => setShowCreateModal(true)} />
           </div>
         )}
       </div>
@@ -366,6 +524,19 @@ export function ProjectCardsRow() {
         <ProjectConfigModal
           project={configModalProject}
           onClose={() => setConfigModalProject(null)}
+        />
+      )}
+
+      {/* ── Create Project Modal ── */}
+      {showCreateModal && (
+        <CreateProjectModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={(data) => {
+            createProject.mutate(data, {
+              onSuccess: () => setShowCreateModal(false),
+            });
+          }}
+          isPending={createProject.isPending}
         />
       )}
     </>
@@ -398,7 +569,7 @@ function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: b
 }
 
 /* ─── Project Configuration Modal (editable) ─── */
-function ProjectConfigModal({ project, onClose }: { project: Project; onClose: () => void }) {
+export function ProjectConfigModal({ project, onClose }: { project: Project; onClose: () => void }) {
   const config = project.crisis_config;
 
   // Editable state - initialize from config

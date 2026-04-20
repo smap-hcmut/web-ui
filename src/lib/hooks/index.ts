@@ -18,6 +18,11 @@ export {
   campaignKeys,
 } from './use-campaigns';
 export { useProjectsByCampaign, useCreateProject, projectKeys } from './use-projects';
+export { useProjectStats, projectStatsKeys } from './use-project-stats';
+export type { ProjectStat, ProjectStatsResponse } from './use-project-stats';
+
+// ─── Datasources & Targets (ingest-srv) ───────────────────────────────────────
+export { useCampaignTargets, datasourceKeys } from './use-datasources';
 
 // ─── Analytics (Direct PG via Next.js API routes) ─────────────────────────────
 export { useCampaignKPIs, kpiKeys } from './use-campaign-kpis';

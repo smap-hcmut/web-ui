@@ -1,6 +1,6 @@
 "use client";
 
-import { Radio, Search, Palette, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Radio, Palette, Settings, LogOut, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 import Link from "next/link";
@@ -8,7 +8,7 @@ import { useTheme, THEMES } from "./ThemeProvider";
 import { useNav, type TabId } from "./NavProvider";
 import { CampaignSwitcher } from "./CampaignSwitcher";
 
-const tabs: TabId[] = ["MAP", "Insights", "Stalker", "Reports"];
+const tabs: TabId[] = ["MAP", "Projects", "Insights", "Stalker", "Reports"];
 
 const brandMenuItems = [
   { icon: Settings, label: 'Settings', href: '/settings' },
@@ -152,14 +152,6 @@ export function TopNav() {
         </div>
 
         <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
-
-        {/* Search */}
-        <button
-          className="p-2 rounded-xl transition-all"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <Search className="w-3.5 h-3.5" />
-        </button>
 
         {/* Theme picker */}
         <div className="relative" ref={paletteRef}>

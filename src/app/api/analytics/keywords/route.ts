@@ -7,9 +7,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { getProjectIdsForCampaign, projectFilter } from '@/lib/db/queries';
+import {
+  queryNative,
+  getProjectIdsForCampaign,
+  projectFilter,
+} from '@/lib/metabase/client';
 
 interface KeywordItem {
   text: string;
@@ -35,15 +37,15 @@ export async function GET(request: NextRequest) {
     const pf = projectFilter(projectIds);
 
     // Unnest keywords array, count and avg sentiment per keyword
-    const kwRows = await db.execute<{
+    const kwRows = await queryNative<{
       keyword: string;
-      volume: string;
-      avg_sentiment: string;
-    }>(sql`
+      volume: number;
+      avg_sentiment: number;
+    }>(`
       SELECT
         kw AS keyword,
-        COUNT(*)::text AS volume,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0)::text AS avg_sentiment
+        COUNT(*) AS volume,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment
       FROM analysis.post_insight,
            LATERAL unnest(keywords) AS kw
       WHERE ${pf}
@@ -55,18 +57,18 @@ export async function GET(request: NextRequest) {
     `);
 
     // Change% — compare last 30 days vs previous 30 days per keyword
-    const changeRows = await db.execute<{
+    const changeRows = await queryNative<{
       keyword: string;
       period: string;
-      volume: string;
-    }>(sql`
+      volume: number;
+    }>(`
       SELECT
         kw AS keyword,
         CASE
           WHEN content_created_at >= NOW() - INTERVAL '30 days' THEN 'current'
           WHEN content_created_at >= NOW() - INTERVAL '60 days' THEN 'previous'
         END AS period,
-        COUNT(*)::text AS volume
+        COUNT(*) AS volume
       FROM analysis.post_insight,
            LATERAL unnest(keywords) AS kw
       WHERE ${pf}
@@ -76,14 +78,14 @@ export async function GET(request: NextRequest) {
     `);
 
     const changeMap = new Map<string, { current: number; previous: number }>();
-    for (const row of changeRows.rows) {
+    for (const row of changeRows) {
       if (!changeMap.has(row.keyword)) changeMap.set(row.keyword, { current: 0, previous: 0 });
       const entry = changeMap.get(row.keyword)!;
       if (row.period === 'current') entry.current = Number(row.volume);
       if (row.period === 'previous') entry.previous = Number(row.volume);
     }
 
-    const keywords: KeywordItem[] = kwRows.rows.map((r) => {
+    const keywords: KeywordItem[] = kwRows.map((r) => {
       const change = changeMap.get(r.keyword) || { current: 0, previous: 0 };
       const pctChange = change.previous > 0
         ? Number((((change.current - change.previous) / change.previous) * 100).toFixed(1))

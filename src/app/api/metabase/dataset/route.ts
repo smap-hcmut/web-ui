@@ -16,37 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { API_CONFIG } from '@/lib/api/config';
-
-let cachedSession: { id: string; expiresAt: number } | null = null;
-
-async function getSession(): Promise<string> {
-  if (cachedSession && Date.now() < cachedSession.expiresAt) {
-    return cachedSession.id;
-  }
-
-  const username = process.env.METABASE_USERNAME;
-  const password = process.env.METABASE_PASSWORD;
-
-  if (!username || !password) {
-    throw new Error('METABASE_USERNAME and METABASE_PASSWORD env vars required');
-  }
-
-  const res = await fetch(`${API_CONFIG.METABASE.URL}/api/session`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-
-  if (!res.ok) throw new Error(`Metabase auth failed: ${res.status}`);
-
-  const data = await res.json();
-  cachedSession = {
-    id: data.id,
-    expiresAt: Date.now() + 13 * 24 * 60 * 60 * 1000,
-  };
-  return data.id;
-}
+import { fetchMetabase } from '@/lib/metabase/client';
 
 interface AggregationInput {
   fn: string;
@@ -131,33 +101,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'sourceTableId is required' }, { status: 400 });
     }
 
-    const sessionId = await getSession();
     const mbQuery = buildMetabaseQuery(body);
 
-    const res = await fetch(`${API_CONFIG.METABASE.URL}/api/dataset`, {
+    const res = await fetchMetabase('/api/dataset', {
       method: 'POST',
-      headers: {
-        'X-Metabase-Session': sessionId,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(mbQuery),
     });
-
-    if (res.status === 401) {
-      cachedSession = null;
-      const retry = await getSession();
-      const res2 = await fetch(`${API_CONFIG.METABASE.URL}/api/dataset`, {
-        method: 'POST',
-        headers: {
-          'X-Metabase-Session': retry,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(mbQuery),
-      });
-      if (!res2.ok) throw new Error(`Metabase dataset failed: ${res2.status}`);
-      const data = await res2.json();
-      return NextResponse.json(transformDatasetResponse(data));
-    }
 
     if (!res.ok) {
       const text = await res.text();

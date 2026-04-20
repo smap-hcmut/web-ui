@@ -6,31 +6,24 @@ import {
   ArrowLeft,
   Settings,
   FolderOpen,
-  Hash,
   Target,
   Users,
-  CreditCard,
   Plus,
-  X,
   Trash2,
   Edit3,
-  Download,
-  ExternalLink,
   Save,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useCampaign } from '@/lib/hooks';
-import { useProjectsByCampaign } from '@/lib/hooks';
-import type { Platform } from '@/lib/types';
+import { useCampaign, useProjectsByCampaign } from '@/lib/hooks';
+import { useCampaignTargets } from '@/lib/hooks/use-datasources';
+import type { SourceType } from '@/lib/api/datasources';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
-  { id: 'keywords', label: 'Keywords', icon: Hash },
   { id: 'targets', label: 'Targets', icon: Target },
   { id: 'team', label: 'Team', icon: Users },
-  { id: 'billing', label: 'Billing', icon: CreditCard },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -50,24 +43,13 @@ const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>)
   e.currentTarget.style.borderColor = 'var(--input-border)';
 };
 
-const platformLabel: Record<Platform, string> = {
-  tiktok: 'TikTok',
-  facebook: 'Facebook',
-  youtube: 'YouTube',
+const sourceTypeLabel: Record<SourceType, string> = {
+  TIKTOK: 'TikTok',
+  FACEBOOK: 'Facebook',
+  YOUTUBE: 'YouTube',
 };
 
-/* ── Mock data for tabs ── */
-const mockTargets = [
-  { id: 't1', type: 'page' as const, platform: 'facebook' as Platform, url: 'facebook.com/VinFastGlobal', status: 'active' as const },
-  { id: 't2', type: 'page' as const, platform: 'tiktok' as Platform, url: 'tiktok.com/@vinfast', status: 'active' as const },
-  { id: 't3', type: 'post' as const, platform: 'youtube' as Platform, url: 'youtube.com/watch?v=abc123', status: 'paused' as const },
-];
 
-const mockTeam = [
-  { id: 'u1', name: 'Nguyen Tan Tai', email: 'tai@smap.io', role: 'admin' as const, avatar: 'NT' },
-  { id: 'u2', name: 'Le Minh Khoa', email: 'khoa@smap.io', role: 'editor' as const, avatar: 'LK' },
-  { id: 'u3', name: 'Tran Anh', email: 'anh@agency.com', role: 'viewer' as const, avatar: 'TA' },
-];
 
 export default function CampaignSettingsPage() {
   return (
@@ -87,13 +69,16 @@ function CampaignSettingsContent() {
   const { data: camp } = useCampaign(campId);
   const { data: projects } = useProjectsByCampaign(campId);
 
+  // Fetch all targets across all projects in this campaign
+  const projectIds = projects?.map((p) => p.id);
+  const { data: targets, isLoading: targetsLoading } = useCampaignTargets(projectIds);
+
   // Overview form state
   const [campName, setCampName] = useState('');
   const [campDesc, setCampDesc] = useState('');
 
   // Sync form state when campaign data loads
   const campNameResolved = campName || camp?.name || '';
-  const campStatus = camp?.status?.toLowerCase() as 'active' | 'paused' | 'archived' | undefined;
 
   return (
     <div className="max-w-[1600px] mx-auto px-6 pt-24 pb-20">
@@ -206,12 +191,6 @@ function CampaignSettingsContent() {
                   <input type="date" defaultValue="2026-06-30" className={inputClass} style={inputStyle} onFocus={handleFocus} onBlur={handleBlur} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>Status</label>
-                <Badge variant={campStatus === 'active' ? 'success' : campStatus === 'paused' ? 'warning' : 'neutral'} dot={campStatus === 'active'}>
-                  {campStatus || 'unknown'}
-                </Badge>
-              </div>
               <button
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white"
                 style={{ background: 'var(--accent)' }}
@@ -286,44 +265,12 @@ function CampaignSettingsContent() {
             </div>
           )}
 
-          {/* ── Keywords ── */}
-          {tab === 'keywords' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  All Keywords
-                </h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium transition-colors"
-                    style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Import CSV
-                  </button>
-                  <button
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
-                    style={{ background: 'var(--accent)' }}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add Keyword
-                  </button>
-                </div>
-              </div>
-
-              <EmptyState
-                title="No keywords configured"
-                description="Keywords are now tracked via analytics. Use the main dashboard to view trending keywords."
-              />
-            </div>
-          )}
-
           {/* ── Targets ── */}
           {tab === 'targets' && (
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Monitored Targets
+                  Monitored Targets {targets && targets.length > 0 ? `(${targets.length})` : ''}
                 </h2>
                 <button
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
@@ -334,9 +281,13 @@ function CampaignSettingsContent() {
                 </button>
               </div>
 
-              {mockTargets.length > 0 ? (
+              {targetsLoading ? (
+                <p className="text-[13px] py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+                  Loading targets...
+                </p>
+              ) : targets && targets.length > 0 ? (
                 <div className="space-y-2">
-                  {mockTargets.map((t) => (
+                  {targets.map((t) => (
                     <div
                       key={t.id}
                       className="flex items-center justify-between px-4 py-3 rounded-xl"
@@ -344,19 +295,18 @@ function CampaignSettingsContent() {
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase" style={{ background: 'var(--bg-surface)', color: 'var(--text-faint)' }}>
-                          {t.type}
+                          {t.target_type}
                         </span>
                         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-faint)' }}>
-                          {platformLabel[t.platform]}
+                          {sourceTypeLabel[t.source_type] ?? t.source_type}
                         </span>
                         <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>
-                          {t.url}
+                          {t.label || t.values.join(', ')}
                         </span>
-                        <ExternalLink className="w-3 h-3" style={{ color: 'var(--text-faint)' }} />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={t.status === 'active' ? 'success' : 'warning'} dot size="sm">
-                          {t.status}
+                        <Badge variant={t.is_active ? 'success' : 'warning'} dot size="sm">
+                          {t.is_active ? 'active' : 'inactive'}
                         </Badge>
                         <button className="p-1" style={{ color: 'var(--danger)' }}>
                           <Trash2 className="w-3.5 h-3.5" />
@@ -376,88 +326,16 @@ function CampaignSettingsContent() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Team Members ({mockTeam.length})
+                  Team Members
                 </h2>
-                <button
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
-                  style={{ background: 'var(--accent)' }}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Invite Member
-                </button>
               </div>
-              <div className="space-y-2">
-                {mockTeam.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between px-4 py-3 rounded-xl"
-                    style={{ background: 'var(--bg-hover)' }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
-                        style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
-                      >
-                        {m.avatar}
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>{m.name}</p>
-                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{m.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={m.role === 'admin' ? 'accent' : 'neutral'} size="sm">
-                        {m.role}
-                      </Badge>
-                      {m.role !== 'admin' && (
-                        <button className="p-1" style={{ color: 'var(--danger)' }}>
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <EmptyState
+                title="Team management coming soon"
+                description="Team member roles and permissions for campaigns are not yet available. This feature is planned for a future release."
+              />
             </div>
           )}
 
-          {/* ── Billing ── */}
-          {tab === 'billing' && (
-            <div>
-              <h2 className="text-[15px] font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-                Campaign Usage
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-                {[
-                  { label: 'API Calls', value: '12,450', limit: '50,000' },
-                  { label: 'Data Volume', value: '2.3 GB', limit: '10 GB' },
-                  { label: 'Keywords Tracked', value: '17', limit: '100' },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-xl p-4"
-                    style={{ background: 'var(--bg-hover)' }}
-                  >
-                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-faint)' }}>
-                      {stat.label}
-                    </p>
-                    <p className="text-[16px] font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
-                      {stat.value}
-                    </p>
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--text-faint)' }}>
-                      of {stat.limit}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                Billing is managed at the workspace level.{' '}
-                <button className="font-semibold" style={{ color: 'var(--accent)' }}>
-                  Go to Workspace Billing →
-                </button>
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

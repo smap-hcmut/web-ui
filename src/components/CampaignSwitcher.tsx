@@ -6,16 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCampaigns } from '@/lib/hooks/use-campaigns';
 import type { Campaign } from '@/lib/api/campaigns';
 
-// ─── Status indicator ─────────────────────────────────────────────────────────
-
-function statusDotClass(status: Campaign['status']): string {
-  switch (status) {
-    case 'ACTIVE': return 'bg-emerald-500';
-    case 'PAUSED': return 'bg-amber-500';
-    default:       return 'bg-gray-400';
-  }
-}
-
 // ─── Inner component (uses useSearchParams — must be inside Suspense) ─────────
 
 function CampaignSwitcherInner() {
@@ -28,6 +18,13 @@ function CampaignSwitcherInner() {
   const { data, isLoading } = useCampaigns();
   const campaigns = data?.campaigns ?? [];
   const active = campaigns.find((c) => c.id === currentCampId);
+
+  // Auto-select first campaign when none is selected
+  useEffect(() => {
+    if (!isLoading && campaigns.length > 0 && !currentCampId) {
+      router.replace(`/smap?camp_id=${campaigns[0].id}`);
+    }
+  }, [isLoading, campaigns, currentCampId, router]);
 
   // Close on outside click
   useEffect(() => {
@@ -145,12 +142,6 @@ function CampaignSwitcherInner() {
                   >
                     {c.name}
                   </p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(c.status)}`} />
-                    <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>
-                      {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
-                    </span>
-                  </div>
                 </div>
                 {/* Active check */}
                 {active?.id === c.id && (

@@ -5,7 +5,7 @@ import { Search, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import type { HeapNode, PhysicsState, SatelliteData, EntityType, PlatformType } from './types';
 import { useHeapData } from '@/lib/hooks';
-import { enrichMockData } from './enrich';
+import { enrichHeapData } from './enrich';
 import BubbleSVGOverlay from './BubbleSVGOverlay';
 import AutoSpotlightTooltip from './AutoSpotlightTooltip';
 import PostTooltip from './tooltips/PostTooltip';
@@ -202,7 +202,7 @@ export default function HeapSpace() {
   /* ─── real data from API ─── */
   const { data: heapResponse } = useHeapData(activeCampaignId ?? undefined);
   const heapData = useMemo(
-    () => enrichMockData(heapResponse?.tree ? [heapResponse.tree as unknown as HeapNode] : []),
+    () => enrichHeapData(heapResponse?.tree ? [heapResponse.tree as unknown as HeapNode] : []),
     [heapResponse],
   );
 

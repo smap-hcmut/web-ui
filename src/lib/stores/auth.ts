@@ -153,8 +153,10 @@ if (typeof window !== 'undefined') {
   window.addEventListener('auth:unauthorized', () => {
     const { reset } = useAuthStore.getState();
     reset();
-    // Optionally redirect to login
-    if (!window.location.pathname.startsWith('/auth')) {
+    // Only redirect to login from protected routes, not from public pages
+    const path = window.location.pathname;
+    const isPublic = path === '/' || path.startsWith('/auth');
+    if (!isPublic) {
       window.location.href = '/auth/login';
     }
   });

@@ -1,7 +1,7 @@
 /**
  * Enrich a HeapNode (post type) into a full PostData
  * with platform-specific fields — all deterministically
- * derived so no mock data edits needed.
+ * derived from the node's properties.
  */
 
 import type { HeapNode, PlatformType } from '../types';

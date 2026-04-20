@@ -108,9 +108,9 @@ function enrichNode(node: HeapNode): HeapNode {
 }
 
 /**
- * Enrich the entire mock data tree.
+ * Enrich the entire heap data tree.
  * Call once at import time — returns new array, original untouched.
  */
-export function enrichMockData(data: HeapNode[]): HeapNode[] {
+export function enrichHeapData(data: HeapNode[]): HeapNode[] {
   return data.map(enrichNode);
 }

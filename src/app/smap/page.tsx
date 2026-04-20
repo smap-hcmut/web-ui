@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
-import { ProjectCardsRow } from "@/components/cards/ProjectCardsRow";
+import { ProjectFlipCard, CreateProjectModal, ProjectConfigModal } from "@/components/cards/ProjectCardsRow";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
@@ -32,7 +32,11 @@ import {
   useSentimentData,
   useTrendingKeywords,
   useRecentActivity,
+  useProjectsByCampaign,
+  useCreateProject,
+  useProjectStats,
   type PostItem,
+  type ProjectStat,
 } from "@/lib/hooks";
 import {
   Activity,
@@ -243,9 +247,6 @@ function MapTab() {
 
   return (
     <>
-      {/* Project Cards Row */}
-      <ProjectCardsRow />
-
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpiMetrics.length > 0 ? kpiMetrics.map((m) => (
@@ -342,6 +343,104 @@ function MapTab() {
         </div>
       </div>
     </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   TAB: Projects
+   ════════════════════════════════════════════ */
+function ProjectsTab() {
+  const { activeCampaignId, projectIds, toggleProject } = useScope();
+  const [configModalProject, setConfigModalProject] = useState<import('@/lib/types').Project | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const { data: apiProjects, isLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
+  const createProject = useCreateProject(activeCampaignId ?? '');
+  const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
+
+  const statsMap = useMemo(() => {
+    const map = new Map<string, ProjectStat>();
+    for (const s of statsData?.stats ?? []) map.set(s.project_id, s);
+    return map;
+  }, [statsData]);
+
+  const projects = useMemo(
+    () =>
+      (apiProjects ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        keywords: [] as import('@/lib/types').Keyword[],
+        platforms: undefined,
+        status: p.status === 'ACTIVE' ? ('active' as const) : ('paused' as const),
+        crisis_config: undefined,
+      })),
+    [apiProjects],
+  );
+
+  if (isLoading) return <ListSkeleton count={6} />;
+
+  return (
+    <div className="content-reveal">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Projects
+          </h2>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {projects.length} project{projects.length !== 1 ? 's' : ''} in this campaign
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors"
+          style={{ background: 'var(--accent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          New Project
+        </button>
+      </div>
+
+      {/* Grid */}
+      {projects.length === 0 ? (
+        <EmptyState
+          title="No projects yet"
+          description="Create your first project to start tracking mentions and analytics"
+        />
+      ) : (
+        <div className="flex flex-wrap gap-3">
+          {projects.map((proj) => (
+            <ProjectFlipCard
+              key={proj.id}
+              project={proj}
+              stat={statsMap.get(proj.id)}
+              isSelected={projectIds.has(proj.id)}
+              onSelect={() => toggleProject(proj.id)}
+              onOpenConfig={() => setConfigModalProject(proj)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
+      {configModalProject && (
+        <ProjectConfigModal
+          project={configModalProject}
+          onClose={() => setConfigModalProject(null)}
+        />
+      )}
+      {showCreateModal && (
+        <CreateProjectModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={(data) => {
+            createProject.mutate(data, { onSuccess: () => setShowCreateModal(false) });
+          }}
+          isPending={createProject.isPending}
+        />
+      )}
+    </div>
   );
 }
 
@@ -569,7 +668,13 @@ function InsightsTab() {
 
         <Card className="col-span-12 lg:col-span-4">
           <SectionTitle sub="Size = volume, opacity = sentiment">Keyword Cloud</SectionTitle>
-          <WordCloud words={wordCloudItems} maxWords={15} height={170} />
+          {wordCloudItems.length > 0 ? (
+            <WordCloud words={wordCloudItems} maxWords={15} height={170} />
+          ) : (
+            <div className="flex items-center justify-center" style={{ height: 170 }}>
+              <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
+            </div>
+          )}
         </Card>
 
         <Card className="col-span-12 lg:col-span-4">
@@ -599,10 +704,14 @@ function InsightsTab() {
 
         <Card className="col-span-12 lg:col-span-8">
           <SectionTitle sub="All keywords ranked by volume">Trending Topics</SectionTitle>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-            <RankList items={firstHalf} maxItems={10} />
-            <RankList items={secondHalf} maxItems={10} startRank={firstHalf.length + 1} />
-          </div>
+          {rankedKeywords.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+              <RankList items={firstHalf} maxItems={10} />
+              <RankList items={secondHalf} maxItems={10} startRank={firstHalf.length + 1} />
+            </div>
+          ) : (
+            <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
+          )}
         </Card>
       </div>
 
@@ -1687,6 +1796,7 @@ export default function Dashboard() {
       </div>
 
       {activeTab === "MAP" && <MapTab />}
+      {activeTab === "Projects" && <ProjectsTab />}
       {activeTab === "Insights" && <InsightsTab />}
       {activeTab === "Stalker" && <StalkerTab />}
       {activeTab === "Reports" && <ReportsTab />}

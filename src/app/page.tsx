@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Radio, ArrowRight, BarChart3, Globe, Zap, Shield } from 'lucide-react';
 import Link from 'next/link';
+import { useAuthStore } from '@/lib/stores/auth';
 
 /* ─── Seeded random for deterministic bubble positions ─── */
 function seeded(seed: number) {
@@ -54,7 +56,15 @@ const particles = Array.from({ length: 18 }, (_, i) => ({
 
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
   useEffect(() => setMounted(true), []);
+
+  // If already logged in, skip landing and go straight to app
+  useEffect(() => {
+    if (isAuthenticated) router.replace('/smap');
+  }, [isAuthenticated, router]);
 
   return (
     <div
@@ -170,21 +180,6 @@ export default function LandingPage() {
           }}
           className="text-center"
         >
-          <div
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[11px] font-semibold tracking-wide uppercase mb-6"
-            style={{
-              background: 'var(--accent-subtle)',
-              color: 'var(--accent)',
-              border: '1px solid rgba(99,102,241,0.2)',
-            }}
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-            </span>
-            Social Media Analysis Platform
-          </div>
-
           <h1
             className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-[1.1] tracking-tight mb-4"
             style={{ color: 'var(--text-primary)' }}
@@ -205,7 +200,7 @@ export default function LandingPage() {
           {/* CTA */}
           <div className="flex items-center justify-center gap-3">
             <Link
-              href="/auth/signup"
+              href="/auth/login"
               className="group flex items-center gap-2 px-7 py-3 rounded-xl text-[14px] font-bold transition-all duration-300"
               style={{
                 background: 'var(--accent)',
@@ -221,27 +216,8 @@ export default function LandingPage() {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              Get Started
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-            <Link
-              href="/smap"
-              className="px-7 py-3 rounded-xl text-[14px] font-semibold transition-all duration-300"
-              style={{
-                background: 'var(--bg-elevated)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--text-muted)';
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.color = 'var(--text-secondary)';
-              }}
-            >
               Live Demo
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
         </div>

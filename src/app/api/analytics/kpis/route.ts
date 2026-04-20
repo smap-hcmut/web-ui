@@ -12,9 +12,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { getProjectIdsForCampaign, projectFilter, percentChange } from '@/lib/db/queries';
+import {
+  queryNative,
+  getProjectIdsForCampaign,
+  projectFilter,
+  fmtNumber,
+  percentChange,
+} from '@/lib/metabase/client';
 
 interface KPIMetric {
   label: string;
@@ -34,12 +38,6 @@ interface KPIsResponse {
     comments: number;
     shares: number;
   };
-}
-
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toFixed(0);
 }
 
 export async function GET(request: NextRequest) {
@@ -66,86 +64,76 @@ export async function GET(request: NextRequest) {
     const pf = projectFilter(projectIds);
 
     // Current period totals
-    const [totals] = await db.execute<{
-      total_mentions: string;
-      avg_sentiment: string;
-      sum_engagement: string;
-      sum_reach: string;
-      sum_views: string;
-      sum_likes: string;
-      sum_comments: string;
-      sum_shares: string;
-    }>(sql`
+    const totals = await queryNative<{
+      total_mentions: number;
+      avg_sentiment: number;
+      sum_engagement: number;
+      sum_reach: number;
+      sum_views: number;
+      sum_likes: number;
+      sum_comments: number;
+      sum_shares: number;
+    }>(`
       SELECT
-        COUNT(*)::text AS total_mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0)::text AS avg_sentiment,
-        COALESCE(SUM(engagement_score), 0)::text AS sum_engagement,
-        COALESCE(SUM(reach_estimate), 0)::text AS sum_reach,
-        COALESCE(SUM((uap_metadata->'engagement'->>'views')::bigint), 0)::text AS sum_views,
-        COALESCE(SUM((uap_metadata->'engagement'->>'likes')::bigint), 0)::text AS sum_likes,
-        COALESCE(SUM((uap_metadata->'engagement'->>'comments')::bigint), 0)::text AS sum_comments,
-        COALESCE(SUM((uap_metadata->'engagement'->>'shares')::bigint), 0)::text AS sum_shares
+        COUNT(*) AS total_mentions,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+        COALESCE(SUM(engagement_score), 0) AS sum_engagement,
+        COALESCE(SUM(reach_estimate), 0) AS sum_reach,
+        COALESCE(SUM((uap_metadata->'engagement'->>'views')::bigint), 0) AS sum_views,
+        COALESCE(SUM((uap_metadata->'engagement'->>'likes')::bigint), 0) AS sum_likes,
+        COALESCE(SUM((uap_metadata->'engagement'->>'comments')::bigint), 0) AS sum_comments,
+        COALESCE(SUM((uap_metadata->'engagement'->>'shares')::bigint), 0) AS sum_shares
       FROM analysis.post_insight
       WHERE ${pf}
-    `).then((r) => [r.rows[0]]);
+    `);
+
+    const t = totals[0];
 
     // Previous 30 days vs current 30 days for change%
-    const periods = await db.execute<{
+    const periods = await queryNative<{
       period: string;
-      mentions: string;
-      sentiment: string;
-      engagement: string;
-      reach: string;
-    }>(sql`
+      mentions: number;
+      sentiment: number;
+      engagement: number;
+      reach: number;
+    }>(`
       SELECT
         CASE
           WHEN content_created_at >= NOW() - INTERVAL '30 days' THEN 'current'
           WHEN content_created_at >= NOW() - INTERVAL '60 days' THEN 'previous'
         END AS period,
-        COUNT(*)::text AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0)::text AS sentiment,
-        COALESCE(SUM(engagement_score), 0)::text AS engagement,
-        COALESCE(SUM(reach_estimate), 0)::text AS reach
+        COUNT(*) AS mentions,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS sentiment,
+        COALESCE(SUM(engagement_score), 0) AS engagement,
+        COALESCE(SUM(reach_estimate), 0) AS reach
       FROM analysis.post_insight
       WHERE ${pf}
         AND content_created_at >= NOW() - INTERVAL '60 days'
       GROUP BY 1
     `);
 
-    const current = periods.rows.find((r) => r.period === 'current');
-    const previous = periods.rows.find((r) => r.period === 'previous');
+    const current = periods.find((r) => r.period === 'current');
+    const previous = periods.find((r) => r.period === 'previous');
 
-    const mentionsChange = percentChange(
-      Number(current?.mentions || 0),
-      Number(previous?.mentions || 0),
-    );
-    const sentimentChange = percentChange(
-      Number(current?.sentiment || 0),
-      Number(previous?.sentiment || 0),
-    );
-    const engagementChange = percentChange(
-      Number(current?.engagement || 0),
-      Number(previous?.engagement || 0),
-    );
-    const reachChange = percentChange(
-      Number(current?.reach || 0),
-      Number(previous?.reach || 0),
-    );
+    const mentionsChange = percentChange(Number(current?.mentions || 0), Number(previous?.mentions || 0));
+    const sentimentChange = percentChange(Number(current?.sentiment || 0), Number(previous?.sentiment || 0));
+    const engagementChange = percentChange(Number(current?.engagement || 0), Number(previous?.engagement || 0));
+    const reachChange = percentChange(Number(current?.reach || 0), Number(previous?.reach || 0));
 
     // 12-point sparkline (monthly, last 12 months)
-    const sparkRows = await db.execute<{
+    const sparkRows = await queryNative<{
       month: string;
-      mentions: string;
-      sentiment: string;
-      engagement: string;
-      reach: string;
-    }>(sql`
+      mentions: number;
+      sentiment: number;
+      engagement: number;
+      reach: number;
+    }>(`
       SELECT
         TO_CHAR(date_trunc('month', content_created_at), 'YYYY-MM') AS month,
-        COUNT(*)::text AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0)::text AS sentiment,
-        COALESCE(SUM(engagement_score), 0)::text AS engagement,
-        COALESCE(SUM(reach_estimate), 0)::text AS reach
+        COUNT(*) AS mentions,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS sentiment,
+        COALESCE(SUM(engagement_score), 0) AS engagement,
+        COALESCE(SUM(reach_estimate), 0) AS reach
       FROM analysis.post_insight
       WHERE ${pf}
         AND content_created_at >= NOW() - INTERVAL '12 months'
@@ -153,24 +141,19 @@ export async function GET(request: NextRequest) {
       ORDER BY 1
     `);
 
-    const mentionsSparkline = sparkRows.rows.map((r) => Number(r.mentions));
-    const sentimentSparkline = sparkRows.rows.map((r) => Number(r.sentiment));
-    const engagementSparkline = sparkRows.rows.map((r) => Number(r.engagement));
-    const reachSparkline = sparkRows.rows.map((r) => Number(r.reach));
-
-    const totalMentions = Number(totals.total_mentions);
-    const avgSentiment = Number(Number(totals.avg_sentiment).toFixed(1));
-    const sumEngagement = Number(totals.sum_engagement);
-    const sumReach = Number(totals.sum_reach);
+    const totalMentions = Number(t.total_mentions);
+    const avgSentiment = Number(Number(t.avg_sentiment).toFixed(1));
+    const sumEngagement = Number(t.sum_engagement);
+    const sumReach = Number(t.sum_reach);
 
     const response: KPIsResponse = {
       metrics: [
         {
           label: 'Total Mentions',
           value: totalMentions,
-          formatted: fmt(totalMentions),
+          formatted: fmtNumber(totalMentions),
           change: mentionsChange,
-          sparkline: mentionsSparkline,
+          sparkline: sparkRows.map((r) => Number(r.mentions)),
           icon: 'activity',
         },
         {
@@ -178,32 +161,32 @@ export async function GET(request: NextRequest) {
           value: avgSentiment,
           formatted: `${avgSentiment}%`,
           change: sentimentChange,
-          sparkline: sentimentSparkline,
+          sparkline: sparkRows.map((r) => Number(r.sentiment)),
           icon: 'smile',
           suffix: '%',
         },
         {
           label: 'Engagement',
           value: sumEngagement,
-          formatted: fmt(sumEngagement),
+          formatted: fmtNumber(sumEngagement),
           change: engagementChange,
-          sparkline: engagementSparkline,
+          sparkline: sparkRows.map((r) => Number(r.engagement)),
           icon: 'heart',
         },
         {
           label: 'Audience Reach',
           value: sumReach,
-          formatted: fmt(sumReach),
+          formatted: fmtNumber(sumReach),
           change: reachChange,
-          sparkline: reachSparkline,
+          sparkline: sparkRows.map((r) => Number(r.reach)),
           icon: 'users',
         },
       ],
       engagement: {
-        views: Number(totals.sum_views),
-        likes: Number(totals.sum_likes),
-        comments: Number(totals.sum_comments),
-        shares: Number(totals.sum_shares),
+        views: Number(t.sum_views),
+        likes: Number(t.sum_likes),
+        comments: Number(t.sum_comments),
+        shares: Number(t.sum_shares),
       },
     };
 

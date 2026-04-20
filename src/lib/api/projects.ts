@@ -48,12 +48,33 @@ export interface UpdateProjectInput {
   domain_type_code?: string;
 }
 
+// ─── Paginated Response (from Go backend) ────────────────────────────────────
+
+interface PaginatedProjectsResponse {
+  projects: Project[];
+  paginator?: {
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  };
+}
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export const projectApi = {
   /** List projects under a campaign */
-  listByCampaign: (campaignId: string): Promise<Project[]> =>
-    apiClient.get<Project[]>(API_CONFIG.ENDPOINTS.project.campaignProjects(campaignId)),
+  listByCampaign: async (campaignId: string): Promise<Project[]> => {
+    // The API returns { projects: [...], paginator: {...} }
+    // handleResponse won't unwrap it (2 keys), so we extract manually
+    const resp = await apiClient.get<PaginatedProjectsResponse | Project[]>(
+      API_CONFIG.ENDPOINTS.project.campaignProjects(campaignId),
+    );
+    // If already an array (unlikely but defensive), return as-is
+    if (Array.isArray(resp)) return resp;
+    // Unwrap the paginated response
+    return resp.projects ?? [];
+  },
 
   /** Get a single project */
   get: (id: string): Promise<Project> =>

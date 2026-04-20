@@ -1,0 +1,29 @@
+.git
+node_modules
+.next
+dist-electron
+electron
+release
+output
+scripts
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Dev/editor
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+README.md
+*.md
+db.sql
+message.txt
