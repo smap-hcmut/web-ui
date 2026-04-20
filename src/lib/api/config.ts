@@ -27,11 +27,12 @@ export const API_CONFIG = {
   // These match the Traefik ingress routing
   SERVICES: {
     identity: '/identity',
-    project: '/project', 
+    project: '/project',
     ingest: '/ingest',
     knowledge: '/knowledge',
     notification: '/notification',
     scraper: '/scraper',
+    reports: '/reports',
   },
 
   // Metabase (separate domain/IP)
@@ -96,6 +97,20 @@ export const API_CONFIG = {
     scraper: {
       tasks: '/scraper/api/v1/tasks',
       task: (id: string) => `/scraper/api/v1/tasks/${id}`,
+    },
+    // NOTE: reports-srv is not implemented yet. FE calls these paths; they are
+    // served by local Next.js mock handlers under src/app/api/proxy/reports/...
+    // When backend lands, delete those mock routes and the catch-all proxy
+    // forwards identically-shaped requests.
+    reports: {
+      list: '/reports/api/v1',
+      competitor: '/reports/api/v1/competitor',
+      report: (id: string) => `/reports/api/v1/${id}`,
+      process: (id: string) => `/reports/api/v1/${id}/process`,
+      posts: (id: string) => `/reports/api/v1/${id}/posts`,
+      cancel: (id: string) => `/reports/api/v1/${id}/cancel`,
+      retry: (id: string) => `/reports/api/v1/${id}/retry`,
+      postComments: (postId: string) => `/reports/api/v1/posts/${postId}/comments`,
     },
   },
 } as const;

@@ -121,6 +121,8 @@ export interface StalkerTarget {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
+export type ReportStatus = 'ready' | 'generating' | 'failed' | 'cancelled';
+
 export interface ReportItem {
   id: string;
   title: string;
@@ -129,8 +131,86 @@ export interface ReportItem {
   generatedAt: string;
   pages: number;
   format: 'PDF' | 'CSV';
-  status: 'ready' | 'generating' | 'failed';
+  status: ReportStatus;
   sections: string[];
+
+  // Competitor-specific
+  campaignId?: string;
+  competitorUrls?: string[];
+  platforms?: Platform[];
+  maxPostsPerCompetitor?: number;
+  process?: CrawlerProcess;      // present while generating / after failure / cancelled
+  totals?: { posts: number; comments: number };
+  errorMessage?: string;
+}
+
+export type CrawlerStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface CrawlerCompetitorProgress {
+  url: string;
+  platform: Platform;
+  crawled: number;
+  target: number;
+  status: CrawlerStatus;
+}
+
+export interface CrawlerProcess {
+  processId: string;
+  status: CrawlerStatus;
+  startedAt: string;
+  finishedAt?: string;
+  progress: {
+    crawled: number;
+    target: number;
+    perCompetitor: CrawlerCompetitorProgress[];
+  };
+  errorMessage?: string;
+}
+
+export interface ReportPostReactions {
+  like?: number;
+  love?: number;
+  haha?: number;
+  wow?: number;
+  sad?: number;
+  angry?: number;
+}
+
+export interface ReportPostSentimentBreakdown {
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+export interface ReportPost {
+  id: string;
+  reportId: string;
+  competitorUrl: string;
+  platform: Platform;
+  author: string;
+  authorAvatar?: string;
+  content: string;
+  postedAt: string;
+  url: string;
+  engagement: { likes: number; comments: number; shares: number; views: number };
+  sentiment: 'positive' | 'negative' | 'neutral';
+  commentCount: number;
+
+  // Optional analytics (render only if BE returns them)
+  reactions?: ReportPostReactions;
+  sentimentBreakdown?: ReportPostSentimentBreakdown;
+  topKeywords?: string[];
+}
+
+export interface ReportComment extends PostComment {
+  postId: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 // ─── Campaign assistant ───────────────────────────────────────────────────────

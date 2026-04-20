@@ -4,14 +4,22 @@ import { Suspense } from "react";
 import { TopNav } from "@/components/TopNav";
 import { LiveTicker } from "@/components/LiveTicker";
 import { CampaignAssistant } from "@/components/CampaignAssistant";
+import { NotificationToasts } from "@/components/NotificationToasts";
+import { NotificationBanner } from "@/components/NotificationBanner";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NavProvider } from "@/components/NavProvider";
 import { ScopeProvider, useScope } from "@/components/ScopeProvider";
+import { AssistantProvider, useAssistant } from "@/components/AssistantProvider";
 import { useRecentActivity } from "@/lib/hooks";
 import type { ActivityItem } from "@/lib/types";
 
+const DOCK_WIDTH = 'clamp(420px, 33vw, 600px)';
+
 function SmapLayoutInner({ children }: { children: React.ReactNode }) {
   const { activeCampaignId } = useScope();
+  const { open: assistantOpen, mode: assistantMode } = useAssistant();
+  const pushContent = assistantOpen && assistantMode === 'docked';
+  const pushOffset = pushContent ? DOCK_WIDTH : undefined;
   const { data } = useRecentActivity({ campaignId: activeCampaignId ?? undefined, limit: 20 });
 
   // Map PostItem[] → ActivityItem[] for LiveTicker
@@ -26,7 +34,13 @@ function SmapLayoutInner({ children }: { children: React.ReactNode }) {
   }));
 
   return (
-    <div className="min-h-screen bg-grid relative">
+    <div
+      className="min-h-screen bg-grid relative transition-[padding] duration-300 ease-out"
+      style={{
+        paddingRight: pushOffset,
+        ['--assistant-push' as string]: pushOffset ?? '0px',
+      } as React.CSSProperties}
+    >
       {/* Ambient gradient orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div
@@ -52,6 +66,9 @@ function SmapLayoutInner({ children }: { children: React.ReactNode }) {
         />
       </div>
 
+      {/* Critical banner */}
+      <NotificationBanner rightOffset={pushOffset} />
+
       {/* Navigation */}
       <TopNav />
 
@@ -61,8 +78,13 @@ function SmapLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Campaign AI Assistant */}
       <CampaignAssistant />
 
+      {/* Toast notifications */}
+      <NotificationToasts
+        rightOffset={pushContent ? `calc(${DOCK_WIDTH} + 1.5rem)` : undefined}
+      />
+
       {/* Live ticker */}
-      <LiveTicker activities={activities} />
+      <LiveTicker activities={activities} rightOffset={pushOffset} />
     </div>
   );
 }
@@ -73,7 +95,9 @@ export default function SmapLayout({ children }: { children: React.ReactNode }) 
       <NavProvider>
         <Suspense fallback={null}>
         <ScopeProvider>
-          <SmapLayoutInner>{children}</SmapLayoutInner>
+          <AssistantProvider>
+            <SmapLayoutInner>{children}</SmapLayoutInner>
+          </AssistantProvider>
         </ScopeProvider>
         </Suspense>
       </NavProvider>

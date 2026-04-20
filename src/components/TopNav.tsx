@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useTheme, THEMES } from "./ThemeProvider";
 import { useNav, type TabId } from "./NavProvider";
 import { CampaignSwitcher } from "./CampaignSwitcher";
+import { NotificationBell } from "./NotificationBell";
 
 const tabs: TabId[] = ["MAP", "Projects", "Insights", "Stalker", "Reports"];
 
@@ -49,7 +50,12 @@ export function TopNav() {
   }, [showBrandMenu]);
 
   return (
-    <nav className="fixed top-5 left-1/2 -translate-x-1/2 z-50">
+    <nav
+      className="fixed top-5 left-1/2 z-50 transition-transform duration-300 ease-out"
+      style={{
+        transform: 'translateX(calc(-50% - var(--assistant-push, 0px) / 2))',
+      }}
+    >
       <div
         className="flex items-center gap-1 px-2 py-1.5 rounded-2xl backdrop-blur-2xl transition-colors duration-300"
         style={{
@@ -152,6 +158,9 @@ export function TopNav() {
         </div>
 
         <div className="w-px h-5 mx-1" style={{ background: 'var(--border)' }} />
+
+        {/* Notifications */}
+        <NotificationBell />
 
         {/* Theme picker */}
         <div className="relative" ref={paletteRef}>
