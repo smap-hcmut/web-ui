@@ -10,18 +10,20 @@ const sentimentColor: Record<string, string> = {
 
 interface LiveTickerProps {
   activities: ActivityItem[];
+  rightOffset?: string;
 }
 
-export function LiveTicker({ activities }: LiveTickerProps) {
+export function LiveTicker({ activities, rightOffset }: LiveTickerProps) {
   // Duplicate for seamless loop
   const items = [...activities, ...activities];
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-xl transition-colors duration-300"
+      className="fixed bottom-0 left-0 z-40 backdrop-blur-xl transition-[right] duration-300 ease-out"
       style={{
         background: 'var(--ticker-bg)',
         borderTop: '1px solid var(--border)',
+        right: rightOffset ?? 0,
       }}
     >
       <div className="ticker-mask overflow-hidden py-3">

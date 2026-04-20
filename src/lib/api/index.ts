@@ -39,3 +39,10 @@ export {
   type Citation,
   type SuggestionItem,
 } from './knowledge';
+export {
+  reportsApi,
+  type GenerateCompetitorInput,
+  type GenerateCompetitorResponse,
+  type ListReportsParams,
+  type ListPostsParams,
+} from './reports';

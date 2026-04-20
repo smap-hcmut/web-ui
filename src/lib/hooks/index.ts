@@ -46,3 +46,17 @@ export type { HeapNode, HeapNodeMetrics, HeapResponse } from './use-heap-data';
 // ─── Metabase (kept for ChartBuilder admin tool) ──────────────────────────────
 export { useMetabaseCards, useMetabaseQuery, useMetabaseMetadata, useMetabaseDataset, metabaseKeys } from './use-metabase';
 export type { MetabaseCard, MetabaseColumn, MetabaseQueryResult, MetabaseTableMeta, MetabaseFieldMeta, DatasetRequest } from './use-metabase';
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+export {
+  useReports,
+  useReport,
+  useReportProcess,
+  useReportPosts,
+  usePostComments,
+  useGenerateCompetitor,
+  useCancelReport,
+  useRetryReport,
+  reportKeys,
+  COMMENTS_PAGE_SIZE,
+} from './use-reports';

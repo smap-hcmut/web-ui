@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
+import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard";
+import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
 import { ProjectFlipCard, CreateProjectModal, ProjectConfigModal } from "@/components/cards/ProjectCardsRow";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
@@ -35,9 +38,12 @@ import {
   useProjectsByCampaign,
   useCreateProject,
   useProjectStats,
+  useReports,
+  useGenerateCompetitor,
   type PostItem,
   type ProjectStat,
 } from "@/lib/hooks";
+import { detectPlatform, PLATFORM_LABEL } from "@/lib/utils/platform";
 import {
   Activity,
   Smile,
@@ -72,6 +78,7 @@ import {
   BarChart3,
   Globe,
   Calendar,
+  RotateCw,
 } from "lucide-react";
 
 /* ── Constants ── */
@@ -1495,16 +1502,30 @@ function CreateStalkerModal({ open, onClose }: { open: boolean; onClose: () => v
    TAB: Reports
    ════════════════════════════════════════════ */
 function ReportsTab() {
-  const [reports] = useState<ReportItem[]>([]);
+  const { activeCampaignId } = useScope();
+  const router = useRouter();
   const [showGenerate, setShowGenerate] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [reviewReport, setReviewReport] = useState<ReportItem | null>(null);
+  const { data, isLoading } = useReports(activeCampaignId);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 900);
-    return () => clearTimeout(t);
-  }, []);
+  if (!activeCampaignId) {
+    return (
+      <div className="content-reveal">
+        <EmptyState
+          icon={<BarChart3 />}
+          title="Select a campaign first"
+          description="Open a campaign from Projects to generate and review reports."
+        />
+      </div>
+    );
+  }
 
-  if (loading) return <ListSkeleton count={4} />;
+  if (isLoading) return <ListSkeleton count={4} />;
+
+  const reports = data?.items ?? [];
+  const openDetail = (id: string) => {
+    router.push(`/smap/reports/${id}?camp_id=${activeCampaignId}`);
+  };
 
   return (
     <div className="content-reveal">
@@ -1529,81 +1550,96 @@ function ReportsTab() {
 
       {reports.length > 0 ? (
         <div className="space-y-3">
-          {reports.map((report) => (
-            <Card key={report.id}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{
-                      background: report.type === "competitor" ? "var(--warning-bg)" : "var(--accent-subtle)",
-                    }}
-                  >
-                    {report.type === "competitor" ? (
-                      <Target className="w-5 h-5" style={{ color: "var(--warning)" }} />
-                    ) : (
-                      <BarChart3 className="w-5 h-5" style={{ color: "var(--accent)" }} />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{report.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant={report.type === "competitor" ? "warning" : report.type === "campaign" ? "accent" : "info"} size="sm">
-                        {report.type}
-                      </Badge>
-                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
-                        {report.generatedAt}
-                      </span>
-                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
-                        · {report.pages} pages · {report.format}
-                      </span>
+          {reports.map((report) => {
+            const nonTerminal =
+              report.status === "generating" ||
+              report.status === "failed" ||
+              report.status === "cancelled";
+            if (nonTerminal) {
+              return <GeneratingReportCard key={report.id} report={report} />;
+            }
+            return (
+              <Card key={report.id}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                      style={{
+                        background: report.type === "competitor" ? "var(--warning-bg)" : "var(--accent-subtle)",
+                      }}
+                    >
+                      {report.type === "competitor" ? (
+                        <Target className="w-5 h-5" style={{ color: "var(--warning)" }} />
+                      ) : (
+                        <BarChart3 className="w-5 h-5" style={{ color: "var(--accent)" }} />
+                      )}
                     </div>
-                    <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
-                      Scope: {report.scope}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {report.sections.map((s) => (
-                        <span
-                          key={s}
-                          className="text-[9px] font-medium px-1.5 py-0.5 rounded"
-                          style={{ background: "var(--bg-hover)", color: "var(--text-faint)" }}
-                        >
-                          {s}
+                    <div>
+                      <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{report.title}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <Badge variant={report.type === "competitor" ? "warning" : report.type === "campaign" ? "accent" : "info"} size="sm">
+                          {report.type}
+                        </Badge>
+                        <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                          {new Date(report.generatedAt).toLocaleString("vi-VN")}
                         </span>
-                      ))}
+                        {report.totals && (
+                          <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                            · {report.totals.posts} posts · {report.totals.comments} comments
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] mt-1" style={{ color: "var(--text-muted)" }}>
+                        Scope: {report.scope}
+                      </p>
+                      {report.sections.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {report.sections.map((s) => (
+                            <span
+                              key={s}
+                              className="text-[9px] font-medium px-1.5 py-0.5 rounded"
+                              style={{ background: "var(--bg-hover)", color: "var(--text-faint)" }}
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1 shrink-0 ml-3">
-                  <button
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-                    style={{ color: "var(--accent)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-subtle)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <Eye className="w-3.5 h-3.5" /> View
-                  </button>
-                  <button
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </button>
-                  <button
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <Send className="w-3.5 h-3.5" /> Share
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0 ml-3">
+                    <button
+                      onClick={() => setReviewReport(report)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ color: "var(--accent)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-subtle)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View
+                    </button>
+                    <button
+                      onClick={() => openDetail(report.id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ color: "var(--text-muted)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Open
+                    </button>
+                    <button
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                      style={{ color: "var(--text-muted)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <EmptyState
@@ -1623,28 +1659,59 @@ function ReportsTab() {
       )}
 
       {/* Generate Report Modal */}
-      <GenerateReportModal open={showGenerate} onClose={() => setShowGenerate(false)} />
+      <GenerateReportModal
+        open={showGenerate}
+        onClose={() => setShowGenerate(false)}
+        campaignId={activeCampaignId}
+      />
+
+      {/* Review modal (paginated post list) */}
+      {reviewReport && (
+        <ReviewPostsModal
+          open={!!reviewReport}
+          onClose={() => setReviewReport(null)}
+          report={reviewReport}
+        />
+      )}
     </div>
   );
 }
 
 /* ── Generate Report Modal ── */
-function GenerateReportModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+interface GenerateReportModalProps {
+  open: boolean;
+  onClose: () => void;
+  campaignId: string;
+}
+
+function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalProps) {
   const [mode, setMode] = useState<"existing" | "competitor">("existing");
   const [competitorUrls, setCompetitorUrls] = useState("");
-  const [generating, setGenerating] = useState(false);
+  const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(["tiktok", "facebook", "youtube"]));
+  const [maxPosts, setMaxPosts] = useState<number>(50);
   const [selectedSections, setSelectedSections] = useState<Set<string>>(
     new Set(["Overview", "Sentiment Analysis", "Trends", "Top Posts", "Platform Breakdown"])
   );
 
-  const toggleSection = (s: string) => {
+  const generate = useGenerateCompetitor();
+
+  const toggleSection = useCallback((s: string) => {
     setSelectedSections((prev) => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s);
       else next.add(s);
       return next;
     });
-  };
+  }, []);
+
+  const togglePlatform = useCallback((p: Platform) => {
+    setPlatforms((prev) => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
+  }, []);
 
   const inputClass = "w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-all duration-200";
   const inputStyle = { background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
@@ -1654,9 +1721,51 @@ function GenerateReportModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const sections = mode === "existing" ? allSectionsExisting : allSectionsCompetitor;
 
+  // Validate competitor URLs against selected platforms.
+  const urlRows = useMemo(() => {
+    const lines = competitorUrls.split("\n").map((l) => l.trim()).filter(Boolean);
+    return lines.map((url) => {
+      const detected = detectPlatform(url);
+      const allowed = detected !== null && platforms.has(detected);
+      return { url, detected, allowed };
+    });
+  }, [competitorUrls, platforms]);
+
+  const validUrls = urlRows.filter((r) => r.allowed).map((r) => r.url);
+  const invalidUrls = urlRows.filter((r) => !r.allowed);
+
+  const maxPostsValid = maxPosts >= 1 && maxPosts <= 500;
+  const canGenerate =
+    mode === "existing"
+      ? true
+      : validUrls.length > 0 && invalidUrls.length === 0 && platforms.size > 0 && maxPostsValid;
+
+  const handleGenerate = async () => {
+    if (mode !== "competitor") {
+      // The existing-data branch isn't wired yet — just close.
+      onClose();
+      return;
+    }
+    try {
+      await generate.mutateAsync({
+        campaignId,
+        competitorUrls: validUrls,
+        platforms: Array.from(platforms),
+        sections: Array.from(selectedSections),
+        maxPostsPerCompetitor: maxPosts,
+      });
+      // Reset and close
+      setCompetitorUrls("");
+      setMaxPosts(50);
+      onClose();
+    } catch {
+      /* mutation error surfaced below via generate.error */
+    }
+  };
+
   return (
     <Modal open={open} onClose={onClose} title="Generate Report" size="md">
-      <div className="max-h-[65vh] overflow-y-auto -mx-6 px-6">
+      <div className="max-h-[70vh] overflow-y-auto -mx-6 px-6">
         {/* Mode selector */}
         <p className="text-[12px] mb-3" style={{ color: "var(--text-muted)" }}>Choose report type</p>
         <div className="grid grid-cols-2 gap-3 mb-5">
@@ -1703,6 +1812,39 @@ function GenerateReportModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Platform multi-select */}
+            <div>
+              <label className="block text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>
+                Platforms to analyse
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["tiktok", "facebook", "youtube"] as Platform[]).map((p) => {
+                  const active = platforms.has(p);
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => togglePlatform(p)}
+                      className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all"
+                      style={{
+                        background: active ? "var(--accent-subtle)" : "var(--bg-hover)",
+                        border: `1.5px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                        color: active ? "var(--accent)" : "var(--text-muted)",
+                      }}
+                    >
+                      <PlatformIcon platform={p} size={14} />
+                      {PLATFORM_LABEL[p]}
+                    </button>
+                  );
+                })}
+              </div>
+              {platforms.size === 0 && (
+                <p className="text-[10px] mt-1" style={{ color: "var(--danger)" }}>
+                  Select at least one platform.
+                </p>
+              )}
+            </div>
+
+            {/* Competitor URLs */}
             <div>
               <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
                 Competitor URLs (one per line)
@@ -1711,12 +1853,52 @@ function GenerateReportModal({ open, onClose }: { open: boolean; onClose: () => 
                 value={competitorUrls}
                 onChange={(e) => setCompetitorUrls(e.target.value)}
                 placeholder={"https://tiktok.com/@competitor\nhttps://facebook.com/competitor"}
-                rows={3}
+                rows={4}
                 className={`${inputClass} resize-none`}
                 style={inputStyle}
               />
+              {urlRows.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {urlRows.map((r, i) => (
+                    <div
+                      key={`${r.url}-${i}`}
+                      className="flex items-center gap-2 text-[10px] px-2 py-1 rounded-md"
+                      style={{
+                        background: r.allowed ? "var(--success-bg)" : "var(--danger-bg)",
+                        color: r.allowed ? "var(--success)" : "var(--danger)",
+                      }}
+                    >
+                      {r.detected && <PlatformIcon platform={r.detected} size={12} />}
+                      <span className="truncate flex-1">{r.url}</span>
+                      <span className="shrink-0 font-semibold">
+                        {r.allowed
+                          ? (r.detected ? PLATFORM_LABEL[r.detected] : "ok")
+                          : r.detected
+                            ? `${PLATFORM_LABEL[r.detected]} not selected`
+                            : "unknown platform"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Max posts */}
+            <div>
+              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+                Maximum posts per competitor
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={maxPosts}
+                onChange={(e) => setMaxPosts(Number(e.target.value) || 0)}
+                className={inputClass}
+                style={inputStyle}
+              />
               <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                We&apos;ll crawl these URLs to gather data for analysis
+                Between 1 and 500. Default 50.
               </p>
             </div>
           </div>
@@ -1754,22 +1936,25 @@ function GenerateReportModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
         </div>
 
+        {generate.isError && (
+          <div className="mt-4 p-3 rounded-xl text-[12px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
+            Failed to start report. Please try again.
+          </div>
+        )}
+
         {/* Generate button */}
         <button
-          onClick={() => {
-            setGenerating(true);
-            setTimeout(() => { setGenerating(false); onClose(); }, 2000);
-          }}
-          disabled={generating}
-          className="w-full mt-6 py-2.5 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-70"
+          onClick={handleGenerate}
+          disabled={generate.isPending || !canGenerate}
+          className="w-full mt-6 py-2.5 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "var(--accent)" }}
-          onMouseEnter={(e) => { if (!generating) e.currentTarget.style.background = "var(--accent-hover)"; }}
+          onMouseEnter={(e) => { if (!generate.isPending && canGenerate) e.currentTarget.style.background = "var(--accent-hover)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
         >
-          {generating ? (
+          {generate.isPending ? (
             <>
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Generating...
+              Starting...
             </>
           ) : (
             <>
