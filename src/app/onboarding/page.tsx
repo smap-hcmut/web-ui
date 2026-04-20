@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Layers,
@@ -15,6 +15,7 @@ import {
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { campaignApi, type CreateCampaignInput } from '@/lib/api/campaigns';
 import { projectApi, type CreateProjectInput, type EntityType } from '@/lib/api/projects';
+import { apiClient } from '@/lib/api/client';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -50,12 +51,18 @@ const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement |
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+interface DomainType {
+  code: string;
+  name?: string;
+}
+
 interface ProjectDraft {
   name: string;
   description: string;
   brand: string;
   entityType: EntityType;
   entityName: string;
+  domainTypeCode: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -79,6 +86,26 @@ export default function OnboardingPage() {
   const [brand, setBrand] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('product');
   const [entityName, setEntityName] = useState('');
+  const [domains, setDomains] = useState<DomainType[]>([]);
+  const [domainTypeCode, setDomainTypeCode] = useState('_default');
+
+  // Fetch available domain types from project-srv on mount
+  useEffect(() => {
+    apiClient
+      .get<{ domains?: DomainType[] }>('/project/api/v1/domains')
+      .then((resp) => {
+        const list = resp.domains ?? [];
+        if (list.length > 0) {
+          setDomains(list);
+          // Prefer '_default'; fall back to whatever comes first
+          const preferred = list.find((d) => d.code === '_default') ?? list[0];
+          setDomainTypeCode(preferred.code);
+        }
+      })
+      .catch(() => {
+        // Silently fall back — '_default' is already set as initial state
+      });
+  }, []);
 
   // ─── Project form helpers ────────────────────────────────────────────────
 
@@ -104,6 +131,7 @@ export default function OnboardingPage() {
         brand: brand.trim(),
         entityType,
         entityName: entityName.trim(),
+        domainTypeCode,
       },
     ]);
     resetProjectForm();
@@ -133,6 +161,7 @@ export default function OnboardingPage() {
         brand: brand.trim(),
         entityType,
         entityName: entityName.trim(),
+        domainTypeCode,
       });
     }
 
@@ -158,6 +187,7 @@ export default function OnboardingPage() {
           brand: draft.brand || undefined,
           entity_type: draft.entityType,
           entity_name: draft.entityName,
+          domain_type_code: draft.domainTypeCode,
         };
         await projectApi.create(campaign.id, projectInput);
       }
@@ -459,6 +489,27 @@ export default function OnboardingPage() {
                     />
                   </div>
                 </div>
+
+                {/* Domain type — only shown when multiple domains are available */}
+                {domains.length > 1 && (
+                  <div>
+                    <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      Domain type
+                    </label>
+                    <select
+                      value={domainTypeCode}
+                      onChange={(e) => setDomainTypeCode(e.target.value)}
+                      className={inputClass}
+                      style={inputStyle}
+                      onFocus={handleFocus as unknown as React.FocusEventHandler<HTMLSelectElement>}
+                      onBlur={handleBlur as unknown as React.FocusEventHandler<HTMLSelectElement>}
+                    >
+                      {domains.map((d) => (
+                        <option key={d.code} value={d.code}>{d.name ?? d.code}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>

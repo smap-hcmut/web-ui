@@ -87,10 +87,30 @@ class ApiClient {
 
     if (isJson) {
       const body = await response.json();
-      // Handle wrapped responses from Go services: { campaign: {...} } or { data: {...} }
-      // Unwrap single-key wrapper objects (campaign, project, etc.)
+      // Handle wrapped responses from Go services.
+      // Standard envelope: { error_code: 0, message: "...", data: <payload> }
+      // where <payload> may itself be a single-key wrapper like { campaign: {...} }
+      // or a multi-key object like { campaigns: [...], paginator: {...} }.
       if (body && typeof body === 'object' && !Array.isArray(body)) {
-        if (body.data !== undefined) return body.data;
+        if (body.data !== undefined) {
+          const data = body.data as Record<string, unknown>;
+          // If data is a single-key object wrapping the real entity (e.g. {campaign:{...}}),
+          // unwrap one more level so callers get the entity directly.
+          // Multi-key payloads (e.g. {campaigns:[...], paginator:{...}}) are returned as-is.
+          if (data && typeof data === 'object' && !Array.isArray(data)) {
+            const dataKeys = Object.keys(data);
+            if (
+              dataKeys.length === 1 &&
+              data[dataKeys[0]] !== null &&
+              typeof data[dataKeys[0]] === 'object' &&
+              !Array.isArray(data[dataKeys[0]])
+            ) {
+              return data[dataKeys[0]] as T;
+            }
+          }
+          return data as T;
+        }
+        // Legacy / non-envelope responses: single-key wrapper without an error_code
         const keys = Object.keys(body);
         if (keys.length === 1 && typeof body[keys[0]] === 'object') {
           return body[keys[0]] as T;
