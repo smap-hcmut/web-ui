@@ -92,6 +92,14 @@ export const projectApi = {
   activate: (id: string): Promise<Project> =>
     apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectActivate(id)),
 
+  /** Resume a paused project */
+  resume: (id: string): Promise<Project> =>
+    apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectResume(id)),
+
+  /** Pause an active project */
+  pause: (id: string): Promise<Project> =>
+    apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectPause(id)),
+
   /** Archive a project */
   archive: (id: string): Promise<void> =>
     apiClient.delete<void>(API_CONFIG.ENDPOINTS.project.project(id)),

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useScope } from '@/components/ScopeProvider';
-import { useProjectsByCampaign, useCreateProject, useProjectStats } from '@/lib/hooks';
+import { useProjectsByCampaign, useCreateProject, useProjectStats, usePauseProject, useResumeProject, useActivateProject, useDryrunProject } from '@/lib/hooks';
 import type { ProjectStat } from '@/lib/hooks';
 import type { Project, CrisisConfig, Platform } from '@/lib/types';
 import type { EntityType } from '@/lib/api/projects';
@@ -22,6 +22,10 @@ import {
   Users,
   Clock,
   Smile,
+  Pause,
+  Play,
+  Zap,
+  Loader2,
 } from 'lucide-react';
 
 /* ─── Trigger badge ─── */
@@ -96,12 +100,24 @@ export function ProjectFlipCard({
   isSelected,
   onSelect,
   onOpenConfig,
+  onPause,
+  onResume,
+  onActivate,
+  onDryrun,
+  isDryrunStarted,
+  isToggling,
 }: {
   project: Project;
   stat?: ProjectStat;
   isSelected: boolean;
   onSelect: () => void;
   onOpenConfig: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  onActivate?: () => void;
+  onDryrun?: () => void;
+  isDryrunStarted?: boolean;
+  isToggling?: boolean;
 }) {
   const [flipped, setFlipped] = useState(false);
 
@@ -145,7 +161,7 @@ export function ProjectFlipCard({
               </span>
               <span
                 className="w-2 h-2 rounded-full shrink-0"
-                style={{ background: status === 'active' ? 'var(--success)' : 'var(--warning)' }}
+                style={{ background: status === 'active' ? 'var(--success)' : status === 'pending' ? 'var(--accent)' : 'var(--warning)' }}
               />
             </div>
             <div className="flex items-center gap-1.5 mb-2">
@@ -204,19 +220,80 @@ export function ProjectFlipCard({
         >
           {/* Back header */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 130 }}>
+            <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 100 }}>
               {project.name}
             </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenConfig(); }}
-              className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
-              style={{ background: 'var(--bg-hover)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-subtle)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              title="Edit crisis config"
-            >
-              <Settings className="w-3 h-3" style={{ color: 'var(--accent)' }} />
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Action button — varies by project status */}
+              {status === 'active' && onPause && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onPause(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--warning-subtle, #fef3c7)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Pause project"
+                >
+                  <Pause className="w-3 h-3" style={{ color: 'var(--warning)' }} />
+                </button>
+              )}
+              {status === 'paused' && onResume && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onResume(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--success-subtle, #d1fae5)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Resume project"
+                >
+                  <Play className="w-3 h-3" style={{ color: 'var(--success)' }} />
+                </button>
+              )}
+              {status === 'pending' && !isDryrunStarted && onDryrun && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDryrun(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--accent-subtle)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Run dry-run check"
+                >
+                  {isToggling
+                    ? <Loader2 className="w-3 h-3 animate-spin" style={{ color: 'var(--accent)' }} />
+                    : <Zap className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                  }
+                </button>
+              )}
+              {status === 'pending' && isDryrunStarted && onActivate && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onActivate(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--success-subtle, #d1fae5)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Activate project"
+                >
+                  {isToggling
+                    ? <Loader2 className="w-3 h-3 animate-spin" style={{ color: 'var(--success)' }} />
+                    : <Play className="w-3 h-3" style={{ color: 'var(--success)' }} />
+                  }
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenConfig(); }}
+                className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                style={{ background: 'var(--bg-hover)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-subtle)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                title="Edit crisis config"
+              >
+                <Settings className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+              </button>
+            </div>
           </div>
 
           {/* Config triggers */}
@@ -417,12 +494,18 @@ export function ProjectCardsRow() {
   const [collapsed, setCollapsed] = useState(false);
   const [configModalProject, setConfigModalProject] = useState<Project | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  // Track which project IDs have had dryrun triggered this session
+  const [dryrunStartedIds, setDryrunStartedIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const { activeCampaignId, projectIds, toggleProject } = useScope();
 
   // Fetch projects from API for the active campaign
   const { data: apiProjects } = useProjectsByCampaign(activeCampaignId ?? undefined);
   const createProject = useCreateProject(activeCampaignId ?? '');
+  const pauseProject = usePauseProject(activeCampaignId ?? '');
+  const resumeProject = useResumeProject(activeCampaignId ?? '');
+  const activateProject = useActivateProject(activeCampaignId ?? '');
+  const dryrunProject = useDryrunProject();
 
   // Fetch per-project analytics (mentions, sentiment, platforms) from Metabase
   const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
@@ -441,7 +524,7 @@ export function ProjectCardsRow() {
       name: p.name,
       keywords: [],
       platforms: undefined,
-      status: p.status === 'ACTIVE' ? 'active' as const : 'paused' as const,
+      status: p.status === 'ACTIVE' ? 'active' as const : p.status === 'PENDING' ? 'pending' as const : 'paused' as const,
       crisis_config: undefined,
     }));
   }, [apiProjects]);
@@ -512,6 +595,23 @@ export function ProjectCardsRow() {
                 isSelected={projectIds.has(proj.id)}
                 onSelect={() => toggleProject(proj.id)}
                 onOpenConfig={() => setConfigModalProject(proj)}
+                onPause={() => pauseProject.mutate(proj.id)}
+                onResume={() => resumeProject.mutate(proj.id)}
+                onActivate={() => activateProject.mutate(proj.id)}
+                onDryrun={() => {
+                  dryrunProject.mutate(proj.id, {
+                    onSuccess: () => {
+                      setDryrunStartedIds((prev) => new Set(prev).add(proj.id));
+                    },
+                  });
+                }}
+                isDryrunStarted={dryrunStartedIds.has(proj.id)}
+                isToggling={
+                  (pauseProject.isPending && pauseProject.variables === proj.id) ||
+                  (resumeProject.isPending && resumeProject.variables === proj.id) ||
+                  (activateProject.isPending && activateProject.variables === proj.id) ||
+                  (dryrunProject.isPending && dryrunProject.variables === proj.id)
+                }
               />
             ))}
             <AddProjectCard onClick={() => setShowCreateModal(true)} />

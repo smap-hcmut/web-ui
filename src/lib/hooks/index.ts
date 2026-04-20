@@ -17,7 +17,7 @@ export {
   useToggleCampaignFavorite,
   campaignKeys,
 } from './use-campaigns';
-export { useProjectsByCampaign, useCreateProject, projectKeys } from './use-projects';
+export { useProjectsByCampaign, useCreateProject, usePauseProject, useResumeProject, useActivateProject, useDryrunProject, projectKeys } from './use-projects';
 export { useProjectStats, projectStatsKeys } from './use-project-stats';
 export type { ProjectStat, ProjectStatsResponse } from './use-project-stats';
 

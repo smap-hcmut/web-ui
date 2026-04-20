@@ -298,6 +298,6 @@ export interface Project {
   name: string;
   keywords: Keyword[];
   platforms?: Platform[];
-  status?: 'active' | 'paused';
+  status?: 'active' | 'paused' | 'pending';
   crisis_config?: CrisisConfig;
 }

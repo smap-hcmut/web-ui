@@ -62,6 +62,7 @@ export const API_CONFIG = {
       project: (id: string) => `/project/api/v1/projects/${id}`,
       projectActivate: (id: string) => `/project/api/v1/projects/${id}/activate`,
       projectPause: (id: string) => `/project/api/v1/projects/${id}/pause`,
+      projectResume: (id: string) => `/project/api/v1/projects/${id}/resume`,
       projectArchive: (id: string) => `/project/api/v1/projects/${id}/archive`,
       projectActivationReadiness: (id: string) => `/project/api/v1/projects/${id}/activation-readiness`,
       workspaces: '/project/api/v1/workspaces',
