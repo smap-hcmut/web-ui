@@ -88,6 +88,10 @@ export const projectApi = {
   update: (id: string, data: UpdateProjectInput): Promise<Project> =>
     apiClient.put<Project>(API_CONFIG.ENDPOINTS.project.project(id), data),
 
+  /** Activate a project (triggers ingest-srv datasource activation) */
+  activate: (id: string): Promise<Project> =>
+    apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectActivate(id)),
+
   /** Archive a project */
   archive: (id: string): Promise<void> =>
     apiClient.delete<void>(API_CONFIG.ENDPOINTS.project.project(id)),

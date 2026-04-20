@@ -12,9 +12,10 @@ import { API_CONFIG } from './config';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SourceType = 'TIKTOK' | 'FACEBOOK' | 'YOUTUBE';
-export type CrawlMode = 'KEYWORD' | 'PROFILE' | 'POST_URL';
+export type CrawlMode = 'SLEEP' | 'NORMAL' | 'CRISIS';
 export type DataSourceStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'ERROR';
 export type TargetType = 'KEYWORD' | 'PROFILE' | 'POST_URL';
+export type DryrunStatus = 'NOT_REQUIRED' | 'PENDING' | 'RUNNING' | 'SUCCESS' | 'WARNING' | 'FAILED';
 
 export interface DataSource {
   id: string;
@@ -38,10 +39,51 @@ export interface CrawlTarget {
   updated_at?: string;
 }
 
+export interface DryrunResult {
+  id: string;
+  source_id: string;
+  project_id: string;
+  target_id: string;
+  job_id: string;
+  status: DryrunStatus;
+  sample_count: number;
+  total_found: number | null;
+  sample_data: unknown | null;
+  warnings: string[] | null;
+  error_message: string;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
 /** Flattened target with datasource info for UI display */
 export interface TargetWithSource extends CrawlTarget {
   source_type: SourceType;
   datasource_name: string;
+}
+
+// ─── Input Types ──────────────────────────────────────────────────────────────
+
+export interface CreateDataSourceInput {
+  project_id: string;
+  name: string;
+  description?: string;
+  source_type: SourceType;
+  crawl_mode: CrawlMode;
+  crawl_interval_minutes: number;
+}
+
+export interface CreateKeywordTargetInput {
+  values: string[];
+  label?: string;
+  crawl_interval_minutes: number;
+  priority?: number;
+}
+
+export interface TriggerDryrunInput {
+  target_id?: string;
+  sample_limit?: number;
+  force?: boolean;
 }
 
 // ─── Paginated Responses (from Go backend) ────────────────────────────────────
@@ -117,4 +159,30 @@ export const datasourceApi = {
 
     return result;
   },
+
+  /** Create a new datasource for a project */
+  create: (data: CreateDataSourceInput): Promise<DataSource> =>
+    apiClient.post<DataSource>(API_CONFIG.ENDPOINTS.ingest.datasources, data),
+
+  /** Add keyword targets to a datasource */
+  createKeywordTarget: (datasourceId: string, data: CreateKeywordTargetInput): Promise<CrawlTarget> =>
+    apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceTargetKeywords(datasourceId), data),
+
+  /** Activate a single crawl target */
+  activateTarget: (datasourceId: string, targetId: string): Promise<CrawlTarget> =>
+    apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceActivateTarget(datasourceId, targetId)),
+
+  /** Trigger a dryrun for a datasource (optionally scoped to a specific target) */
+  triggerDryrun: (datasourceId: string, data?: TriggerDryrunInput): Promise<DryrunResult> =>
+    apiClient.post<DryrunResult>(API_CONFIG.ENDPOINTS.ingest.datasourceTriggerDryrun(datasourceId), data),
+
+  /**
+   * Get the latest dryrun result for a datasource.
+   * Optionally filter by target_id.
+   */
+  getDryrunLatest: (datasourceId: string, targetId?: string): Promise<DryrunResult> =>
+    apiClient.get<DryrunResult>(
+      API_CONFIG.ENDPOINTS.ingest.datasourceDryrunLatest(datasourceId),
+      targetId ? { target_id: targetId } : undefined,
+    ),
 };

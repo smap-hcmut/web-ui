@@ -76,6 +76,10 @@ export const API_CONFIG = {
       datasources: '/ingest/api/v1/datasources',
       datasource: (id: string) => `/ingest/api/v1/datasources/${id}`,
       datasourceTargets: (id: string) => `/ingest/api/v1/datasources/${id}/targets`,
+      datasourceTargetKeywords: (id: string) => `/ingest/api/v1/datasources/${id}/targets/keywords`,
+      datasourceActivateTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}/activate`,
+      datasourceTriggerDryrun: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun`,
+      datasourceDryrunLatest: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun/latest`,
     },
     knowledge: {
       chat: '/knowledge/api/v1/knowledge/chat',

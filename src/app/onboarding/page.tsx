@@ -5,23 +5,27 @@ import { useRouter } from 'next/navigation';
 import {
   Layers,
   FolderOpen,
+  Activity,
   ArrowRight,
   ArrowLeft,
   Plus,
   X,
   Check,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { apiClient } from '@/lib/api/client';
 import { campaignApi, type CreateCampaignInput } from '@/lib/api/campaigns';
 import { projectApi, type CreateProjectInput, type EntityType } from '@/lib/api/projects';
-import { apiClient } from '@/lib/api/client';
+import { datasourceApi, type SourceType } from '@/lib/api/datasources';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STEPS = [
   { label: 'Campaign', icon: Layers },
   { label: 'Projects', icon: FolderOpen },
+  { label: 'Monitoring', icon: Activity },
 ] as const;
 
 const ENTITY_TYPES: { value: EntityType; label: string }[] = [
@@ -31,6 +35,14 @@ const ENTITY_TYPES: { value: EntityType; label: string }[] = [
   { value: 'competitor', label: 'Competitor' },
   { value: 'topic', label: 'Topic' },
 ];
+
+const PLATFORMS: { value: SourceType; label: string; dryrun: boolean }[] = [
+  { value: 'FACEBOOK', label: 'Facebook', dryrun: false },
+  { value: 'YOUTUBE', label: 'YouTube', dryrun: false },
+  { value: 'TIKTOK', label: 'TikTok', dryrun: true },
+];
+
+const CRAWL_INTERVAL_MINUTES = 60;
 
 // ─── Input styling helpers ───────────────────────────────────────────────────
 
@@ -65,21 +77,45 @@ interface ProjectDraft {
   domainTypeCode: string;
 }
 
+// ─── Dryrun polling helper ────────────────────────────────────────────────────
+
+async function pollDryrunStatus(
+  datasourceId: string,
+  targetId: string,
+  maxAttempts = 30,
+  intervalMs = 3000,
+): Promise<'SUCCESS' | 'WARNING' | 'FAILED' | 'TIMEOUT'> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    try {
+      const result = await datasourceApi.getDryrunLatest(datasourceId, targetId);
+      if (result.status === 'SUCCESS' || result.status === 'WARNING') return result.status;
+      if (result.status === 'FAILED') return 'FAILED';
+      // PENDING or RUNNING — keep polling
+    } catch {
+      // ignore transient errors, keep polling
+    }
+  }
+  return 'TIMEOUT';
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
-  // Step 1: Campaign
+  // Step 0: Campaign
   const [campaignName, setCampaignName] = useState('');
   const [campaignDesc, setCampaignDesc] = useState('');
   const [campStart, setCampStart] = useState('');
   const [campEnd, setCampEnd] = useState('');
 
-  // Step 2: Projects (multiple drafts)
+  // Step 1: Projects (multiple drafts)
   const [savedProjects, setSavedProjects] = useState<ProjectDraft[]>([]);
   const [projectName, setProjectName] = useState('');
   const [projectDesc, setProjectDesc] = useState('');
@@ -89,6 +125,13 @@ export default function OnboardingPage() {
   const [domains, setDomains] = useState<DomainType[]>([]);
   const [domainTypeCode, setDomainTypeCode] = useState('_default');
 
+  // Step 2: Monitoring
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SourceType>>(
+    () => new Set<SourceType>(['FACEBOOK', 'YOUTUBE']),
+  );
+  const [projectKeywords, setProjectKeywords] = useState<string[][]>([]);
+  const [keywordInputs, setKeywordInputs] = useState<string[]>([]);
+
   // Fetch available domain types from project-srv on mount
   useEffect(() => {
     apiClient
@@ -97,7 +140,6 @@ export default function OnboardingPage() {
         const list = resp.domains ?? [];
         if (list.length > 0) {
           setDomains(list);
-          // Prefer '_default'; fall back to whatever comes first
           const preferred = list.find((d) => d.code === '_default') ?? list[0];
           setDomainTypeCode(preferred.code);
         }
@@ -139,6 +181,64 @@ export default function OnboardingPage() {
 
   const removeProject = (idx: number) => {
     setSavedProjects((prev) => prev.filter((_, i) => i !== idx));
+    setProjectKeywords((prev) => prev.filter((_, i) => i !== idx));
+    setKeywordInputs((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // ─── Monitoring helpers ──────────────────────────────────────────────────
+
+  const togglePlatform = (platform: SourceType) => {
+    setSelectedPlatforms((prev) => {
+      const next = new Set(prev);
+      if (next.has(platform)) next.delete(platform);
+      else next.add(platform);
+      return next;
+    });
+  };
+
+  const addKeyword = (projectIdx: number, keyword: string) => {
+    const kw = keyword.trim();
+    if (!kw) return;
+    setProjectKeywords((prev) => {
+      const next = [...prev];
+      if (!next[projectIdx]?.includes(kw)) {
+        next[projectIdx] = [...(next[projectIdx] ?? []), kw];
+      }
+      return next;
+    });
+    setKeywordInputs((prev) => {
+      const next = [...prev];
+      next[projectIdx] = '';
+      return next;
+    });
+  };
+
+  const removeKeyword = (projectIdx: number, kwIdx: number) => {
+    setProjectKeywords((prev) => {
+      const next = [...prev];
+      next[projectIdx] = next[projectIdx].filter((_, i) => i !== kwIdx);
+      return next;
+    });
+  };
+
+  const handleKeywordInputChange = (projectIdx: number, val: string) => {
+    if (val.includes(',')) {
+      const parts = val.split(',');
+      const toAdd = parts[0].trim();
+      if (toAdd) addKeyword(projectIdx, toAdd);
+      // Keep whatever is after the comma in the input
+      setKeywordInputs((prev) => {
+        const next = [...prev];
+        next[projectIdx] = parts.slice(1).join(',');
+        return next;
+      });
+    } else {
+      setKeywordInputs((prev) => {
+        const next = [...prev];
+        next[projectIdx] = val;
+        return next;
+      });
+    }
   };
 
   // ─── Validation ──────────────────────────────────────────────────────────
@@ -146,14 +246,53 @@ export default function OnboardingPage() {
   const canProceed = () => {
     if (step === 0) return campaignName.trim().length > 0 && campStart && campEnd;
     if (step === 1) return savedProjects.length > 0 || currentProjectValid;
+    if (step === 2) {
+      return (
+        selectedPlatforms.size > 0 &&
+        projectKeywords.length > 0 &&
+        projectKeywords.every((kws) => kws.length > 0)
+      );
+    }
     return false;
   };
 
-  // ─── Submit: create campaign then projects sequentially ──────────────────
+  // ─── Continue (step 1 → step 2: finalize projects + init keywords) ───────
+
+  const handleContinue = () => {
+    setError(null);
+    if (step === 1) {
+      // Auto-save current project if valid
+      let finalProjects = [...savedProjects];
+      if (currentProjectValid) {
+        finalProjects = [
+          ...finalProjects,
+          {
+            name: projectName.trim(),
+            description: projectDesc.trim(),
+            brand: brand.trim(),
+            entityType,
+            entityName: entityName.trim(),
+            domainTypeCode,
+          },
+        ];
+        setSavedProjects(finalProjects);
+        resetProjectForm();
+      }
+      // Pre-populate keywords from entity_name + brand for each project
+      setProjectKeywords(
+        finalProjects.map((p) => [p.entityName, p.brand].filter(Boolean)),
+      );
+      setKeywordInputs(new Array(finalProjects.length).fill(''));
+    }
+    setStep(step + 1);
+  };
+
+  // ─── Submit ───────────────────────────────────────────────────────────────
 
   const handleFinish = async () => {
-    // Auto-save current project if valid
-    let projectsToCreate = [...savedProjects];
+    const projectsToCreate = [...savedProjects];
+    // On step 2 the form is reset, so currentProjectValid should be false;
+    // but guard just in case user somehow reaches this from step 1.
     if (currentProjectValid) {
       projectsToCreate.push({
         name: projectName.trim(),
@@ -167,20 +306,25 @@ export default function OnboardingPage() {
 
     setLoading(true);
     setError(null);
+    setWarnings([]);
+    const newWarnings: string[] = [];
 
     try {
       // 1. Create campaign
+      setProgressMessage('Creating campaign...');
       const campaignInput: CreateCampaignInput = {
         name: campaignName.trim(),
         description: campaignDesc.trim() || undefined,
         start_date: new Date(campStart).toISOString(),
         end_date: new Date(campEnd).toISOString(),
       };
-
       const campaign = await campaignApi.create(campaignInput);
 
-      // 2. Create projects sequentially under the new campaign
-      for (const draft of projectsToCreate) {
+      // 2. Create projects sequentially
+      setProgressMessage('Creating projects...');
+      const createdProjects: Array<{ id: string; draft: ProjectDraft; index: number }> = [];
+      for (let i = 0; i < projectsToCreate.length; i++) {
+        const draft = projectsToCreate[i];
         const projectInput: CreateProjectInput = {
           name: draft.name,
           description: draft.description || undefined,
@@ -189,11 +333,81 @@ export default function OnboardingPage() {
           entity_name: draft.entityName,
           domain_type_code: draft.domainTypeCode,
         };
-        await projectApi.create(campaign.id, projectInput);
+        const project = await projectApi.create(campaign.id, projectInput);
+        createdProjects.push({ id: project.id, draft, index: i });
       }
 
-      // Success — navigate to smap with the real campaign id
-      router.push(`/smap?camp_id=${campaign.id}`);
+      // 3. Setup datasources (step 2 only)
+      setProgressMessage('Setting up data sources...');
+      for (const { id: projectId, draft, index } of createdProjects) {
+        const keywords = projectKeywords[index]?.length
+          ? projectKeywords[index]
+          : [draft.entityName].filter(Boolean);
+
+        for (const platform of Array.from(selectedPlatforms)) {
+          try {
+            // 3a. Create datasource
+            const ds = await datasourceApi.create({
+              project_id: projectId,
+              name: `${draft.entityName} - ${platform}`,
+              source_type: platform,
+              crawl_mode: 'NORMAL',
+              crawl_interval_minutes: CRAWL_INTERVAL_MINUTES,
+            });
+
+            // 3b. Create keyword target
+            const target = await datasourceApi.createKeywordTarget(ds.id, {
+              values: keywords,
+              label: keywords.join(', '),
+              crawl_interval_minutes: CRAWL_INTERVAL_MINUTES,
+            });
+
+            // 3c. Activate (TikTok KEYWORD requires dryrun first)
+            if (platform === 'TIKTOK') {
+              setProgressMessage(`Validating TikTok access for "${draft.name}"...`);
+              try {
+                await datasourceApi.triggerDryrun(ds.id, { target_id: target.id });
+                const status = await pollDryrunStatus(ds.id, target.id);
+                if (status === 'SUCCESS' || status === 'WARNING') {
+                  await datasourceApi.activateTarget(ds.id, target.id);
+                } else {
+                  newWarnings.push(
+                    `TikTok validation ${status === 'FAILED' ? 'failed' : 'timed out'} for "${draft.name}". You can retry it from Settings.`,
+                  );
+                }
+              } catch {
+                newWarnings.push(
+                  `TikTok setup incomplete for "${draft.name}". You can retry it from Settings.`,
+                );
+              }
+            } else {
+              await datasourceApi.activateTarget(ds.id, target.id);
+            }
+          } catch (err: unknown) {
+            const msg =
+              err && typeof err === 'object' && 'message' in err
+                ? (err as { message: string }).message
+                : 'unknown error';
+            newWarnings.push(`Failed to setup ${platform} for "${draft.name}": ${msg}`);
+          }
+        }
+
+        // 3d. Activate project in project-srv
+        try {
+          setProgressMessage(`Activating "${draft.name}"...`);
+          await projectApi.activate(projectId);
+        } catch {
+          // Non-critical — cron will pick up active targets
+        }
+      }
+
+      // 4. Navigate
+      if (newWarnings.length > 0) {
+        setWarnings(newWarnings);
+        setTimeout(() => router.push(`/smap?camp_id=${campaign.id}`), 4000);
+      } else {
+        router.push(`/smap?camp_id=${campaign.id}`);
+      }
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
@@ -202,6 +416,7 @@ export default function OnboardingPage() {
       setError(msg);
     } finally {
       setLoading(false);
+      setProgressMessage('');
     }
   };
 
@@ -288,7 +503,24 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* ─── Step 1: Campaign ─── */}
+          {/* Warning banner (after finish with partial failures) */}
+          {warnings.length > 0 && (
+            <div
+              className="flex items-start gap-2 p-3 rounded-xl mb-6 text-[12px]"
+              style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', color: '#ca8a04' }}
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Setup completed with warnings</p>
+                {warnings.map((w, i) => (
+                  <p key={i} className="opacity-80 mt-0.5">{w}</p>
+                ))}
+                <p className="mt-1 opacity-60">Redirecting you now...</p>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Step 0: Campaign ─── */}
           {step === 0 && (
             <div key="step-0">
               <h2 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -365,7 +597,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* ─── Step 2: Projects ─── */}
+          {/* ─── Step 1: Projects ─── */}
           {step === 1 && (
             <div key="step-1">
               <h2 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -396,7 +628,7 @@ export default function OnboardingPage() {
                         </p>
                         <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                           {proj.entityType} &middot; {proj.entityName}
-                          {proj.brand && ` &middot; ${proj.brand}`}
+                          {proj.brand && ` \u00b7 ${proj.brand}`}
                         </p>
                       </div>
                       <button
@@ -549,15 +781,135 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          {/* ─── Step 2: Monitoring ─── */}
+          {step === 2 && (
+            <div key="step-2">
+              <h2 className="text-[15px] font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                Setup monitoring
+              </h2>
+              <p className="text-[12px] mb-5" style={{ color: 'var(--text-muted)' }}>
+                Choose which platforms to crawl and confirm the keywords for each project.
+              </p>
+
+              {/* Platform selection */}
+              <div className="mb-5">
+                <label className="block text-[11px] font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Platforms *
+                </label>
+                <div className="flex gap-2">
+                  {PLATFORMS.map((p) => {
+                    const active = selectedPlatforms.has(p.value);
+                    return (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => togglePlatform(p.value)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium transition-all duration-150"
+                        style={{
+                          background: active ? 'var(--accent)' : 'var(--bg-hover)',
+                          color: active ? 'white' : 'var(--text-muted)',
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                        }}
+                      >
+                        {active && <Check className="w-3 h-3" />}
+                        {p.label}
+                        {p.dryrun && (
+                          <span
+                            className="text-[9px] px-1 py-0.5 rounded"
+                            style={{ background: active ? 'rgba(255,255,255,0.2)' : 'var(--border)', color: active ? 'white' : 'var(--text-faint)' }}
+                          >
+                            slow
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedPlatforms.has('TIKTOK') && (
+                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-faint)' }}>
+                    TikTok requires a validation step (~90s) during setup.
+                  </p>
+                )}
+              </div>
+
+              {/* Keywords per project */}
+              <div className="space-y-3">
+                <label className="block text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  Keywords per project *
+                </label>
+                {savedProjects.map((proj, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-xl"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}
+                  >
+                    <p className="text-[12px] font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>
+                      {proj.name}
+                    </p>
+                    <p className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                      {proj.entityType} &middot; {proj.entityName}
+                    </p>
+                    {/* Keyword chips + input */}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {projectKeywords[idx]?.map((kw, ki) => (
+                        <span
+                          key={ki}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px]"
+                          style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', border: '1px solid var(--accent)' }}
+                        >
+                          {kw}
+                          <button
+                            type="button"
+                            onClick={() => removeKeyword(idx, ki)}
+                            className="opacity-60 hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        type="text"
+                        value={keywordInputs[idx] ?? ''}
+                        onChange={(e) => handleKeywordInputChange(idx, e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ',') {
+                            e.preventDefault();
+                            addKeyword(idx, keywordInputs[idx] ?? '');
+                          }
+                          if (e.key === 'Backspace' && !keywordInputs[idx] && projectKeywords[idx]?.length > 0) {
+                            removeKeyword(idx, projectKeywords[idx].length - 1);
+                          }
+                        }}
+                        placeholder="Add keyword, Enter to confirm"
+                        className="text-[11px] px-2 py-0.5 rounded-lg outline-none flex-1 min-w-[120px]"
+                        style={{
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--input-border)',
+                          color: 'var(--text-primary)',
+                        }}
+                      />
+                    </div>
+                    {(projectKeywords[idx]?.length ?? 0) === 0 && (
+                      <p className="text-[10px] mt-1.5" style={{ color: '#ef4444' }}>
+                        At least one keyword is required.
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ─── Navigation buttons ─── */}
           <div className="flex items-center justify-between mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
             {step > 0 ? (
               <button
                 type="button"
                 onClick={() => { setStep(step - 1); setError(null); }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium transition-colors"
+                disabled={loading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-medium transition-colors disabled:opacity-40"
                 style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = 'var(--bg-hover)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -571,7 +923,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 disabled={!canProceed()}
-                onClick={() => setStep(step + 1)}
+                onClick={handleContinue}
                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all duration-200 disabled:opacity-40"
                 style={{ background: 'var(--accent)' }}
                 onMouseEnter={(e) => { if (canProceed()) e.currentTarget.style.background = 'var(--accent-hover)'; }}
@@ -593,7 +945,7 @@ export default function OnboardingPage() {
                 {loading ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Creating...
+                    {progressMessage || 'Creating...'}
                   </>
                 ) : (
                   <>
