@@ -19,6 +19,7 @@ import {
   fmtNumber,
   percentChange,
 } from '@/lib/metabase/client';
+import { IS_MOCK, mockKPIs } from '@/lib/mock';
 
 interface KPIMetric {
   label: string;
@@ -46,6 +47,8 @@ export async function GET(request: NextRequest) {
     if (!campaignId) {
       return NextResponse.json({ error: 'campaignId is required' }, { status: 400 });
     }
+
+    if (IS_MOCK) return NextResponse.json(mockKPIs);
 
     const projectIds = await getProjectIdsForCampaign(campaignId);
     if (projectIds.length === 0) {

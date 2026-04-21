@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { IS_MOCK, matchProxyGet } from '@/lib/mock';
 
 const BACKEND_URL =
   process.env.API_BASE_URL || 'https://smap-api.tantai.dev';
@@ -71,6 +72,20 @@ async function handler(
   const search = request.nextUrl.search;
   const targetUrl = `${BACKEND_URL}${targetPath}${search}`;
   const requestHost = request.headers.get('host') || 'localhost';
+
+  // ── Mock mode: short-circuit before hitting real backend ──────────────────
+  if (IS_MOCK) {
+    if (request.method === 'GET') {
+      const body = matchProxyGet(`${targetPath}${search}`);
+      if (body !== undefined) {
+        return NextResponse.json(body);
+      }
+      // Unknown GET → return empty shape rather than 502
+      return NextResponse.json({}, { status: 200 });
+    }
+    // Read-only: mutations are no-ops, return 200 with echoed/empty body
+    return NextResponse.json({ ok: true, mock: true }, { status: 200 });
+  }
 
   // Build forwarded headers
   const headers = new Headers();

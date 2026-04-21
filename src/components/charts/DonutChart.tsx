@@ -64,13 +64,18 @@ export function DonutChart({ segments, size = 140, showLegend = true, className 
   };
 
   return (
-    <div className={clsx('flex items-center gap-6', className)}>
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <div className={clsx('flex flex-wrap items-center justify-center gap-4 md:gap-6 min-w-0 w-full', className)}>
+      <div
+        className="relative min-w-0"
+        style={{ width: size, height: size, maxWidth: '100%', aspectRatio: '1 / 1' }}
+      >
         <svg
-          width={size} height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          preserveAspectRatio="xMidYMid meet"
+          width="100%" height="100%"
           onMouseMove={handleMove}
           onMouseLeave={() => { setTipIdx(null); setMouse(null); }}
-          className="cursor-pointer"
+          className="cursor-pointer block"
         >
           {/* Background track */}
           <circle cx={cxC} cy={cyC} r={r} fill="none" stroke="var(--bg-hover)" strokeWidth={strokeW} />
@@ -81,11 +86,11 @@ export function DonutChart({ segments, size = 140, showLegend = true, className 
               cx={cxC} cy={cyC} r={r}
               fill="none"
               stroke={arc.color}
-              strokeWidth={tipIdx === i ? strokeW + 4 : strokeW}
+              strokeWidth={tipIdx === i ? strokeW + 3 : strokeW}
               strokeLinecap="round"
               strokeDasharray={`${arc.dash} ${circumference - arc.dash}`}
               strokeDashoffset={arc.offset}
-              className="transition-all duration-300"
+              style={{ transition: 'stroke-width 150ms ease-out' }}
             />
           ))}
         </svg>
@@ -99,12 +104,12 @@ export function DonutChart({ segments, size = 140, showLegend = true, className 
       </div>
 
       {showLegend && (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0 flex-1">
           {segments.map((seg, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-2 min-w-0">
               <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: seg.color }} />
-              <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{seg.label}</span>
-              <span className="text-[11px] font-bold tabular-nums ml-auto" style={{ color: 'var(--text-primary)' }}>
+              <span className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>{seg.label}</span>
+              <span className="text-[11px] font-bold tabular-nums ml-auto shrink-0" style={{ color: 'var(--text-primary)' }}>
                 {((seg.value / total) * 100).toFixed(0)}%
               </span>
             </div>

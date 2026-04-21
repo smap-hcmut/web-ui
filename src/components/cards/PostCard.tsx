@@ -32,35 +32,37 @@ export function PostCard({ author, content, platform, sentiment, engagement, tim
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
             style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
           >
             {author.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>{author}</p>
-            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{platform} · {time}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{author}</p>
+            <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{platform} · {time}</p>
           </div>
         </div>
-        <Badge variant={sentimentVariant[sentiment]}>{sentiment}</Badge>
+        <div className="shrink-0">
+          <Badge variant={sentimentVariant[sentiment]}>{sentiment}</Badge>
+        </div>
       </div>
 
       <p className="text-[12px] leading-relaxed mb-3 line-clamp-3" style={{ color: 'var(--text-secondary)' }}>
         {content}
       </p>
 
-      <div className="flex items-center gap-4" style={{ color: 'var(--text-muted)' }}>
-        <span className="inline-flex items-center gap-1 text-[11px]">
-          <Heart className="w-3 h-3" /> {formatNum(engagement)}
+      <div className="flex items-center gap-3 md:gap-4 flex-wrap" style={{ color: 'var(--text-muted)' }}>
+        <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
+          <Heart className="w-3 h-3 shrink-0" /> {formatNum(engagement)}
         </span>
-        <span className="inline-flex items-center gap-1 text-[11px]">
-          <MessageCircle className="w-3 h-3" /> {formatNum(Math.floor(engagement * 0.12))}
+        <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
+          <MessageCircle className="w-3 h-3 shrink-0" /> {formatNum(Math.floor(engagement * 0.12))}
         </span>
-        <span className="inline-flex items-center gap-1 text-[11px]">
-          <Share2 className="w-3 h-3" /> {formatNum(Math.floor(engagement * 0.05))}
+        <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
+          <Share2 className="w-3 h-3 shrink-0" /> {formatNum(Math.floor(engagement * 0.05))}
         </span>
       </div>
     </div>

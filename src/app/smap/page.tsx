@@ -126,7 +126,7 @@ function fmt(n: number): string {
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-2xl p-5 ${className}`}
+      className={`rounded-2xl p-4 md:p-5 min-w-0 ${className}`}
       style={{
         background: "var(--bg-surface)",
         border: "1px solid var(--border)",
@@ -140,11 +140,11 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: string }) {
   return (
-    <div className="mb-3">
-      <h2 className="text-[14px] font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+    <div className="mb-3 min-w-0">
+      <h2 className="text-[13px] md:text-[14px] font-semibold tracking-tight truncate" style={{ color: "var(--text-primary)" }}>
         {children}
       </h2>
-      {sub && <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>{sub}</p>}
+      {sub && <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: "var(--text-muted)" }}>{sub}</p>}
     </div>
   );
 }
@@ -696,10 +696,10 @@ function InsightsTab() {
           <SectionTitle sub="Content conversion">Engagement Funnel</SectionTitle>
           <div className="space-y-2.5">
             {engagementFunnel.map((stage) => (
-              <div key={stage.label}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>{stage.label}</span>
-                  <span className="text-[11px] font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+              <div key={stage.label} className="min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-[11px] font-medium truncate" style={{ color: "var(--text-secondary)" }}>{stage.label}</span>
+                  <span className="text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0" style={{ color: "var(--text-primary)" }}>
                     {fmt(stage.value)} <span className="font-normal" style={{ color: "var(--text-faint)" }}>({stage.pct}%)</span>
                   </span>
                 </div>
@@ -734,7 +734,7 @@ function InsightsTab() {
                 <button
                   key={p}
                   onClick={() => setPlatformFilter(p)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
+                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
                   style={{
                     background: platformFilter === p ? "var(--bg-surface-solid)" : "transparent",
                     color: platformFilter === p ? "var(--text-primary)" : "var(--text-muted)",
@@ -752,7 +752,7 @@ function InsightsTab() {
                 <button
                   key={s}
                   onClick={() => setSentimentFilter(s)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
+                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
                   style={{
                     background: sentimentFilter === s ? "var(--bg-surface-solid)" : "transparent",
                     color: sentimentFilter === s ? "var(--text-primary)" : "var(--text-muted)",
@@ -767,10 +767,10 @@ function InsightsTab() {
             {/* Sort */}
             <button
               onClick={() => setSortBy(sortBy === "engagement" ? "time" : "engagement")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap"
               style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
             >
-              <ArrowUpDown className="w-3 h-3" />
+              <ArrowUpDown className="w-3 h-3 shrink-0" />
               {sortBy === "engagement" ? "By Engagement" : "By Time"}
             </button>
           </div>

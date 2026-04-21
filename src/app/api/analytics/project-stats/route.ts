@@ -15,6 +15,7 @@ import {
   getProjectIdsForCampaign,
   projectFilter,
 } from '@/lib/metabase/client';
+import { IS_MOCK, mockProjectStats } from '@/lib/mock';
 
 export interface ProjectStat {
   project_id: string;
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest) {
     if (!campaignId) {
       return NextResponse.json({ error: 'campaignId is required' }, { status: 400 });
     }
+
+    if (IS_MOCK) return NextResponse.json(mockProjectStats);
 
     const projectIds = await getProjectIdsForCampaign(campaignId);
     if (projectIds.length === 0) {

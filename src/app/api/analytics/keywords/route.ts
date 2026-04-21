@@ -12,6 +12,7 @@ import {
   getProjectIdsForCampaign,
   projectFilter,
 } from '@/lib/metabase/client';
+import { IS_MOCK, mockKeywords } from '@/lib/mock';
 
 interface KeywordItem {
   text: string;
@@ -27,6 +28,13 @@ export async function GET(request: NextRequest) {
 
     if (!campaignId) {
       return NextResponse.json({ error: 'campaignId is required' }, { status: 400 });
+    }
+
+    if (IS_MOCK) {
+      return NextResponse.json({
+        keywords: mockKeywords.keywords.slice(0, limit),
+        wordCloud: mockKeywords.wordCloud,
+      });
     }
 
     const projectIds = await getProjectIdsForCampaign(campaignId);

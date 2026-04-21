@@ -43,30 +43,37 @@ export function WordCloud({ words, maxWords = 30, height = 320, className }: Wor
 
   // Deterministic spiral placement
   const placed: { x: number; y: number; w: number; h: number }[] = [];
+  const PAD_X = 6;
+  const PAD_Y = 3;
 
-  function findPos(idx: number, fs: number, textLen: number) {
-    const estW = textLen * fs * 0.58;
-    const estH = fs * 1.3;
+  // Pessimistic width estimate for system-ui-ish font. Slight padding so
+  // rendered glyphs don't visually touch.
+  function estimateBox(fs: number, textLen: number) {
+    const w = textLen * fs * 0.62 + PAD_X * 2;
+    const h = fs * 1.25 + PAD_Y * 2;
+    return { w, h };
+  }
 
-    // Spiral outward from center — wider spread
-    for (let t = 0; t < 600; t++) {
+  function findPos(idx: number, fs: number, textLen: number): { x: number; y: number } | null {
+    const { w: estW, h: estH } = estimateBox(fs, textLen);
+
+    // Spiral outward from center with more iterations for reliable placement.
+    for (let t = 0; t < 2000; t++) {
       const angle = t * 0.18 + idx * 0.5;
-      const radius = t * 0.8;
+      const radius = t * 0.7;
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
 
-      // Bounds check
       if (x - estW / 2 < 8 || x + estW / 2 > vw - 8) continue;
       if (y - estH / 2 < 8 || y + estH / 2 > height - 8) continue;
 
-      // Overlap check
       const box = { x: x - estW / 2, y: y - estH / 2, w: estW, h: estH };
       const overlaps = placed.some(
         (p) =>
           box.x < p.x + p.w &&
           box.x + box.w > p.x &&
           box.y < p.y + p.h &&
-          box.y + box.h > p.y
+          box.y + box.h > p.y,
       );
 
       if (!overlaps) {
@@ -74,17 +81,27 @@ export function WordCloud({ words, maxWords = 30, height = 320, className }: Wor
         return { x, y };
       }
     }
-    // Fallback: place it anyway
-    return { x: cx + (idx % 5) * 60 - 120, y: cy + Math.floor(idx / 5) * 30 - 60 };
+    return null;
   }
 
-  const items = display.map((word, i) => {
-    const fs = fontSize(word.value);
-    const pos = findPos(i, fs, word.text.length);
-    const baseOp = word.opacity ?? (0.5 + (word.value - minVal) / range * 0.5);
-    const opacity = baseOp;
-    return { ...word, ...pos, fs, opacity };
-  });
+  // Place with shrink-to-fit: if a word can't fit at its target size, drop
+  // the font step by step until it fits. Below the floor, drop the word
+  // entirely rather than overlapping.
+  const items = display
+    .map((word) => {
+      let fs = fontSize(word.value);
+      let pos: { x: number; y: number } | null = null;
+      for (let step = 0; step < 4; step++) {
+        pos = findPos(0, fs, word.text.length);
+        if (pos) break;
+        fs *= 0.85;
+        if (fs < 10) break;
+      }
+      if (!pos) return null;
+      const baseOp = word.opacity ?? 0.5 + ((word.value - minVal) / range) * 0.5;
+      return { ...word, ...pos, fs, opacity: baseOp };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   return (
     <div className={className}>

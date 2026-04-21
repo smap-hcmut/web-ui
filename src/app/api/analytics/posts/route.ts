@@ -13,6 +13,7 @@ import {
   getProjectIdsForCampaign,
   projectFilter,
 } from '@/lib/metabase/client';
+import { IS_MOCK, mockPostsAll } from '@/lib/mock';
 
 export interface PostItem {
   id: string;
@@ -48,6 +49,18 @@ export async function GET(request: NextRequest) {
 
     if (!campaignId) {
       return NextResponse.json({ error: 'campaignId is required' }, { status: 400 });
+    }
+
+    if (IS_MOCK) {
+      let list = [...mockPostsAll];
+      if (platform !== 'all') list = list.filter((p) => p.platform === platform.toUpperCase());
+      if (sentiment !== 'all') list = list.filter((p) => p.sentiment === sentiment);
+      list.sort((a, b) =>
+        sort === 'time' ? (b.time > a.time ? 1 : -1) : b.engagement - a.engagement,
+      );
+      const total = list.length;
+      const paged = list.slice(offset, offset + limit);
+      return NextResponse.json({ posts: paged, total });
     }
 
     const projectIds = await getProjectIdsForCampaign(campaignId);
