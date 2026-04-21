@@ -825,12 +825,14 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
   const [commentSort, setCommentSort] = useState<"likes" | "time" | "sentiment">("likes");
   const [commentPage, setCommentPage] = useState(0);
   const [detailLoading, setDetailLoading] = useState(true);
+  const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   // Reset page & simulate loading when post changes
   useEffect(() => {
     if (post) {
       setCommentPage(0);
       setDetailLoading(true);
+      setShowAllKeywords(false);
       const t = setTimeout(() => setDetailLoading(false), 800);
       return () => clearTimeout(t);
     }
@@ -927,19 +929,45 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
         </p>
 
         {/* Keywords */}
-        {post.keywords.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {post.keywords.map((kw) => (
-              <span
-                key={kw}
-                className="text-[10px] font-medium px-2 py-0.5 rounded-md"
-                style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
-              >
-                {kw}
-              </span>
-            ))}
-          </div>
-        )}
+        {post.keywords.length > 0 && (() => {
+          const KW_LIMIT = 10;
+          const overflow = post.keywords.length - KW_LIMIT;
+          const visible = showAllKeywords ? post.keywords : post.keywords.slice(0, KW_LIMIT);
+          return (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {visible.map((kw, i) => (
+                <span
+                  key={`${kw}-${i}`}
+                  className="text-[10px] font-medium px-2 py-0.5 rounded-md"
+                  style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
+                >
+                  {kw}
+                </span>
+              ))}
+              {overflow > 0 && !showAllKeywords && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllKeywords(true)}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors hover:opacity-80"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}
+                  aria-label={`Show ${overflow} more keywords`}
+                >
+                  +{overflow}
+                </button>
+              )}
+              {showAllKeywords && post.keywords.length > KW_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllKeywords(false)}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-colors hover:opacity-80"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}
+                >
+                  Show less
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Stats grid */}
         <div className="grid grid-cols-4 gap-2 mb-4">

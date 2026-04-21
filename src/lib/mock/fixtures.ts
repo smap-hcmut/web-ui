@@ -210,7 +210,7 @@ export const mockPostsAll = Array.from({ length: 36 }, (_, i) => {
     likes: Math.round(engagement * 0.55),
     comments: Math.round(engagement * 0.12),
     shares: Math.round(engagement * 0.05),
-    keywords: [keywordsBase[i % keywordsBase.length], keywordsBase[(i + 3) % keywordsBase.length]],
+    keywords: Array.from({ length: 4 + (i % 11) }, (_, k) => keywordsBase[(i + k * 2) % keywordsBase.length]),
     riskLevel: sentiment === 'negative' ? 'medium' : 'low',
     hashtags: [`#${keywordsBase[i % keywordsBase.length].replace(/\s+/g, '')}`, '#review'],
   };
