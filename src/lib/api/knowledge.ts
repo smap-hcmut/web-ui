@@ -19,10 +19,11 @@ export interface ChatRequest {
 }
 
 export interface Citation {
-  source: string;
+  id: string;
   content: string;
-  url?: string;
-  relevance_score?: number;
+  platform: string;
+  sentiment: string;
+  relevance_score: number;
 }
 
 export interface ChatResponse {

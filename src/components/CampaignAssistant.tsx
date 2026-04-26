@@ -195,10 +195,10 @@ function parseDemoCommand(text: string): BotResponseBlock[] | { error: string } 
 /* ─── Default suggestions (used when API has none or no campaign selected) ─── */
 
 const defaultSuggestions = [
-  { id: 'sq1', text: 'Tóm tắt sentiment tuần này' },
-  { id: 'sq2', text: 'Top 5 bài viết có engagement cao nhất' },
-  { id: 'sq3', text: 'So sánh hiệu suất giữa các platform' },
-  { id: 'sq4', text: 'Xu hướng keyword nổi bật' },
+  { id: 'sq1', text: 'Khách hàng đang phản hồi gì nổi bật về chiến dịch này?' },
+  { id: 'sq2', text: 'Các phản hồi tích cực nổi bật là gì?' },
+  { id: 'sq3', text: 'Vấn đề nào được nhắc đến nhiều nhất gần đây?' },
+  { id: 'sq4', text: 'Chi tiết phản hồi tiêu cực nổi bật là gì?' },
 ];
 
 /** Convert knowledge-srv chat response to BotResponseBlock[] */
@@ -215,7 +215,12 @@ function chatResponseToBlocks(resp: ChatResponse): BotResponseBlock[] {
     blocks.push({
       type: 'bullets',
       items: resp.citations.map(
-        (c) => c.url ? `[${c.source}](${c.url}): ${c.content}` : `${c.source}: ${c.content}`,
+        (c) => {
+          const source = 'source' in c && typeof c.source === 'string' ? c.source : '';
+          const prefix = c.platform || source || 'Nguồn';
+          const sentiment = c.sentiment ? ` (${c.sentiment})` : '';
+          return `${prefix}${sentiment}: ${c.content || ''}`;
+        },
       ),
     });
   }
@@ -281,7 +286,7 @@ function formatFullTime(d: Date): string {
 
 /* ─── Persistence (per-campaign, TTL 4h, cap 100 msgs) ─── */
 
-const PERSIST_PREFIX = 'smap:assistant:chat:';
+const PERSIST_PREFIX = 'smap:assistant:v2:chat:';
 const PERSIST_TTL_MS = 4 * 60 * 60 * 1000;
 const PERSIST_MAX_MESSAGES = 100;
 
@@ -306,7 +311,25 @@ function loadPersisted(campaignId: string | null): PersistedChat | null {
       return null;
     }
     // Revive Date objects
-    data.messages = data.messages.map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+    data.messages = data.messages.map((m) => ({
+      ...m,
+      timestamp: new Date(m.timestamp),
+      blocks: m.blocks.map((b) => {
+        if (b.type === 'text' && b.content) {
+          return {
+            ...b,
+            content: b.content.replace(/(^|\n)(-\s+)?undefined:/g, '$1$2Nguồn:'),
+          };
+        }
+        if (b.type === 'bullets' && b.items) {
+          return {
+            ...b,
+            items: b.items.map((item) => item.replace(/^undefined:/, 'Nguồn:')),
+          };
+        }
+        return b;
+      }),
+    }));
     return data;
   } catch {
     return null;

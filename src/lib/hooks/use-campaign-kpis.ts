@@ -5,7 +5,12 @@
  * with change%, sparklines, and engagement breakdown from the analytics API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,11 +64,20 @@ async function fetchKPIs(campaignId: string): Promise<KPIsResponse> {
  * Also returns engagement breakdown (views, likes, comments, shares).
  */
 export function useCampaignKPIs(campaignId: string | undefined) {
-  return useQuery({
-    queryKey: kpiKeys.campaign(campaignId!),
+  const queryKey = campaignId ? kpiKeys.campaign(campaignId) : [...kpiKeys.all, '__pending__'] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchKPIs(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000, // 1 minute — analytics data doesn't change rapidly
     refetchInterval: 5 * 60_000, // auto-refresh every 5 minutes
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<KPIsResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

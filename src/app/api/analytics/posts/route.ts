@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
 } from '@/lib/metabase/client';
 import { IS_MOCK, mockPostsAll } from '@/lib/mock';
 
@@ -68,10 +68,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ posts: [], total: 0 });
     }
 
-    const pf = projectFilter(projectIds);
+    const postsCTE = dedupedPostInsightCTE(projectIds);
 
     // Build dynamic WHERE conditions
-    const conditions: string[] = [pf];
+    const conditions: string[] = [];
 
     if (platform !== 'all') {
       conditions.push(`UPPER(platform) = '${platform.toUpperCase().replace(/'/g, "''")}'`);
@@ -85,22 +85,12 @@ export async function GET(request: NextRequest) {
       conditions.push('overall_sentiment_score >= 0.4 AND overall_sentiment_score < 0.7');
     }
 
-    const where = conditions.join(' AND ');
+    const where = conditions.length > 0 ? conditions.join(' AND ') : '1 = 1';
 
     const orderBy = sort === 'time'
       ? 'content_created_at DESC NULLS LAST'
       : 'engagement_score DESC NULLS LAST';
 
-    // Total count
-    const countRows = await queryNative<{ total: number }>(`
-      SELECT COUNT(*) AS total
-      FROM analysis.post_insight
-      WHERE ${where}
-    `);
-
-    const total = Number(countRows[0]?.total || 0);
-
-    // Posts
     const rows = await queryNative<{
       id: string;
       platform: string;
@@ -113,7 +103,9 @@ export async function GET(request: NextRequest) {
       risk_level: string;
       keywords: string | string[];
       uap_metadata: string | Record<string, unknown>;
+      total_count: number;
     }>(`
+      ${postsCTE}
       SELECT
         id::text,
         LOWER(platform) AS platform,
@@ -125,12 +117,15 @@ export async function GET(request: NextRequest) {
         COALESCE(reach_estimate, 0) AS reach_estimate,
         COALESCE(risk_level, 'LOW') AS risk_level,
         COALESCE(keywords, '{}') AS keywords,
-        COALESCE(uap_metadata::text, '{}') AS uap_metadata
-      FROM analysis.post_insight
+        COALESCE(uap_metadata::text, '{}') AS uap_metadata,
+        COUNT(*) OVER() AS total_count
+      FROM deduped_post_insight
       WHERE ${where}
       ORDER BY ${orderBy}
       LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const total = Number(rows[0]?.total_count || 0);
 
     const posts: PostItem[] = rows.map((r) => {
       let uap: Record<string, unknown> = {};

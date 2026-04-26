@@ -5,7 +5,12 @@
  * donut chart, timeline, pulse score from the analytics API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,11 +65,20 @@ async function fetchSentiment(campaignId: string): Promise<SentimentResponse> {
  * - total: total posts analyzed
  */
 export function useSentimentData(campaignId: string | undefined) {
-  return useQuery({
-    queryKey: sentimentKeys.campaign(campaignId!),
+  const queryKey = campaignId ? sentimentKeys.campaign(campaignId) : [...sentimentKeys.all, '__pending__'] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchSentiment(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<SentimentResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

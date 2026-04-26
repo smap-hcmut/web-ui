@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
   fmtNumber,
   percentChange,
 } from '@/lib/metabase/client';
@@ -64,85 +64,92 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(empty);
     }
 
-    const pf = projectFilter(projectIds);
+    const analyticsCTE = dedupedPostInsightCTE(projectIds);
 
-    // Current period totals
-    const totals = await queryNative<{
-      total_mentions: number;
-      avg_sentiment: number;
-      sum_engagement: number;
-      sum_reach: number;
-      sum_views: number;
-      sum_likes: number;
-      sum_comments: number;
-      sum_shares: number;
-    }>(`
-      SELECT
-        COUNT(*) AS total_mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
-        COALESCE(SUM(engagement_score), 0) AS sum_engagement,
-        COALESCE(SUM(reach_estimate), 0) AS sum_reach,
-        COALESCE(SUM((uap_metadata->'engagement'->>'views')::bigint), 0) AS sum_views,
-        COALESCE(SUM((uap_metadata->'engagement'->>'likes')::bigint), 0) AS sum_likes,
-        COALESCE(SUM((uap_metadata->'engagement'->>'comments')::bigint), 0) AS sum_comments,
-        COALESCE(SUM((uap_metadata->'engagement'->>'shares')::bigint), 0) AS sum_shares
-      FROM analysis.post_insight
-      WHERE ${pf}
-    `);
+    const [summaryRows, sparkRows] = await Promise.all([
+      queryNative<{
+        total_mentions: number;
+        avg_sentiment: number;
+        sum_engagement: number;
+        sum_reach: number;
+        sum_views: number;
+        sum_likes: number;
+        sum_comments: number;
+        sum_shares: number;
+        current_mentions: number;
+        previous_mentions: number;
+        current_sentiment: number;
+        previous_sentiment: number;
+        current_engagement: number;
+        previous_engagement: number;
+        current_reach: number;
+        previous_reach: number;
+      }>(`
+        ${analyticsCTE}
+        SELECT
+          COUNT(*) AS total_mentions,
+          COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+          COALESCE(SUM(engagement_score), 0) AS sum_engagement,
+          COALESCE(SUM(reach_estimate), 0) AS sum_reach,
+          COALESCE(SUM((uap_metadata->'engagement'->>'views')::bigint), 0) AS sum_views,
+          COALESCE(SUM((uap_metadata->'engagement'->>'likes')::bigint), 0) AS sum_likes,
+          COALESCE(SUM((uap_metadata->'engagement'->>'comments')::bigint), 0) AS sum_comments,
+          COALESCE(SUM((uap_metadata->'engagement'->>'shares')::bigint), 0) AS sum_shares,
+          COUNT(*) FILTER (WHERE content_created_at >= NOW() - INTERVAL '30 days') AS current_mentions,
+          COUNT(*) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '60 days'
+              AND content_created_at < NOW() - INTERVAL '30 days'
+          ) AS previous_mentions,
+          COALESCE(AVG(overall_sentiment_score) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '30 days'
+          ) * 100, 0) AS current_sentiment,
+          COALESCE(AVG(overall_sentiment_score) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '60 days'
+              AND content_created_at < NOW() - INTERVAL '30 days'
+          ) * 100, 0) AS previous_sentiment,
+          COALESCE(SUM(engagement_score) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '30 days'
+          ), 0) AS current_engagement,
+          COALESCE(SUM(engagement_score) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '60 days'
+              AND content_created_at < NOW() - INTERVAL '30 days'
+          ), 0) AS previous_engagement,
+          COALESCE(SUM(reach_estimate) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '30 days'
+          ), 0) AS current_reach,
+          COALESCE(SUM(reach_estimate) FILTER (
+            WHERE content_created_at >= NOW() - INTERVAL '60 days'
+              AND content_created_at < NOW() - INTERVAL '30 days'
+          ), 0) AS previous_reach
+        FROM deduped_post_insight
+      `),
+      queryNative<{
+        month: string;
+        mentions: number;
+        sentiment: number;
+        engagement: number;
+        reach: number;
+      }>(`
+        ${analyticsCTE}
+        SELECT
+          TO_CHAR(date_trunc('month', content_created_at), 'YYYY-MM') AS month,
+          COUNT(*) AS mentions,
+          COALESCE(AVG(overall_sentiment_score) * 100, 0) AS sentiment,
+          COALESCE(SUM(engagement_score), 0) AS engagement,
+          COALESCE(SUM(reach_estimate), 0) AS reach
+        FROM deduped_post_insight
+        WHERE content_created_at >= NOW() - INTERVAL '12 months'
+        GROUP BY 1
+        ORDER BY 1
+      `),
+    ]);
 
-    const t = totals[0];
+    const t = summaryRows[0];
 
-    // Previous 30 days vs current 30 days for change%
-    const periods = await queryNative<{
-      period: string;
-      mentions: number;
-      sentiment: number;
-      engagement: number;
-      reach: number;
-    }>(`
-      SELECT
-        CASE
-          WHEN content_created_at >= NOW() - INTERVAL '30 days' THEN 'current'
-          WHEN content_created_at >= NOW() - INTERVAL '60 days' THEN 'previous'
-        END AS period,
-        COUNT(*) AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS sentiment,
-        COALESCE(SUM(engagement_score), 0) AS engagement,
-        COALESCE(SUM(reach_estimate), 0) AS reach
-      FROM analysis.post_insight
-      WHERE ${pf}
-        AND content_created_at >= NOW() - INTERVAL '60 days'
-      GROUP BY 1
-    `);
-
-    const current = periods.find((r) => r.period === 'current');
-    const previous = periods.find((r) => r.period === 'previous');
-
-    const mentionsChange = percentChange(Number(current?.mentions || 0), Number(previous?.mentions || 0));
-    const sentimentChange = percentChange(Number(current?.sentiment || 0), Number(previous?.sentiment || 0));
-    const engagementChange = percentChange(Number(current?.engagement || 0), Number(previous?.engagement || 0));
-    const reachChange = percentChange(Number(current?.reach || 0), Number(previous?.reach || 0));
-
-    // 12-point sparkline (monthly, last 12 months)
-    const sparkRows = await queryNative<{
-      month: string;
-      mentions: number;
-      sentiment: number;
-      engagement: number;
-      reach: number;
-    }>(`
-      SELECT
-        TO_CHAR(date_trunc('month', content_created_at), 'YYYY-MM') AS month,
-        COUNT(*) AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS sentiment,
-        COALESCE(SUM(engagement_score), 0) AS engagement,
-        COALESCE(SUM(reach_estimate), 0) AS reach
-      FROM analysis.post_insight
-      WHERE ${pf}
-        AND content_created_at >= NOW() - INTERVAL '12 months'
-      GROUP BY 1
-      ORDER BY 1
-    `);
+    const mentionsChange = percentChange(Number(t.current_mentions), Number(t.previous_mentions));
+    const sentimentChange = percentChange(Number(t.current_sentiment), Number(t.previous_sentiment));
+    const engagementChange = percentChange(Number(t.current_engagement), Number(t.previous_engagement));
+    const reachChange = percentChange(Number(t.current_reach), Number(t.previous_reach));
 
     const totalMentions = Number(t.total_mentions);
     const avgSentiment = Number(Number(t.avg_sentiment).toFixed(1));

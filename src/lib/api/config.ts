@@ -19,6 +19,16 @@ const getApiBaseUrl = () => {
   return process.env.API_BASE_URL || 'https://smap-api.tantai.dev';
 };
 
+const getMetabaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_METABASE_URL || 'https://smap-metabase.tantai.dev';
+  }
+  return process.env.METABASE_INTERNAL_URL
+    || process.env.METABASE_URL
+    || process.env.NEXT_PUBLIC_METABASE_URL
+    || 'http://metabase.smap.svc.cluster.local';
+};
+
 export const API_CONFIG = {
   // Base URL for all API calls (browser-accessible)
   BASE_URL: getApiBaseUrl(),
@@ -37,7 +47,7 @@ export const API_CONFIG = {
 
   // Metabase (separate domain/IP)
   METABASE: {
-    URL: process.env.NEXT_PUBLIC_METABASE_URL || 'https://smap-metabase.tantai.dev',
+    URL: getMetabaseUrl(),
     SECRET: process.env.METABASE_SECRET_KEY || 'c6a62ff7eea13cfa4801c1bf2397d82ccc6f5c3c4e6f38fedd1aabc49ce81752',
   },
 

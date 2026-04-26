@@ -5,7 +5,12 @@
  * from the analytics API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,11 +66,22 @@ async function fetchKeywords(campaignId: string, limit = 50): Promise<KeywordsRe
  * - wordCloud: items with text, value, color, opacity (for word cloud visualization)
  */
 export function useTrendingKeywords(campaignId: string | undefined, limit = 50) {
-  return useQuery({
-    queryKey: keywordKeys.campaign(campaignId!, limit),
+  const queryKey = campaignId
+    ? keywordKeys.campaign(campaignId, limit)
+    : [...keywordKeys.all, '__pending__', { limit }] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchKeywords(campaignId!, limit),
     enabled: !!campaignId,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<KeywordsResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

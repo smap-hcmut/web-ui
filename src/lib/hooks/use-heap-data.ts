@@ -5,7 +5,12 @@
  * HeapSpace bubble visualization from the analytics API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,11 +62,20 @@ async function fetchHeapData(campaignId: string): Promise<HeapResponse> {
  * Returns null tree if no projects exist for the campaign.
  */
 export function useHeapData(campaignId: string | undefined) {
-  return useQuery({
-    queryKey: heapKeys.campaign(campaignId!),
+  const queryKey = campaignId ? heapKeys.campaign(campaignId) : [...heapKeys.all, '__pending__'] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchHeapData(campaignId!),
     enabled: !!campaignId,
     staleTime: 2 * 60_000, // heap data is heavier — longer stale time
     refetchInterval: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<HeapResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

@@ -16,7 +16,17 @@ interface CachedSession {
   expiresAt: number;
 }
 
-const globalForMb = globalThis as unknown as { mbSession: CachedSession | null };
+interface CachedCampaignProjects {
+  value: string[];
+  expiresAt: number;
+}
+
+const globalForMb = globalThis as unknown as {
+  mbSession: CachedSession | null;
+  mbCampaignProjects?: Record<string, CachedCampaignProjects>;
+};
+
+const CAMPAIGN_PROJECTS_TTL_MS = 5 * 60 * 1000;
 
 async function getSession(): Promise<string> {
   if (globalForMb.mbSession && Date.now() < globalForMb.mbSession.expiresAt) {
@@ -180,12 +190,25 @@ function escapeSQL(s: string): string {
 export async function getProjectIdsForCampaign(campaignId: string): Promise<string[]> {
   if (!isUUID(campaignId)) return [];
 
+  const cached = globalForMb.mbCampaignProjects?.[campaignId];
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.value;
+  }
+
   const rows = await queryNative<{ id: string }>(`
     SELECT id::text FROM project.projects
     WHERE campaign_id = '${campaignId}'
       AND deleted_at IS NULL
   `);
-  return rows.map((r) => r.id);
+  const projectIds = rows.map((r) => r.id);
+  globalForMb.mbCampaignProjects = {
+    ...(globalForMb.mbCampaignProjects || {}),
+    [campaignId]: {
+      value: projectIds,
+      expiresAt: Date.now() + CAMPAIGN_PROJECTS_TTL_MS,
+    },
+  };
+  return projectIds;
 }
 
 /**
@@ -201,6 +224,96 @@ export function projectFilter(projectIds: string[]): string {
 
   const quoted = valid.map((id) => `'${escapeSQL(id)}'`).join(', ');
   return `project_id IN (${quoted})`;
+}
+
+/**
+ * Build a reusable CTE that keeps only the latest snapshot row per canonical post key.
+ * Canonical key: platform + durable source key.
+ *
+ * NOTE: Do not include timestamps in the partition key. Older campaigns can have
+ * multiple snapshot rows for the same logical post with different ingest/content
+ * timestamps; including time in the key prevents deduplication.
+ */
+export function latestPostInsightCTE(projectIds: string[]): string {
+  const pf = projectFilter(projectIds);
+
+  return `
+WITH latest_post_insight AS (
+  SELECT *
+  FROM (
+    SELECT
+      pi.*,
+      ROW_NUMBER() OVER (
+        PARTITION BY
+          COALESCE(NULLIF(UPPER(pi.platform), ''), 'UNKNOWN'),
+          COALESCE(
+            NULLIF(pi.source_id, ''),
+            NULLIF(pi.uap_metadata->>'post_id', ''),
+            NULLIF(pi.uap_metadata->>'comment_id', ''),
+            NULLIF(pi.uap_metadata->>'video_id', ''),
+            NULLIF(pi.uap_metadata->>'url', ''),
+            MD5(CONCAT_WS(
+              '|',
+              COALESCE(NULLIF(LOWER(pi.uap_metadata->>'author_username'), ''), 'unknown'),
+              COALESCE(NULLIF(pi.content, ''), '__empty__')
+            ))
+          )
+        ORDER BY
+          COALESCE(pi.updated_at, pi.analyzed_at, pi.ingested_at, pi.created_at) DESC NULLS LAST,
+          pi.created_at DESC NULLS LAST,
+          pi.id DESC
+      ) AS snapshot_rank
+    FROM analysis.post_insight pi
+    WHERE ${pf}
+  ) ranked
+  WHERE snapshot_rank = 1
+)
+`;
+}
+
+/**
+ * Build a campaign-level deduped relation for analytics routes.
+ *
+ * This sits on top of latest snapshot dedupe and collapses repeated rows that
+ * represent the same logical post/comment content on the same platform by the
+ * same author. Campaign dashboards should read from this relation so every
+ * route reports on the same population.
+ */
+export function dedupedPostInsightCTE(projectIds: string[]): string {
+  const latestCTE = latestPostInsightCTE(projectIds);
+
+  return `${latestCTE}, deduped_post_insight AS (
+  SELECT *
+  FROM (
+    SELECT
+      lpi.*,
+      ROW_NUMBER() OVER (
+        PARTITION BY
+          COALESCE(NULLIF(UPPER(lpi.platform), ''), 'UNKNOWN'),
+          COALESCE(
+            NULLIF(LOWER(lpi.uap_metadata->>'author_username'), ''),
+            NULLIF(LOWER(lpi.uap_metadata->>'author_display_name'), ''),
+            'unknown'
+          ),
+          COALESCE(
+            NULLIF(TRIM(REGEXP_REPLACE(COALESCE(lpi.content, ''), '\\s+', ' ', 'g')), ''),
+            NULLIF(lpi.source_id, ''),
+            NULLIF(lpi.uap_metadata->>'post_id', ''),
+            NULLIF(lpi.uap_metadata->>'comment_id', ''),
+            NULLIF(lpi.uap_metadata->>'video_id', ''),
+            NULLIF(lpi.uap_metadata->>'url', ''),
+            lpi.id::text
+          )
+        ORDER BY
+          COALESCE(lpi.updated_at, lpi.analyzed_at, lpi.ingested_at, lpi.created_at) DESC NULLS LAST,
+          lpi.created_at DESC NULLS LAST,
+          lpi.id DESC
+      ) AS display_rank
+    FROM latest_post_insight lpi
+  ) ranked
+  WHERE display_rank = 1
+)
+`;
 }
 
 /** Format large numbers for display */

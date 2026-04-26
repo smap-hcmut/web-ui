@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
 } from '@/lib/metabase/client';
 import { IS_MOCK, mockHeap } from '@/lib/mock';
 
@@ -43,78 +43,73 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ tree: null });
     }
 
-    const pf = projectFilter(projectIds);
+    const analyticsCTE = dedupedPostInsightCTE(projectIds);
 
-    // Get campaign name
-    const campRows = await queryNative<{ name: string }>(`
-      SELECT name FROM project.campaigns WHERE id = '${campaignId}'
-    `);
+    const [campRows, projectRows, projStats, kwRows] = await Promise.all([
+      queryNative<{ name: string }>(`
+        SELECT name FROM project.campaigns WHERE id = '${campaignId}'
+      `),
+      queryNative<{
+        id: string;
+        name: string;
+      }>(`
+        SELECT id::text, name
+        FROM project.projects
+        WHERE campaign_id = '${campaignId}' AND deleted_at IS NULL
+      `),
+      queryNative<{
+        project_id: string;
+        mentions: number;
+        avg_sentiment: number;
+        sum_engagement: number;
+      }>(`
+        ${analyticsCTE}
+        SELECT
+          project_id,
+          COUNT(*) AS mentions,
+          COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+          COALESCE(SUM(engagement_score), 0) AS sum_engagement
+        FROM deduped_post_insight
+        GROUP BY project_id
+      `),
+      queryNative<{
+        project_id: string;
+        keyword: string;
+        volume: number;
+        avg_sentiment: number;
+        sum_engagement: number;
+      }>(`
+        ${analyticsCTE}
+        , ranked AS (
+          SELECT
+            project_id,
+            kw AS keyword,
+            COUNT(*) AS volume,
+            AVG(overall_sentiment_score) * 100 AS avg_sentiment,
+            SUM(engagement_score) AS sum_engagement,
+            ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY COUNT(*) DESC) AS rn
+          FROM deduped_post_insight,
+               LATERAL unnest(keywords) AS kw
+          WHERE keywords IS NOT NULL
+            AND array_length(keywords, 1) > 0
+          GROUP BY project_id, kw
+        )
+        SELECT
+          project_id,
+          keyword,
+          volume,
+          COALESCE(avg_sentiment, 0) AS avg_sentiment,
+          COALESCE(sum_engagement, 0) AS sum_engagement
+        FROM ranked
+        WHERE rn <= 10
+        ORDER BY project_id, volume DESC
+      `),
+    ]);
     const campRow = campRows[0];
-
-    // Get projects info
-    const projectRows = await queryNative<{
-      id: string;
-      name: string;
-    }>(`
-      SELECT id::text, name
-      FROM project.projects
-      WHERE campaign_id = '${campaignId}' AND deleted_at IS NULL
-    `);
-
-    // Per-project aggregations
-    const projStats = await queryNative<{
-      project_id: string;
-      mentions: number;
-      avg_sentiment: number;
-      sum_engagement: number;
-    }>(`
-      SELECT
-        project_id,
-        COUNT(*) AS mentions,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
-        COALESCE(SUM(engagement_score), 0) AS sum_engagement
-      FROM analysis.post_insight
-      WHERE ${pf}
-      GROUP BY project_id
-    `);
 
     const projStatsMap = new Map(
       projStats.map((r) => [r.project_id, r]),
     );
-
-    // Per-keyword per-project (top 10 per project for performance)
-    const kwRows = await queryNative<{
-      project_id: string;
-      keyword: string;
-      volume: number;
-      avg_sentiment: number;
-      sum_engagement: number;
-    }>(`
-      WITH ranked AS (
-        SELECT
-          project_id,
-          kw AS keyword,
-          COUNT(*) AS volume,
-          AVG(overall_sentiment_score) * 100 AS avg_sentiment,
-          SUM(engagement_score) AS sum_engagement,
-          ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY COUNT(*) DESC) AS rn
-        FROM analysis.post_insight,
-             LATERAL unnest(keywords) AS kw
-        WHERE ${pf}
-          AND keywords IS NOT NULL
-          AND array_length(keywords, 1) > 0
-        GROUP BY project_id, kw
-      )
-      SELECT
-        project_id,
-        keyword,
-        volume,
-        COALESCE(avg_sentiment, 0) AS avg_sentiment,
-        COALESCE(sum_engagement, 0) AS sum_engagement
-      FROM ranked
-      WHERE rn <= 10
-      ORDER BY project_id, volume DESC
-    `);
 
     // Build keyword children per project
     const kwByProject = new Map<string, HeapNode[]>();

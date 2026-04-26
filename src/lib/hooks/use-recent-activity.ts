@@ -6,7 +6,12 @@
  * Used for: LiveTicker, PostCard list, Post detail modal.
  */
 
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,13 +88,24 @@ async function fetchPosts(params: PostsParams): Promise<PostsResponse> {
  */
 export function useRecentActivity(params: Omit<PostsParams, 'campaignId'> & { campaignId?: string }) {
   const { campaignId, ...rest } = params;
-  return useQuery({
-    queryKey: postsKeys.page({ campaignId: campaignId!, ...rest }),
+  const queryKey = campaignId
+    ? postsKeys.page({ campaignId, ...rest })
+    : [...postsKeys.all, '__pending__', rest] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchPosts({ campaignId: campaignId!, ...rest }),
     enabled: !!campaignId,
     staleTime: 30_000, // posts are more dynamic — shorter stale time
     refetchInterval: 2 * 60_000, // refresh every 2 minutes
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<PostsResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }
 
 /**

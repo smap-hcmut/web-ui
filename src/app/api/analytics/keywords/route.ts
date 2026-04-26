@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
 } from '@/lib/metabase/client';
 import { IS_MOCK, mockKeywords } from '@/lib/mock';
 
@@ -42,61 +42,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ keywords: [], wordCloud: [] });
     }
 
-    const pf = projectFilter(projectIds);
+    const analyticsCTE = dedupedPostInsightCTE(projectIds);
 
-    // Unnest keywords array, count and avg sentiment per keyword
     const kwRows = await queryNative<{
       keyword: string;
       volume: number;
       avg_sentiment: number;
+      current_volume: number;
+      previous_volume: number;
     }>(`
+      ${analyticsCTE}
       SELECT
         kw AS keyword,
         COUNT(*) AS volume,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment
-      FROM analysis.post_insight,
+        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+        COUNT(*) FILTER (WHERE content_created_at >= NOW() - INTERVAL '30 days') AS current_volume,
+        COUNT(*) FILTER (
+          WHERE content_created_at >= NOW() - INTERVAL '60 days'
+            AND content_created_at < NOW() - INTERVAL '30 days'
+        ) AS previous_volume
+      FROM deduped_post_insight,
            LATERAL unnest(keywords) AS kw
-      WHERE ${pf}
-        AND keywords IS NOT NULL
+      WHERE keywords IS NOT NULL
         AND array_length(keywords, 1) > 0
       GROUP BY kw
       ORDER BY COUNT(*) DESC
       LIMIT ${limit}
     `);
 
-    // Change% — compare last 30 days vs previous 30 days per keyword
-    const changeRows = await queryNative<{
-      keyword: string;
-      period: string;
-      volume: number;
-    }>(`
-      SELECT
-        kw AS keyword,
-        CASE
-          WHEN content_created_at >= NOW() - INTERVAL '30 days' THEN 'current'
-          WHEN content_created_at >= NOW() - INTERVAL '60 days' THEN 'previous'
-        END AS period,
-        COUNT(*) AS volume
-      FROM analysis.post_insight,
-           LATERAL unnest(keywords) AS kw
-      WHERE ${pf}
-        AND keywords IS NOT NULL
-        AND content_created_at >= NOW() - INTERVAL '60 days'
-      GROUP BY 1, 2
-    `);
-
-    const changeMap = new Map<string, { current: number; previous: number }>();
-    for (const row of changeRows) {
-      if (!changeMap.has(row.keyword)) changeMap.set(row.keyword, { current: 0, previous: 0 });
-      const entry = changeMap.get(row.keyword)!;
-      if (row.period === 'current') entry.current = Number(row.volume);
-      if (row.period === 'previous') entry.previous = Number(row.volume);
-    }
-
     const keywords: KeywordItem[] = kwRows.map((r) => {
-      const change = changeMap.get(r.keyword) || { current: 0, previous: 0 };
-      const pctChange = change.previous > 0
-        ? Number((((change.current - change.previous) / change.previous) * 100).toFixed(1))
+      const currentVolume = Number(r.current_volume);
+      const previousVolume = Number(r.previous_volume);
+      const pctChange = previousVolume > 0
+        ? Number((((currentVolume - previousVolume) / previousVolume) * 100).toFixed(1))
         : 0;
 
       return {

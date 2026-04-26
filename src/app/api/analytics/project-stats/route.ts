@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
 } from '@/lib/metabase/client';
 import { IS_MOCK, mockProjectStats } from '@/lib/mock';
 
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ stats: [] });
     }
 
-    const pf = projectFilter(projectIds);
+    const analyticsCTE = dedupedPostInsightCTE(projectIds);
 
     const rows = await queryNative<{
       project_id: string;
@@ -46,13 +46,13 @@ export async function GET(request: NextRequest) {
       avg_sentiment: number;
       platforms: string;
     }>(`
+      ${analyticsCTE}
       SELECT
         project_id::text AS project_id,
         COUNT(*) AS mentions,
         COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
         STRING_AGG(DISTINCT platform, ',' ORDER BY platform) AS platforms
-      FROM analysis.post_insight
-      WHERE ${pf}
+      FROM deduped_post_insight
       GROUP BY project_id
     `);
 

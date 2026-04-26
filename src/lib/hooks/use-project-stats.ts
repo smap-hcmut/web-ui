@@ -5,7 +5,12 @@
  * (mention count, avg sentiment, platforms) from the Metabase-backed API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,11 +52,22 @@ async function fetchProjectStats(campaignId: string): Promise<ProjectStatsRespon
  * used by ProjectCardsRow to populate flip cards with real data.
  */
 export function useProjectStats(campaignId: string | undefined) {
-  return useQuery({
-    queryKey: projectStatsKeys.campaign(campaignId!),
+  const queryKey = campaignId
+    ? projectStatsKeys.campaign(campaignId)
+    : [...projectStatsKeys.all, '__pending__'] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchProjectStats(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<ProjectStatsResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

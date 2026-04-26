@@ -8,6 +8,25 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Campaign } from '@/lib/api/campaigns';
 
 const VISIBLE_BATCH = 8;
+const LAST_CAMPAIGN_KEY = 'smap:last-campaign';
+
+function readLastCampaignId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(LAST_CAMPAIGN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeLastCampaignId(campaignId: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_CAMPAIGN_KEY, campaignId);
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 // ─── Inner component (uses useSearchParams — must be inside Suspense) ─────────
 
@@ -44,9 +63,17 @@ function CampaignSwitcherInner() {
   // Auto-select first campaign when none is selected
   useEffect(() => {
     if (!isLoading && campaigns.length > 0 && !currentCampId) {
-      router.replace(`/smap?camp_id=${campaigns[0].id}`);
+      const lastCampaignId = readLastCampaignId();
+      const preferredCampaign = campaigns.find((c) => c.id === lastCampaignId) ?? campaigns[0];
+      router.replace(`/smap?camp_id=${preferredCampaign.id}`);
     }
   }, [isLoading, campaigns, currentCampId, router]);
+
+  useEffect(() => {
+    if (currentCampId) {
+      writeLastCampaignId(currentCampId);
+    }
+  }, [currentCampId]);
 
   // Close on outside click
   useEffect(() => {

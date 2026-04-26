@@ -236,6 +236,7 @@ function MapTab() {
   const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
 
   const isLoading = kpisLoading || keywordsLoading || sentimentLoading;
+  const waitingForCampaign = !activeCampaignId;
 
   // KPI metrics from API (or empty)
   const kpiMetrics = kpisData?.metrics ?? [];
@@ -250,7 +251,7 @@ function MapTab() {
   const scopedSentiment = sentimentData?.pulse ?? 0;
   const keywordCount = keywordsData?.keywords?.length ?? 0;
 
-  if (isLoading) return <TabSkeleton rows={2} />;
+  if (waitingForCampaign || isLoading) return <TabSkeleton rows={2} />;
 
   return (
     <>
@@ -384,7 +385,7 @@ function ProjectsTab() {
     [apiProjects],
   );
 
-  if (isLoading) return <ListSkeleton count={6} />;
+  if (!activeCampaignId || isLoading) return <ListSkeleton count={6} />;
 
   return (
     <div className="content-reveal">
@@ -474,6 +475,11 @@ function InsightsTab() {
   });
 
   const isLoading = platformLoading || sentimentLoading || keywordsLoading;
+  const waitingForCampaign = !activeCampaignId;
+
+  if (waitingForCampaign || isLoading) {
+    return <TabSkeleton rows={3} />;
+  }
 
   // Platform overview cards
   const scopedPlatformStats = useMemo(() => {

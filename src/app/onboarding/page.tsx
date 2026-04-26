@@ -36,10 +36,10 @@ const ENTITY_TYPES: { value: EntityType; label: string }[] = [
   { value: 'topic', label: 'Topic' },
 ];
 
-const PLATFORMS: { value: SourceType; label: string; dryrun: boolean }[] = [
-  { value: 'FACEBOOK', label: 'Facebook', dryrun: false },
-  { value: 'YOUTUBE', label: 'YouTube', dryrun: false },
-  { value: 'TIKTOK', label: 'TikTok', dryrun: true },
+const PLATFORMS: { value: SourceType; label: string }[] = [
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'YOUTUBE', label: 'YouTube' },
+  { value: 'TIKTOK', label: 'TikTok' },
 ];
 
 const CRAWL_INTERVAL_MINUTES = 60;
@@ -77,28 +77,6 @@ interface ProjectDraft {
   domainTypeCode: string;
 }
 
-// ─── Dryrun polling helper ────────────────────────────────────────────────────
-
-async function pollDryrunStatus(
-  datasourceId: string,
-  targetId: string,
-  maxAttempts = 30,
-  intervalMs = 3000,
-): Promise<'SUCCESS' | 'WARNING' | 'FAILED' | 'TIMEOUT'> {
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, intervalMs));
-    try {
-      const result = await datasourceApi.getDryrunLatest(datasourceId, targetId);
-      if (result.status === 'SUCCESS' || result.status === 'WARNING') return result.status;
-      if (result.status === 'FAILED') return 'FAILED';
-      // PENDING or RUNNING — keep polling
-    } catch {
-      // ignore transient errors, keep polling
-    }
-  }
-  return 'TIMEOUT';
-}
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
@@ -127,7 +105,7 @@ export default function OnboardingPage() {
 
   // Step 2: Monitoring
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SourceType>>(
-    () => new Set<SourceType>(['FACEBOOK', 'YOUTUBE']),
+    () => new Set<SourceType>(['FACEBOOK', 'YOUTUBE', 'TIKTOK']),
   );
   const [projectKeywords, setProjectKeywords] = useState<string[][]>([]);
   const [keywordInputs, setKeywordInputs] = useState<string[]>([]);
@@ -362,27 +340,8 @@ export default function OnboardingPage() {
               crawl_interval_minutes: CRAWL_INTERVAL_MINUTES,
             });
 
-            // 3c. Activate (TikTok KEYWORD requires dryrun first)
-            if (platform === 'TIKTOK') {
-              setProgressMessage(`Validating TikTok access for "${draft.name}"...`);
-              try {
-                await datasourceApi.triggerDryrun(ds.id, { target_id: target.id });
-                const status = await pollDryrunStatus(ds.id, target.id);
-                if (status === 'SUCCESS' || status === 'WARNING') {
-                  await datasourceApi.activateTarget(ds.id, target.id);
-                } else {
-                  newWarnings.push(
-                    `TikTok validation ${status === 'FAILED' ? 'failed' : 'timed out'} for "${draft.name}". You can retry it from Settings.`,
-                  );
-                }
-              } catch {
-                newWarnings.push(
-                  `TikTok setup incomplete for "${draft.name}". You can retry it from Settings.`,
-                );
-              }
-            } else {
-              await datasourceApi.activateTarget(ds.id, target.id);
-            }
+            // 3c. Activate target immediately for all platforms
+            await datasourceApi.activateTarget(ds.id, target.id);
           } catch (err: unknown) {
             const msg =
               err && typeof err === 'object' && 'message' in err
@@ -813,23 +772,10 @@ export default function OnboardingPage() {
                       >
                         {active && <Check className="w-3 h-3" />}
                         {p.label}
-                        {p.dryrun && (
-                          <span
-                            className="text-[9px] px-1 py-0.5 rounded"
-                            style={{ background: active ? 'rgba(255,255,255,0.2)' : 'var(--border)', color: active ? 'white' : 'var(--text-faint)' }}
-                          >
-                            slow
-                          </span>
-                        )}
                       </button>
                     );
                   })}
                 </div>
-                {selectedPlatforms.has('TIKTOK') && (
-                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-faint)' }}>
-                    TikTok requires a validation step (~90s) during setup.
-                  </p>
-                )}
               </div>
 
               {/* Keywords per project */}

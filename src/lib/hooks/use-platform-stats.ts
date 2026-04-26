@@ -5,7 +5,12 @@
  * sentiment, reach) and 12-month time-series data from the analytics API.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import {
+  getCachedAnalyticsData,
+  getCachedAnalyticsUpdatedAt,
+  usePersistedAnalyticsCache,
+} from './analytics-cache';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,11 +68,20 @@ async function fetchPlatformStats(campaignId: string): Promise<PlatformStatsResp
  * - months: month labels (YYYY-MM)
  */
 export function usePlatformStats(campaignId: string | undefined) {
-  return useQuery({
-    queryKey: platformKeys.campaign(campaignId!),
+  const queryKey = campaignId ? platformKeys.campaign(campaignId) : [...platformKeys.all, '__pending__'] as const;
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => fetchPlatformStats(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,
+    initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
   });
+
+  usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
+
+  return query;
 }

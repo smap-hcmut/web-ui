@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   queryNative,
   getProjectIdsForCampaign,
-  projectFilter,
+  dedupedPostInsightCTE,
 } from '@/lib/metabase/client';
 import { IS_MOCK, mockSentiment } from '@/lib/mock';
 
@@ -40,66 +40,49 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const pf = projectFilter(projectIds);
+    const analyticsCTE = dedupedPostInsightCTE(projectIds);
 
-    // Donut: positive/neutral/negative counts
-    const sentimentCounts = await queryNative<{
-      category: string;
-      count: number;
-    }>(`
-      SELECT
-        CASE
-          WHEN overall_sentiment_score >= 0.7 THEN 'Positive'
-          WHEN overall_sentiment_score >= 0.4 THEN 'Neutral'
-          ELSE 'Negative'
-        END AS category,
-        COUNT(*) AS count
-      FROM analysis.post_insight
-      WHERE ${pf} AND overall_sentiment_score IS NOT NULL
-      GROUP BY 1
-    `);
+    const [summaryRows, tlRows] = await Promise.all([
+      queryNative<{
+        positive_count: number;
+        neutral_count: number;
+        negative_count: number;
+        avg_sentiment: number;
+        total: number;
+      }>(`
+        ${analyticsCTE}
+        SELECT
+          COUNT(*) FILTER (WHERE overall_sentiment_score >= 0.7) AS positive_count,
+          COUNT(*) FILTER (WHERE overall_sentiment_score >= 0.4 AND overall_sentiment_score < 0.7) AS neutral_count,
+          COUNT(*) FILTER (WHERE overall_sentiment_score < 0.4) AS negative_count,
+          COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
+          COUNT(*) AS total
+        FROM deduped_post_insight
+      `),
+      queryNative<{
+        month: string;
+        platform: string;
+        avg_sentiment: number;
+      }>(`
+        ${analyticsCTE}
+        SELECT
+          TO_CHAR(date_trunc('month', content_created_at), 'YYYY-MM') AS month,
+          UPPER(platform) AS platform,
+          COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment
+        FROM deduped_post_insight
+        WHERE platform IS NOT NULL
+          AND content_created_at >= NOW() - INTERVAL '12 months'
+        GROUP BY 1, 2
+        ORDER BY 1
+      `),
+    ]);
 
-    const donutMap: Record<string, number> = { Positive: 0, Neutral: 0, Negative: 0 };
-    for (const row of sentimentCounts) {
-      donutMap[row.category] = Number(row.count);
-    }
+    const summary = summaryRows[0];
     const donut = [
-      { label: 'Positive', value: donutMap.Positive || 1, color: 'var(--success)' },
-      { label: 'Neutral', value: donutMap.Neutral || 1, color: 'var(--warning)' },
-      { label: 'Negative', value: donutMap.Negative || 1, color: 'var(--danger)' },
+      { label: 'Positive', value: Number(summary?.positive_count || 0), color: 'var(--success)' },
+      { label: 'Neutral', value: Number(summary?.neutral_count || 0), color: 'var(--warning)' },
+      { label: 'Negative', value: Number(summary?.negative_count || 0), color: 'var(--danger)' },
     ];
-
-    // Overall pulse (average sentiment 0-100)
-    const pulseRows = await queryNative<{
-      avg_sentiment: number;
-      total: number;
-    }>(`
-      SELECT
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment,
-        COUNT(*) AS total
-      FROM analysis.post_insight
-      WHERE ${pf}
-    `);
-
-    const pulseRow = pulseRows[0];
-
-    // Timeline: monthly sentiment by platform (12 months)
-    const tlRows = await queryNative<{
-      month: string;
-      platform: string;
-      avg_sentiment: number;
-    }>(`
-      SELECT
-        TO_CHAR(date_trunc('month', content_created_at), 'YYYY-MM') AS month,
-        UPPER(platform) AS platform,
-        COALESCE(AVG(overall_sentiment_score) * 100, 0) AS avg_sentiment
-      FROM analysis.post_insight
-      WHERE ${pf}
-        AND platform IS NOT NULL
-        AND content_created_at >= NOW() - INTERVAL '12 months'
-      GROUP BY 1, 2
-      ORDER BY 1
-    `);
 
     const monthSet = new Set<string>();
     tlRows.forEach((r) => monthSet.add(r.month));
@@ -125,8 +108,8 @@ export async function GET(request: NextRequest) {
       donut,
       timeline,
       months,
-      pulse: Number(Number(pulseRow.avg_sentiment).toFixed(1)),
-      total: Number(pulseRow.total),
+      pulse: Number(Number(summary?.avg_sentiment || 0).toFixed(1)),
+      total: Number(summary?.total || 0),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
