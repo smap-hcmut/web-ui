@@ -11,6 +11,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,10 +76,10 @@ export function usePlatformStats(campaignId: string | undefined) {
     queryFn: () => fetchPlatformStats(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);

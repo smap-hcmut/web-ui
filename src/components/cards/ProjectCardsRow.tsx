@@ -514,7 +514,7 @@ export function ProjectCardsRow() {
   const activateProject = useActivateProject(activeCampaignId ?? '');
   const dryrunProject = useDryrunProject();
 
-  // Fetch per-project analytics (mentions, sentiment, platforms) from Metabase
+  // Fetch per-project analytics (mentions, sentiment, platforms) from analysis-api
   const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
   const statsMap = useMemo(() => {
     const map = new Map<string, ProjectStat>();

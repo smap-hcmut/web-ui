@@ -11,6 +11,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,10 +72,10 @@ export function useCampaignKPIs(campaignId: string | undefined) {
     queryFn: () => fetchKPIs(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000, // 1 minute — analytics data doesn't change rapidly
-    refetchInterval: 5 * 60_000, // auto-refresh every 5 minutes
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KPIsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);

@@ -11,6 +11,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,10 +70,10 @@ export function useHeapData(campaignId: string | undefined) {
     queryFn: () => fetchHeapData(campaignId!),
     enabled: !!campaignId,
     staleTime: 2 * 60_000, // heap data is heavier — longer stale time
-    refetchInterval: 5 * 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<HeapResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);

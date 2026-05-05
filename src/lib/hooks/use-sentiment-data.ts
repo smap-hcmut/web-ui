@@ -11,6 +11,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,10 +73,10 @@ export function useSentimentData(campaignId: string | undefined) {
     queryFn: () => fetchSentiment(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<SentimentResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);

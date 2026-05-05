@@ -106,7 +106,7 @@ Renders as a heading, a table, bold key insight, and a blockquote call-out.
 - `bullets` — list of items (each item also rendered as markdown)
 - `stats` — grid of KPI cards with label / value / change %
 
-Future candidates (not yet wired): `chart` (re-use `ChartBuilder`), `callout`, `actions` (quick-reply chips).
+Future candidates (not yet wired): `chart`, `callout`, `actions` (quick-reply chips).
 
 ## Chatbot slash commands (client-side)
 

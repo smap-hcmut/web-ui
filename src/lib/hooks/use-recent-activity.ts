@@ -12,6 +12,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,10 +98,10 @@ export function useRecentActivity(params: Omit<PostsParams, 'campaignId'> & { ca
     queryFn: () => fetchPosts({ campaignId: campaignId!, ...rest }),
     enabled: !!campaignId,
     staleTime: 30_000, // posts are more dynamic — shorter stale time
-    refetchInterval: 2 * 60_000, // refresh every 2 minutes
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PostsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
@@ -121,6 +122,7 @@ export function useInfinitePosts(params: Omit<PostsParams, 'campaignId' | 'offse
     enabled: !!campaignId,
     staleTime: 30_000,
     initialPageParam: 0,
+    ...analyticsQueryOptions,
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       const nextOffset = (lastPageParam as number) + limit;
       return nextOffset < lastPage.total ? nextOffset : undefined;

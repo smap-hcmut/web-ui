@@ -2,7 +2,7 @@
  * Project Stats Hook
  *
  * React Query hook for fetching per-project analytics
- * (mention count, avg sentiment, platforms) from the Metabase-backed API.
+ * (mention count, avg sentiment, platforms) from the analysis API.
  */
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,10 +62,10 @@ export function useProjectStats(campaignId: string | undefined) {
     queryFn: () => fetchProjectStats(campaignId!),
     enabled: !!campaignId,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<ProjectStatsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
+    ...analyticsQueryOptions,
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);

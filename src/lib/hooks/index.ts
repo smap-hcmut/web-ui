@@ -43,10 +43,6 @@ export type { PostItem, PostsResponse, PostsParams } from './use-recent-activity
 export { useHeapData, heapKeys } from './use-heap-data';
 export type { HeapNode, HeapNodeMetrics, HeapResponse } from './use-heap-data';
 
-// ─── Metabase (kept for ChartBuilder admin tool) ──────────────────────────────
-export { useMetabaseCards, useMetabaseQuery, useMetabaseMetadata, useMetabaseDataset, metabaseKeys } from './use-metabase';
-export type { MetabaseCard, MetabaseColumn, MetabaseQueryResult, MetabaseTableMeta, MetabaseFieldMeta, DatasetRequest } from './use-metabase';
-
 // ─── Reports ──────────────────────────────────────────────────────────────────
 export {
   useReports,

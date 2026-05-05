@@ -477,10 +477,6 @@ function InsightsTab() {
   const isLoading = platformLoading || sentimentLoading || keywordsLoading;
   const waitingForCampaign = !activeCampaignId;
 
-  if (waitingForCampaign || isLoading) {
-    return <TabSkeleton rows={3} />;
-  }
-
   // Platform overview cards
   const scopedPlatformStats = useMemo(() => {
     return (platformData?.stats ?? []).map((p) => ({
@@ -631,7 +627,9 @@ function InsightsTab() {
       }
     : null;
 
-  if (isLoading) return <TabSkeleton rows={3} />;
+  if (waitingForCampaign || isLoading) {
+    return <TabSkeleton rows={3} />;
+  }
 
   return (
     <div className="content-reveal">
