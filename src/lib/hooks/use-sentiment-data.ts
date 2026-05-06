@@ -72,7 +72,6 @@ export function useSentimentData(campaignId: string | undefined) {
     queryKey,
     queryFn: () => fetchSentiment(campaignId!),
     enabled: !!campaignId,
-    staleTime: 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<SentimentResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,

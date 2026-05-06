@@ -71,7 +71,6 @@ export function useCampaignKPIs(campaignId: string | undefined) {
     queryKey,
     queryFn: () => fetchKPIs(campaignId!),
     enabled: !!campaignId,
-    staleTime: 60_000, // 1 minute — analytics data doesn't change rapidly
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KPIsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,

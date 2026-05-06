@@ -97,11 +97,11 @@ export function useRecentActivity(params: Omit<PostsParams, 'campaignId'> & { ca
     queryKey,
     queryFn: () => fetchPosts({ campaignId: campaignId!, ...rest }),
     enabled: !!campaignId,
-    staleTime: 30_000, // posts are more dynamic — shorter stale time
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PostsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
     ...analyticsQueryOptions,
+    staleTime: 30_000, // posts are more dynamic — shorter stale time
   });
 
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
@@ -120,9 +120,9 @@ export function useInfinitePosts(params: Omit<PostsParams, 'campaignId' | 'offse
     queryFn: ({ pageParam = 0 }) =>
       fetchPosts({ campaignId: campaignId!, limit, offset: pageParam as number, ...rest }),
     enabled: !!campaignId,
-    staleTime: 30_000,
     initialPageParam: 0,
     ...analyticsQueryOptions,
+    staleTime: 30_000,
     getNextPageParam: (lastPage, _allPages, lastPageParam) => {
       const nextOffset = (lastPageParam as number) + limit;
       return nextOffset < lastPage.total ? nextOffset : undefined;

@@ -75,7 +75,6 @@ export function useTrendingKeywords(campaignId: string | undefined, limit = 50) 
     queryKey,
     queryFn: () => fetchKeywords(campaignId!, limit),
     enabled: !!campaignId,
-    staleTime: 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KeywordsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,

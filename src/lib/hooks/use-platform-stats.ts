@@ -75,7 +75,6 @@ export function usePlatformStats(campaignId: string | undefined) {
     queryKey,
     queryFn: () => fetchPlatformStats(campaignId!),
     enabled: !!campaignId,
-    staleTime: 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,

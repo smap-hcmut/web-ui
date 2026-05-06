@@ -61,7 +61,6 @@ export function useProjectStats(campaignId: string | undefined) {
     queryKey,
     queryFn: () => fetchProjectStats(campaignId!),
     enabled: !!campaignId,
-    staleTime: 60_000,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<ProjectStatsResponse>(queryKey) : undefined,
     initialDataUpdatedAt: campaignId ? getCachedAnalyticsUpdatedAt(queryKey) : undefined,
