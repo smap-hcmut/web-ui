@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -12,16 +12,20 @@ import {
   Trash2,
   Edit3,
   Save,
+  AlertTriangle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { CrisisConfigEditor } from '@/components/crisis/CrisisConfigEditor';
 import { useCampaign, useProjectsByCampaign } from '@/lib/hooks';
 import { useCampaignTargets } from '@/lib/hooks/use-datasources';
 import type { SourceType } from '@/lib/api/datasources';
+import type { Project } from '@/lib/api/projects';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
+  { id: 'crisis', label: 'Crisis', icon: AlertTriangle },
   { id: 'targets', label: 'Targets', icon: Target },
   { id: 'team', label: 'Team', icon: Users },
 ] as const;
@@ -49,7 +53,70 @@ const sourceTypeLabel: Record<SourceType, string> = {
   YOUTUBE: 'YouTube',
 };
 
+function CrisisSettingsPanel({ projects }: { projects: Project[] }) {
+  const [selectedProjectId, setSelectedProjectId] = useState('');
 
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
+    }
+    if (selectedProjectId && !projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]?.id ?? '');
+    }
+  }, [projects, selectedProjectId]);
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+
+  if (projects.length === 0) {
+    return (
+      <EmptyState
+        title="No projects yet"
+        description="Create a project first, then tune crisis thresholds for keyword, volume, sentiment, and influencer rules."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Crisis Configuration
+          </h2>
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+            Teach SMAP when a project should become WARNING or CRITICAL.
+          </p>
+        </div>
+        <div className="w-full sm:w-80">
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Project
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className={inputClass}
+            style={inputStyle}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} · {project.entity_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {selectedProject ? (
+        <CrisisConfigEditor
+          key={selectedProject.id}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
+          domainTypeCode={selectedProject.domain_type_code}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 export default function CampaignSettingsPage() {
   return (
@@ -263,6 +330,11 @@ function CampaignSettingsContent() {
                 <EmptyState title="No projects yet" description="Create a project to start monitoring keywords and social mentions." />
               )}
             </div>
+          )}
+
+          {/* ── Crisis ── */}
+          {tab === 'crisis' && (
+            <CrisisSettingsPanel projects={projects ?? []} />
           )}
 
           {/* ── Targets ── */}

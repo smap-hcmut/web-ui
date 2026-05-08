@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { CrisisConfigEditorModal } from '@/components/crisis/CrisisConfigEditor';
 import { useScope } from '@/components/ScopeProvider';
 import { useProjectsByCampaign, useCreateProject, useProjectStats, usePauseProject, useResumeProject, useActivateProject, useDryrunProject } from '@/lib/hooks';
 import type { ProjectStat } from '@/lib/hooks';
@@ -529,6 +530,7 @@ export function ProjectCardsRow() {
     return (apiProjects ?? []).map((p) => ({
       id: p.id,
       name: p.name,
+      domain_type_code: p.domain_type_code,
       keywords: [],
       platforms: undefined,
       status: p.status === 'ACTIVE' ? 'active' as const : p.status === 'PENDING' ? 'pending' as const : 'paused' as const,
@@ -628,8 +630,10 @@ export function ProjectCardsRow() {
 
       {/* ── Project Config Modal ── */}
       {configModalProject && (
-        <ProjectConfigModal
-          project={configModalProject}
+        <CrisisConfigEditorModal
+          projectId={configModalProject.id}
+          projectName={configModalProject.name}
+          domainTypeCode={configModalProject.domain_type_code}
           onClose={() => setConfigModalProject(null)}
         />
       )}

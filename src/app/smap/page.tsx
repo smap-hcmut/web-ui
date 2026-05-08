@@ -7,7 +7,8 @@ import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
 import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard";
 import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
-import { ProjectFlipCard, CreateProjectModal, ProjectConfigModal } from "@/components/cards/ProjectCardsRow";
+import { ProjectFlipCard, CreateProjectModal } from "@/components/cards/ProjectCardsRow";
+import { CrisisConfigEditorModal } from "@/components/crisis/CrisisConfigEditor";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
@@ -377,6 +378,7 @@ function ProjectsTab() {
       (apiProjects ?? []).map((p) => ({
         id: p.id,
         name: p.name,
+        domain_type_code: p.domain_type_code,
         keywords: [] as import('@/lib/types').Keyword[],
         platforms: undefined,
         status: p.status === 'ACTIVE' ? ('active' as const) : ('paused' as const),
@@ -434,8 +436,10 @@ function ProjectsTab() {
 
       {/* Modals */}
       {configModalProject && (
-        <ProjectConfigModal
-          project={configModalProject}
+        <CrisisConfigEditorModal
+          projectId={configModalProject.id}
+          projectName={configModalProject.name}
+          domainTypeCode={configModalProject.domain_type_code}
           onClose={() => setConfigModalProject(null)}
         />
       )}

@@ -296,6 +296,7 @@ export interface Keyword {
 export interface Project {
   id: string;
   name: string;
+  domain_type_code?: string;
   keywords: Keyword[];
   platforms?: Platform[];
   status?: 'active' | 'paused' | 'pending';

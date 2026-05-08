@@ -1,9 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo, Suspense } from 'react';
-import { ChevronDown, Check, Plus, Layers, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Check, Plus, Layers, Search, Pause, Play, Power } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCampaigns, useArchiveCampaign } from '@/lib/hooks/use-campaigns';
+import {
+  useCampaigns,
+  useStopCampaign,
+  usePauseCampaign,
+  useResumeCampaign,
+} from '@/lib/hooks/use-campaigns';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Campaign } from '@/lib/api/campaigns';
 
@@ -34,14 +39,18 @@ function CampaignSwitcherInner() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(VISIBLE_BATCH);
-  const [deleteConfirm, setDeleteConfirm] = useState<Campaign | null>(null);
+  const [stopConfirm, setStopConfirm] = useState<Campaign | null>(null);
+  const [pauseConfirm, setPauseConfirm] = useState<Campaign | null>(null);
+  const [resumeConfirm, setResumeConfirm] = useState<Campaign | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentCampId = searchParams.get('camp_id');
 
   const { data, isLoading } = useCampaigns();
-  const archiveMutation = useArchiveCampaign();
+  const stopCampaignMutation = useStopCampaign();
+  const pauseCampaignMutation = usePauseCampaign();
+  const resumeCampaignMutation = useResumeCampaign();
   const campaigns = data?.campaigns ?? [];
   const active = campaigns.find((c) => c.id === currentCampId);
 
@@ -91,27 +100,55 @@ function CampaignSwitcherInner() {
     setQuery('');
   };
 
-  const handleDelete = () => {
-    if (!deleteConfirm) return;
-    
-    const deletingId = deleteConfirm.id;
-    
-    archiveMutation.mutate(deletingId, {
+  const handleStopCampaign = () => {
+    if (!stopConfirm) return;
+
+    const stoppingId = stopConfirm.id;
+
+    stopCampaignMutation.mutate(stoppingId, {
       onSuccess: () => {
-        // If deleting the active campaign, redirect to first available campaign
-        if (deletingId === currentCampId) {
-          const remaining = campaigns.filter(c => c.id !== deletingId);
+        // If stopping active campaign, redirect to first available campaign
+        if (stoppingId === currentCampId) {
+          const remaining = campaigns.filter(c => c.id !== stoppingId);
           if (remaining.length > 0) {
             router.push(`/smap?camp_id=${remaining[0].id}`);
           } else {
             router.push('/smap');
           }
         }
-        setDeleteConfirm(null);
+        setStopConfirm(null);
       },
       onError: (error) => {
-        console.error('Failed to delete campaign:', error);
-        setDeleteConfirm(null);
+        console.error('Failed to stop campaign:', error);
+        setStopConfirm(null);
+      },
+    });
+  };
+
+  const handlePauseCampaign = () => {
+    if (!pauseConfirm) return;
+
+    pauseCampaignMutation.mutate(pauseConfirm.id, {
+      onSuccess: () => {
+        setPauseConfirm(null);
+      },
+      onError: (error) => {
+        console.error('Failed to pause campaign:', error);
+        setPauseConfirm(null);
+      },
+    });
+  };
+
+  const handleResumeCampaign = () => {
+    if (!resumeConfirm) return;
+
+    resumeCampaignMutation.mutate(resumeConfirm.id, {
+      onSuccess: () => {
+        setResumeConfirm(null);
+      },
+      onError: (error) => {
+        console.error('Failed to resume campaign:', error);
+        setResumeConfirm(null);
       },
     });
   };
@@ -261,26 +298,56 @@ function CampaignSwitcherInner() {
                       )}
                     </button>
                     
-                    {/* Delete button - visible on hover */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirm(c);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-150 shrink-0"
-                      style={{ 
-                        background: 'transparent',
-                      }}
-                      onMouseEnter={(e) => { 
-                        e.currentTarget.style.background = 'var(--danger-bg)';
-                      }}
-                      onMouseLeave={(e) => { 
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                      title="Xóa campaign"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--danger)' }} />
-                    </button>
+                    {/* Pause/resume + stop buttons - visible on hover */}
+                    {(c.status === 'ACTIVE' || c.status === 'PAUSED') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          c.status === 'PAUSED' ? setResumeConfirm(c) : setPauseConfirm(c);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-150 shrink-0"
+                        style={{
+                          background: 'transparent',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = c.status === 'PAUSED'
+                            ? 'var(--accent-bg)'
+                            : 'var(--warning-bg)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                        disabled={pauseCampaignMutation.isPending || resumeCampaignMutation.isPending}
+                        title={c.status === 'PAUSED' ? 'Tiếp tục campaign' : 'Tạm dừng campaign'}
+                      >
+                        {c.status === 'PAUSED' ? (
+                          <Play className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+                        ) : (
+                          <Pause className="w-3.5 h-3.5" style={{ color: 'var(--warning)' }} />
+                        )}
+                      </button>
+                    )}
+                    {(c.status === 'ACTIVE' || c.status === 'PAUSED' || c.status === 'PENDING') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStopConfirm(c);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-150 shrink-0"
+                        style={{
+                          background: 'transparent',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--danger-bg)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                        title="Hard-stop toàn bộ campaign (không xoá dữ liệu)"
+                      >
+                        <Power className="w-3.5 h-3.5" style={{ color: 'var(--warning)' }} />
+                      </button>
+                    )}
                   </div>
                 ))}
 
@@ -321,15 +388,38 @@ function CampaignSwitcherInner() {
         </div>
       )}
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirm Stop-all Dialog */}
       <ConfirmDialog
-        open={!!deleteConfirm}
-        title="Xóa Campaign"
-        message={`Bạn có chắc chắn muốn xóa campaign "${deleteConfirm?.name}"? Hành động này không thể hoàn tác.`}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteConfirm(null)}
-        variant="danger"
-        confirmLabel={archiveMutation.isPending ? "Đang xóa..." : "Xóa"}
+        open={!!stopConfirm}
+        title="Hard-stop toàn bộ Campaign"
+        message={`Bạn có chắc chắn muốn hard-stop toàn bộ campaign "${stopConfirm?.name}" không?\n\nHành động này chỉ tạm dừng crawl và huỷ/tạm dừng các job đang chạy/pending của campaign, đồng thời ngăn tạo job mới; không xoá campaign, không xoá dữ liệu phân tích lịch sử.`}
+        onConfirm={handleStopCampaign}
+        onCancel={() => setStopConfirm(null)}
+        variant="warning"
+        confirmLabel={stopCampaignMutation.isPending ? "Đang hard-stop..." : "Hard-stop campaign"}
+        cancelLabel="Hủy"
+      />
+
+      {/* Confirm Pause Dialog */}
+      <ConfirmDialog
+        open={!!pauseConfirm}
+        title="Tạm dừng Campaign"
+        message={`Bạn có chắc chắn muốn tạm dừng campaign "${pauseConfirm?.name}"? Các project của campaign sẽ ngừng crawl cho tới khi bạn bật lại.`}
+        onConfirm={handlePauseCampaign}
+        onCancel={() => setPauseConfirm(null)}
+        variant="warning"
+        confirmLabel={pauseCampaignMutation.isPending ? 'Đang tạm dừng...' : 'Tạm dừng'}
+        cancelLabel="Hủy"
+      />
+
+      {/* Confirm Resume Dialog */}
+      <ConfirmDialog
+        open={!!resumeConfirm}
+        title="Mở lại Campaign"
+        message={`Bạn có chắc chắn muốn mở lại campaign "${resumeConfirm?.name}"? Các project của campaign sẽ tiếp tục crawl lại.`}
+        onConfirm={handleResumeCampaign}
+        onCancel={() => setResumeConfirm(null)}
+        confirmLabel={resumeCampaignMutation.isPending ? 'Đang mở lại...' : 'Mở lại'}
         cancelLabel="Hủy"
       />
     </div>

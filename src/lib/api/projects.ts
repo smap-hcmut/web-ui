@@ -48,6 +48,58 @@ export interface UpdateProjectInput {
   domain_type_code?: string;
 }
 
+export interface CrisisKeywordGroupInput {
+  name: string;
+  keywords: string[];
+  weight: number;
+}
+
+export interface CrisisConfigInput {
+  status?: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  keywords_trigger?: {
+    enabled: boolean;
+    logic: 'AND' | 'OR';
+    groups: CrisisKeywordGroupInput[];
+  };
+  volume_trigger?: {
+    enabled: boolean;
+    metric: 'MENTIONS' | 'ENGAGEMENT' | 'REACH';
+    rules: Array<{
+      level: 'WARNING' | 'CRITICAL';
+      threshold_percent_growth: number;
+      comparison_window_hours: number;
+      baseline: 'PREVIOUS_PERIOD' | 'AVERAGE_7D' | 'AVERAGE_30D';
+    }>;
+  };
+  sentiment_trigger?: {
+    enabled: boolean;
+    min_sample_size: number;
+    rules: Array<{
+      type: 'NEGATIVE_SPIKE' | 'ASPECT_NEGATIVE';
+      threshold_percent?: number;
+      critical_aspects?: string[];
+      negative_threshold_percent?: number;
+    }>;
+  };
+  influencer_trigger?: {
+    enabled: boolean;
+    logic: 'AND' | 'OR';
+    rules: Array<{
+      type: 'HIGH_REACH' | 'VIRAL_NEGATIVE';
+      min_followers?: number;
+      required_sentiment?: 'NEGATIVE' | 'NEUTRAL';
+      min_shares?: number;
+      min_comments?: number;
+    }>;
+  };
+}
+
+export type CrisisConfig = CrisisConfigInput & {
+  project_id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // ─── Paginated Response (from Go backend) ────────────────────────────────────
 
 interface PaginatedProjectsResponse {
@@ -99,6 +151,14 @@ export const projectApi = {
   /** Pause an active project */
   pause: (id: string): Promise<Project> =>
     apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectPause(id)),
+
+  /** Create or update project-level crisis detection config */
+  upsertCrisisConfig: (id: string, data: CrisisConfigInput): Promise<unknown> =>
+    apiClient.put<unknown>(API_CONFIG.ENDPOINTS.project.projectCrisisConfig(id), data),
+
+  /** Get project-level crisis detection config */
+  getCrisisConfig: (id: string): Promise<CrisisConfig> =>
+    apiClient.get<CrisisConfig>(API_CONFIG.ENDPOINTS.project.projectCrisisConfig(id)),
 
   /** Archive a project */
   archive: (id: string): Promise<void> =>

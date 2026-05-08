@@ -81,6 +81,12 @@ export const campaignApi = {
   archive: (id: string): Promise<void> =>
     apiClient.delete<void>(API_CONFIG.ENDPOINTS.project.campaign(id)),
 
+  pause: (id: string): Promise<void> =>
+    apiClient.post<void>(API_CONFIG.ENDPOINTS.project.campaignPause(id)),
+
+  resume: (id: string): Promise<void> =>
+    apiClient.post<void>(API_CONFIG.ENDPOINTS.project.campaignResume(id)),
+
   favorite: (id: string): Promise<void> =>
     apiClient.post<void>(API_CONFIG.ENDPOINTS.project.campaignFavorite(id)),
 

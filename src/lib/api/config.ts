@@ -49,6 +49,8 @@ export const API_CONFIG = {
     project: {
       campaigns: '/project/api/v1/campaigns',
       campaign: (id: string) => `/project/api/v1/campaigns/${id}`,
+      campaignPause: (id: string) => `/project/api/v1/campaigns/${id}/pause`,
+      campaignResume: (id: string) => `/project/api/v1/campaigns/${id}/resume`,
       campaignFavorite: (id: string) => `/project/api/v1/campaigns/${id}/favorite`,
       campaignFavorites: '/project/api/v1/campaigns/favorites',
       campaignProjects: (id: string) => `/project/api/v1/campaigns/${id}/projects`,
@@ -59,6 +61,7 @@ export const API_CONFIG = {
       projectResume: (id: string) => `/project/api/v1/projects/${id}/resume`,
       projectArchive: (id: string) => `/project/api/v1/projects/${id}/archive`,
       projectActivationReadiness: (id: string) => `/project/api/v1/projects/${id}/activation-readiness`,
+      projectCrisisConfig: (id: string) => `/project/api/v1/projects/${id}/crisis-config`,
       workspaces: '/project/api/v1/workspaces',
       workspace: (id: string) => `/project/api/v1/workspaces/${id}`,
     },

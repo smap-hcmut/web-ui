@@ -19,6 +19,7 @@ import { apiClient } from '@/lib/api/client';
 import { campaignApi, type CreateCampaignInput } from '@/lib/api/campaigns';
 import { projectApi, type CreateProjectInput, type EntityType } from '@/lib/api/projects';
 import { datasourceApi, type SourceType } from '@/lib/api/datasources';
+import { buildCrisisConfigPreset } from '@/lib/crisis/presets';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ const PLATFORMS: { value: SourceType; label: string }[] = [
 ];
 
 const CRAWL_INTERVAL_MINUTES = 60;
+const AHAMOVE_DOMAIN_CODE = 'ahamove';
 
 // ─── Input styling helpers ───────────────────────────────────────────────────
 
@@ -102,6 +104,7 @@ export default function OnboardingPage() {
   const [entityName, setEntityName] = useState('');
   const [domains, setDomains] = useState<DomainType[]>([]);
   const [domainTypeCode, setDomainTypeCode] = useState('_default');
+  const [domainManuallyChanged, setDomainManuallyChanged] = useState(false);
 
   // Step 2: Monitoring
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<SourceType>>(
@@ -127,6 +130,18 @@ export default function OnboardingPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (domainManuallyChanged) return;
+    if (!domains.some((d) => d.code === AHAMOVE_DOMAIN_CODE)) return;
+
+    const text = [campaignName, projectName, brand, entityName, projectDesc]
+      .join(' ')
+      .toLowerCase();
+    if (text.includes('ahamove') || text.includes('aha move') || text.includes('ahatruck') || text.includes('aha truck')) {
+      setDomainTypeCode(AHAMOVE_DOMAIN_CODE);
+    }
+  }, [brand, campaignName, domainManuallyChanged, domains, entityName, projectDesc, projectName]);
+
   // ─── Project form helpers ────────────────────────────────────────────────
 
   const currentProjectValid =
@@ -139,6 +154,7 @@ export default function OnboardingPage() {
     setBrand('');
     setEntityType('product');
     setEntityName('');
+    setDomainManuallyChanged(false);
   };
 
   const saveCurrentProject = () => {
@@ -313,6 +329,20 @@ export default function OnboardingPage() {
         };
         const project = await projectApi.create(campaign.id, projectInput);
         createdProjects.push({ id: project.id, draft, index: i });
+
+        const crisisPreset = buildCrisisConfigPreset(draft.domainTypeCode);
+        if (crisisPreset) {
+          try {
+            setProgressMessage(`Applying crisis preset to "${draft.name}"...`);
+            await projectApi.upsertCrisisConfig(project.id, crisisPreset);
+          } catch (err: unknown) {
+            const msg =
+              err && typeof err === 'object' && 'message' in err
+                ? (err as { message: string }).message
+                : 'unknown error';
+            newWarnings.push(`Failed to apply crisis preset for "${draft.name}": ${msg}`);
+          }
+        }
       }
 
       // 3. Setup datasources (step 2 only)
@@ -689,7 +719,10 @@ export default function OnboardingPage() {
                     </label>
                     <select
                       value={domainTypeCode}
-                      onChange={(e) => setDomainTypeCode(e.target.value)}
+                      onChange={(e) => {
+                        setDomainManuallyChanged(true);
+                        setDomainTypeCode(e.target.value);
+                      }}
                       className={inputClass}
                       style={inputStyle}
                       onFocus={handleFocus as unknown as React.FocusEventHandler<HTMLSelectElement>}

@@ -14,6 +14,9 @@ export {
   useCreateCampaign,
   useUpdateCampaign,
   useArchiveCampaign,
+  useStopCampaign,
+  usePauseCampaign,
+  useResumeCampaign,
   useToggleCampaignFavorite,
   campaignKeys,
 } from './use-campaigns';

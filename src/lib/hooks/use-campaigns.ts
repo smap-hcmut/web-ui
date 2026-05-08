@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   campaignApi,
   type Campaign,
+  type CampaignListResponse,
   type CampaignListParams,
   type CreateCampaignInput,
   type UpdateCampaignInput,
@@ -80,6 +81,61 @@ export function useArchiveCampaign() {
   return useMutation({
     mutationFn: (id: string) => campaignApi.archive(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
+    },
+  });
+}
+
+export function useStopCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    // "Stop-all" in the UI is expected to pause execution and stop crawl jobs,
+    // not remove campaign metadata. Keep behavior aligned with backend pause.
+    mutationFn: (id: string) => campaignApi.pause(id),
+    onSuccess: (_, id) => {
+      updateCampaignStatus(queryClient, id, 'PAUSED');
+      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: campaignKeys.details() });
+    },
+  });
+}
+
+function updateCampaignStatus(queryClient: ReturnType<typeof useQueryClient>, id: string, status: Campaign['status']) {
+  queryClient.setQueriesData<CampaignListResponse>({ queryKey: campaignKeys.lists() }, (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      campaigns: old.campaigns.map((campaign) =>
+        campaign.id === id ? { ...campaign, status } : campaign,
+      ),
+    };
+  });
+
+  queryClient.setQueryData<Campaign>(campaignKeys.detail(id), (old) =>
+    old ? { ...old, status } : old,
+  );
+}
+
+export function usePauseCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => campaignApi.pause(id),
+    onSuccess: (_, id) => {
+      updateCampaignStatus(queryClient, id, 'PAUSED');
+      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
+    },
+  });
+}
+
+export function useResumeCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => campaignApi.resume(id),
+    onSuccess: (_, id) => {
+      updateCampaignStatus(queryClient, id, 'ACTIVE');
       queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
     },
   });
