@@ -28,9 +28,11 @@ export function LineChart({ series, xLabels, height = 240, showLegend = true, co
   const padL = compact ? 4 : 52, padR = compact ? 4 : 20, padT = compact ? 4 : 16, padB = compact ? 4 : (xLabels ? 32 : 16);
   const chartW = vw - padL - padR;
   const chartH = height - padT - padB;
-  const stepX = chartW / (pLen - 1);
+  const stepX = pLen > 1 ? chartW / (pLen - 1) : 0;
   const yTicks = 4;
   const yStep = range / yTicks;
+  const xLabelStep = xLabels ? Math.max(1, Math.ceil(xLabels.length / 6)) : 1;
+  const zeroY = min < 0 && max > 0 ? padT + chartH - (chartH * (0 - min)) / range : null;
 
   return (
     <div className={className}>
@@ -49,9 +51,15 @@ export function LineChart({ series, xLabels, height = 240, showLegend = true, co
           );
         })}
 
+        {zeroY !== null && (
+          <line x1={padL} x2={vw - padR} y1={zeroY} y2={zeroY} stroke="var(--text-muted)" strokeWidth={1.2} opacity={0.45} />
+        )}
+
         {/* X labels */}
         {!compact && xLabels?.map((label, i) => {
-          const x = padL + (i / (xLabels.length - 1)) * chartW;
+          if (i !== 0 && i !== xLabels.length - 1 && i % xLabelStep !== 0) return null;
+          const denom = Math.max(xLabels.length - 1, 1);
+          const x = padL + (i / denom) * chartW;
           return (
             <text key={i} x={x} y={height - 6} textAnchor="middle" fill="var(--text-muted)" fontSize={11} fontFamily="system-ui">
               {label}

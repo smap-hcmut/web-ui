@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   BellRing,
@@ -21,7 +22,7 @@ import {
   type CrisisConfigInput,
   type CrisisKeywordGroupInput,
 } from '@/lib/api/projects';
-import { buildCrisisConfigPreset, buildDefaultCrisisConfig } from '@/lib/crisis/presets';
+import { buildCrisisConfigPreset, buildDefaultCrisisConfig, buildDefaultResponsePolicy } from '@/lib/crisis/presets';
 
 type VolumeRule = NonNullable<CrisisConfigInput['volume_trigger']>['rules'][number];
 type SentimentRule = NonNullable<CrisisConfigInput['sentiment_trigger']>['rules'][number];
@@ -50,6 +51,13 @@ type EditorState = {
   influencerEnabled: boolean;
   influencerLogic: 'AND' | 'OR';
   influencerRules: InfluencerRule[];
+  adaptiveCrawlEnabled: boolean;
+  adaptiveTriggerLevel: 'WATCH' | 'WARNING' | 'CRITICAL';
+  adaptiveCooldownMinutes: number;
+  notificationEnabled: boolean;
+  notificationTriggerLevel: 'WARNING' | 'CRITICAL';
+  notificationCooldownMinutes: number;
+  opsAlertOnCritical: boolean;
 };
 
 type Props = {
@@ -138,11 +146,11 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" style={{ color: 'var(--warning)' }} />
             <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Crisis thresholds
+              Brand Risk Monitoring
             </h2>
           </div>
           <p className="mt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            Tune how SMAP flags risk for {projectName || 'this project'}.
+            Configure brand risk monitoring for {projectName || 'this project'}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -153,6 +161,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
             style={inputStyle}
           >
             <option value="NORMAL">NORMAL</option>
+            <option value="WATCH">WATCH</option>
             <option value="WARNING">WARNING</option>
             <option value="CRITICAL">CRITICAL</option>
           </select>
@@ -211,6 +220,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
           <VolumeSection state={state} setState={setState} />
           <SentimentSection state={state} setState={setState} />
           <InfluencerSection state={state} setState={setState} />
+          <ResponsePolicySection state={state} setState={setState} />
 
           <div className="sticky bottom-0 flex justify-end pt-2">
             <button
@@ -236,14 +246,24 @@ export function CrisisConfigEditorModal({
   domainTypeCode,
   onClose,
 }: Props & { onClose: () => void }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[220] flex items-center justify-center p-4"
+      className="fixed inset-x-0 bottom-0 top-[88px] z-[120] flex items-start justify-center overflow-y-auto px-4 pb-6 pt-4 sm:pt-5"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(5px)' }}
       onClick={onClose}
     >
       <div
-        className="max-h-[86vh] w-full max-w-4xl overflow-y-auto rounded-3xl p-6"
+        className="max-h-[calc(100vh-124px)] w-full max-w-5xl overflow-y-auto rounded-2xl p-5 sm:p-6"
         style={{
           background: 'var(--bg-surface-solid)',
           border: '1px solid var(--border)',
@@ -276,7 +296,8 @@ export function CrisisConfigEditorModal({
           compact
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -317,7 +338,7 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<BellRing className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Keyword risk groups"
+        title="Issue Keywords"
         enabled={state.keywordEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, keywordEnabled: value }))}
       />
@@ -404,7 +425,7 @@ function VolumeSection({ state, setState }: { state: EditorState; setState: Disp
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<Flame className="h-4 w-4" style={{ color: 'var(--warning)' }} />}
-        title="Volume spike rules"
+        title="Conversation Spike"
         enabled={state.volumeEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, volumeEnabled: value }))}
       />
@@ -462,7 +483,7 @@ function SentimentSection({ state, setState }: { state: EditorState; setState: D
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<SlidersHorizontal className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Sentiment thresholds"
+        title="Negative Sentiment Share"
         enabled={state.sentimentEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, sentimentEnabled: value }))}
       />
@@ -513,7 +534,7 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<Users className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Influencer and virality rules"
+        title="Influencer Amplification"
         enabled={state.influencerEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, influencerEnabled: value }))}
       />
@@ -553,6 +574,88 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
   );
 }
 
+function ResponsePolicySection({ state, setState }: { state: EditorState; setState: Dispatch<SetStateAction<EditorState>> }) {
+  return (
+    <section className="rounded-2xl p-4" style={cardStyle}>
+      <div className="mb-3 flex items-center gap-3">
+        <RefreshCw className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+        <span className="flex-1 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Response Policy
+        </span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)' }}>
+          <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.adaptiveCrawlEnabled}
+              onChange={(e) => setState((prev) => ({ ...prev, adaptiveCrawlEnabled: e.target.checked }))}
+            />
+            Adaptive crawling
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>Boost crawling from</span>
+              <select
+                value={state.adaptiveTriggerLevel}
+                onChange={(e) => setState((prev) => ({ ...prev, adaptiveTriggerLevel: e.target.value as EditorState['adaptiveTriggerLevel'] }))}
+                className={inputClass}
+                style={inputStyle}
+              >
+                <option value="WATCH">Watch</option>
+                <option value="WARNING">Warning</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </label>
+            <NumberField
+              label="Cooldown minutes"
+              value={state.adaptiveCooldownMinutes}
+              onChange={(value) => setState((prev) => ({ ...prev, adaptiveCooldownMinutes: value }))}
+            />
+          </div>
+        </div>
+        <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)' }}>
+          <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.notificationEnabled}
+              onChange={(e) => setState((prev) => ({ ...prev, notificationEnabled: e.target.checked }))}
+            />
+            User alerts
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>Notify users from</span>
+              <select
+                value={state.notificationTriggerLevel}
+                onChange={(e) => setState((prev) => ({ ...prev, notificationTriggerLevel: e.target.value as EditorState['notificationTriggerLevel'] }))}
+                className={inputClass}
+                style={inputStyle}
+              >
+                <option value="WARNING">Warning</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </label>
+            <NumberField
+              label="Repeat cooldown"
+              value={state.notificationCooldownMinutes}
+              onChange={(value) => setState((prev) => ({ ...prev, notificationCooldownMinutes: value }))}
+            />
+          </div>
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.opsAlertOnCritical}
+              onChange={(e) => setState((prev) => ({ ...prev, opsAlertOnCritical: e.target.checked }))}
+            />
+            Escalate critical alerts to ops
+          </label>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
     <label className="block">
@@ -579,6 +682,17 @@ function normalizeConfig(config: CrisisConfig | CrisisConfigInput): EditorState 
   const volumeTrigger = config.volume_trigger ?? fallback.volume_trigger!;
   const sentimentTrigger = config.sentiment_trigger ?? fallback.sentiment_trigger!;
   const influencerTrigger = config.influencer_trigger ?? fallback.influencer_trigger!;
+  const defaultPolicy = buildDefaultResponsePolicy();
+  const responsePolicy = {
+    adaptive_crawl: {
+      ...defaultPolicy.adaptive_crawl,
+      ...(config.response_policy?.adaptive_crawl ?? {}),
+    },
+    notification: {
+      ...defaultPolicy.notification,
+      ...(config.response_policy?.notification ?? {}),
+    },
+  };
 
   return {
     status: config.status ?? 'NORMAL',
@@ -601,6 +715,13 @@ function normalizeConfig(config: CrisisConfig | CrisisConfigInput): EditorState 
     influencerEnabled: influencerTrigger.enabled,
     influencerLogic: influencerTrigger.logic,
     influencerRules: influencerTrigger.rules.length ? influencerTrigger.rules : fallback.influencer_trigger!.rules,
+    adaptiveCrawlEnabled: responsePolicy.adaptive_crawl.enabled,
+    adaptiveTriggerLevel: responsePolicy.adaptive_crawl.trigger_level,
+    adaptiveCooldownMinutes: responsePolicy.adaptive_crawl.cooldown_minutes,
+    notificationEnabled: responsePolicy.notification.enabled,
+    notificationTriggerLevel: responsePolicy.notification.trigger_level,
+    notificationCooldownMinutes: responsePolicy.notification.repeat_cooldown_minutes,
+    opsAlertOnCritical: responsePolicy.notification.ops_alert_on_critical,
   };
 }
 
@@ -635,6 +756,19 @@ function buildPayload(state: EditorState): CrisisConfigInput {
       enabled: state.influencerEnabled,
       logic: state.influencerLogic,
       rules: state.influencerRules,
+    },
+    response_policy: {
+      adaptive_crawl: {
+        enabled: state.adaptiveCrawlEnabled,
+        trigger_level: state.adaptiveTriggerLevel,
+        cooldown_minutes: state.adaptiveCooldownMinutes,
+      },
+      notification: {
+        enabled: state.notificationEnabled,
+        trigger_level: state.notificationTriggerLevel,
+        repeat_cooldown_minutes: state.notificationCooldownMinutes,
+        ops_alert_on_critical: state.opsAlertOnCritical,
+      },
     },
   };
 }

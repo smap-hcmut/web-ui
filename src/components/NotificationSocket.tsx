@@ -11,7 +11,7 @@ type NotificationEnvelope = {
   message?: string;
 };
 
-type NotificationKind = "info" | "success" | "warning" | "error";
+type NotificationKind = "info" | "success" | "warning" | "critical";
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 15_000;
@@ -155,8 +155,10 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
     const severity = stringValue(payload.severity).toLowerCase();
     return {
       title: stringValue(payload.title) || "Crisis alert",
-      message: stringValue(payload.message) || "A crisis rule has been triggered.",
-      kind: severity === "critical" || severity === "high" ? "error" : "warning",
+      message:
+        stringValue(payload.message) ||
+        `${stringValue(payload.project_name) || "A project"} reached a crisis response threshold.`,
+      kind: severity === "critical" || severity === "high" ? "critical" : "warning",
     };
   }
 

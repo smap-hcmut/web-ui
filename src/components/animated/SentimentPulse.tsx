@@ -1,9 +1,10 @@
 'use client';
 
 interface SentimentPulseProps {
-  value: number; // 0-100
+  value: number; // 0-100 by default, -100..100 when mode="net"
   size?: number;
   showLabel?: boolean;
+  mode?: 'percent' | 'net';
   className?: string;
 }
 
@@ -13,9 +14,20 @@ const getConfig = (v: number) => {
   return { color: '#ef4444', label: 'Negative', emoji: '↓' };
 };
 
-export function SentimentPulse({ value, size = 64, showLabel = true, className }: SentimentPulseProps) {
-  const pct = Math.max(0, Math.min(100, value));
-  const cfg = getConfig(pct);
+const getNetConfig = (v: number) => {
+  if (v >= 10) return { color: '#10b981', label: 'Positive', emoji: '↑' };
+  if (v <= -10) return { color: '#ef4444', label: 'Negative', emoji: '↓' };
+  return { color: '#f59e0b', label: 'Mixed', emoji: '→' };
+};
+
+export function SentimentPulse({ value, size = 64, showLabel = true, mode = 'percent', className }: SentimentPulseProps) {
+  const pct = mode === 'net'
+    ? Math.max(0, Math.min(100, (value + 100) / 2))
+    : Math.max(0, Math.min(100, value));
+  const cfg = mode === 'net' ? getNetConfig(value) : getConfig(pct);
+  const displayValue = mode === 'net'
+    ? `${value > 0 ? '+' : ''}${Math.round(value)}`
+    : String(Math.round(pct));
   const r = size / 2;
   const strokeW = size * 0.08;
   const innerR = r - strokeW * 2;
@@ -58,7 +70,7 @@ export function SentimentPulse({ value, size = 64, showLabel = true, className }
         {/* Center value */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-bold tabular-nums" style={{ color: cfg.color, fontSize: size * 0.24 }}>
-            {pct}
+            {displayValue}
           </span>
         </div>
       </div>

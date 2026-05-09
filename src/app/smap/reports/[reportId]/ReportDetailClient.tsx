@@ -36,11 +36,10 @@ export function ReportDetailClient({ reportId }: Props) {
   const campId = searchParams.get('camp_id');
 
   const { data: report, isLoading } = useReport(reportId);
-  // Route fetches a big page once and virtualises. BE page_size cap should
-  // stay in sync — mock allows up to 5000.
+  // Knowledge-srv returns the current evidence window from indexed campaign data.
   const { data: postsData, isLoading: postsLoading } = useReportPosts(reportId, {
     page: 1,
-    pageSize: 5000,
+    pageSize: 50,
   });
 
   const [selected, setSelected] = useState<Set<string>>(() =>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Bot,
   X,
@@ -16,15 +17,22 @@ import {
   ChevronDown,
   TrendingUp,
   TrendingDown,
+  FileText,
+  ExternalLink,
+  BarChart3,
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { BotResponseBlock } from '@/lib/types';
 import { useScope } from '@/components/ScopeProvider';
+import { useNav } from '@/components/NavProvider';
 import { useAssistant } from '@/components/AssistantProvider';
 import { ChatMarkdown } from '@/components/ChatMarkdown';
 import { knowledgeApi, type ChatResponse } from '@/lib/api/knowledge';
+import { reportsApi } from '@/lib/api/reports';
+import { reportKeys } from '@/lib/hooks/use-reports';
 import { useCampaigns } from '@/lib/hooks';
-import { useNotificationStore, type NotificationSeverity } from '@/lib/stores';
+import { useNotificationStore, useReportJobsStore, type NotificationSeverity } from '@/lib/stores';
+import { detectPlatform, PLATFORM_LABEL } from '@/lib/utils/platform';
 
 /* ─── !noti command parser ─── */
 
@@ -192,6 +200,62 @@ function parseDemoCommand(text: string): BotResponseBlock[] | { error: string } 
   return blocks;
 }
 
+/* ─── Report intent parser ─── */
+
+interface ParsedReportRequest {
+  kind: 'campaign' | 'competitor';
+  title: string;
+  sections: string[];
+  urls?: string[];
+}
+
+const REPORT_INTENT_RE =
+  /\b(report|reports|deck|pdf)\b|báo cáo|tạo\s+.*báo cáo|xuất\s+.*báo cáo|generate\s+.*report|export\s+.*report/i;
+const COMPETITOR_RE = /competitor|đối thủ|cạnh tranh|so sánh với|benchmark/i;
+const URL_RE = /https?:\/\/[^\s,;]+/gi;
+
+function cleanUrl(raw: string): string {
+  return raw.replace(/[)\].,;]+$/g, '');
+}
+
+function inferReportSections(text: string, kind: ParsedReportRequest['kind']): string[] {
+  const q = text.toLowerCase();
+  if (kind === 'competitor') {
+    return ['Engagement Analysis', 'Content Strategy', 'Sentiment Breakdown', 'Competitive Gap'];
+  }
+  if (/crisis|khủng hoảng|rủi ro|risk/.test(q)) {
+    return ['Brand Risk Summary', 'Conversation Spike', 'Negative Sentiment Drivers', 'Response Recommendations'];
+  }
+  if (/sentiment|cảm xúc|tiêu cực|tích cực/.test(q)) {
+    return ['Executive Summary', 'Sentiment Drivers', 'Audience Language', 'Marketing Actions'];
+  }
+  if (/trend|xu hướng|viral|tăng|giảm/.test(q)) {
+    return ['Executive Summary', 'Trend Signals', 'Platform Breakdown', 'Recommended Experiments'];
+  }
+  return ['Executive Summary', 'Key Conversation Themes', 'Platform Breakdown', 'Marketing Actions'];
+}
+
+function parseReportRequest(text: string): ParsedReportRequest | null {
+  const trimmed = text.trim();
+  if (!REPORT_INTENT_RE.test(trimmed)) return null;
+
+  const urls = Array.from(trimmed.matchAll(URL_RE))
+    .map((match) => cleanUrl(match[0]))
+    .filter((url) => detectPlatform(url) !== null);
+  const kind: ParsedReportRequest['kind'] =
+    urls.length > 0 && COMPETITOR_RE.test(trimmed) ? 'competitor' : 'campaign';
+  const date = new Date().toLocaleDateString('vi-VN');
+
+  return {
+    kind,
+    urls,
+    title: kind === 'competitor'
+      ? `Competitor intelligence report · ${date}`
+      : `Campaign intelligence report · ${date}`,
+    sections: inferReportSections(trimmed, kind),
+  };
+}
+
 /* ─── Default suggestions (used when API has none or no campaign selected) ─── */
 
 const defaultSuggestions = [
@@ -265,6 +329,9 @@ function blocksToPlainText(blocks: BotResponseBlock[]): string {
             return `${s.label}: ${s.value}${change}`;
           })
           .join('\n');
+      }
+      if (b.type === 'report' && b.report) {
+        return `${b.report.title}\n${b.report.description ?? ''}\n${b.report.href}`;
       }
       return '';
     })
@@ -358,9 +425,12 @@ function clearPersisted(campaignId: string | null) {
 
 export function CampaignAssistant() {
   const { activeCampaignId } = useScope();
+  const { setActiveTab } = useNav();
   const { open, setOpen, toggleOpen, mode, toggleMode } = useAssistant();
+  const queryClient = useQueryClient();
   const isDocked = mode === 'docked';
   const pushNoti = useNotificationStore((s) => s.push);
+  const addReportJob = useReportJobsStore((s) => s.addJob);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
@@ -580,6 +650,122 @@ export function CampaignAssistant() {
     }
   }, [activeCampaignId, conversationId, open]);
 
+  const createReportFromChat = useCallback(async (
+    userText: string,
+    request: ParsedReportRequest,
+  ) => {
+    setTyping(true);
+    try {
+      if (!activeCampaignId) {
+        throw new Error('No campaign selected');
+      }
+
+      let reportId = '';
+      let statusLabel = 'ready';
+      let description = '';
+
+      if (request.kind === 'competitor') {
+        const platforms = Array.from(new Set(
+          (request.urls ?? [])
+            .map((url) => detectPlatform(url))
+            .filter((platform): platform is NonNullable<ReturnType<typeof detectPlatform>> => platform !== null),
+        ));
+        const result = await reportsApi.generateCompetitor({
+          campaignId: activeCampaignId,
+          competitorUrls: request.urls ?? [],
+          platforms: platforms.length > 0 ? platforms : ['tiktok', 'facebook', 'youtube'],
+          sections: request.sections,
+          maxPostsPerCompetitor: 50,
+        });
+        reportId = result.reportId;
+        statusLabel = 'generating';
+        addReportJob({
+          reportId: result.reportId,
+          processId: result.processId,
+          campaignId: activeCampaignId,
+          status: 'pending',
+          startedAt: new Date().toISOString(),
+        });
+        description = `Benchmark artifact started with ${(request.urls ?? []).length} source reference${(request.urls ?? []).length === 1 ? '' : 's'} stored in the report context.`;
+      } else {
+        const result = await reportsApi.generateCampaign({
+          campaignId: activeCampaignId,
+          title: request.title,
+          sections: request.sections,
+          prompt: userText,
+          source: 'assistant',
+        });
+        reportId = result.reportId;
+        statusLabel = result.status;
+        description = 'Artifact created from the current campaign scope and saved to Reports.';
+      }
+
+      queryClient.invalidateQueries({ queryKey: reportKeys.list(activeCampaignId) });
+      queryClient.invalidateQueries({ queryKey: reportKeys.lists() });
+
+      const href = `/smap/reports/${reportId}?camp_id=${activeCampaignId}`;
+      const botMsg: ChatMessage = {
+        id: uid(),
+        role: 'bot',
+        blocks: [
+          {
+            type: 'text',
+              content: request.kind === 'competitor'
+              ? 'Mình đã tạo benchmark report và lưu artifact vào Reports.'
+              : 'Mình đã tạo campaign report và lưu artifact vào Reports.',
+          },
+          {
+            type: 'report',
+            report: {
+              id: reportId,
+              title: request.title,
+              type: request.kind === 'competitor' ? 'competitor' : 'campaign',
+              status: statusLabel === 'ready' ? 'ready' : 'generating',
+              href,
+              description,
+            },
+          },
+          {
+            type: 'bullets',
+            items: [
+              `Sections: ${request.sections.join(', ')}`,
+              request.kind === 'competitor'
+                ? 'Reports tab will keep polling the knowledge-srv generation process.'
+                : 'You can open the report detail to review the generated evidence set.',
+            ],
+          },
+        ],
+        timestamp: new Date(),
+        suggestions: [
+          'Mở tab Reports',
+          'Tạo thêm báo cáo sentiment',
+          'Tóm tắt insight chính của campaign',
+        ],
+      };
+      setMessages((prev) => [...prev, botMsg]);
+      setSuggestions([
+        { id: 'rr-1', text: 'Mở tab Reports' },
+        { id: 'rr-2', text: 'Tạo thêm báo cáo sentiment' },
+        { id: 'rr-3', text: 'Tóm tắt insight chính của campaign' },
+      ]);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message
+        : (err as { message?: string })?.message || 'Failed to create report';
+      const botMsg: ChatMessage = {
+        id: uid(),
+        role: 'bot',
+        blocks: [{ type: 'text', content: errMsg }],
+        timestamp: new Date(),
+        error: true,
+        retryOf: userText,
+      };
+      setMessages((prev) => [...prev, botMsg]);
+    } finally {
+      setTyping(false);
+      if (!open) setHasUnread(true);
+    }
+  }, [activeCampaignId, addReportJob, open, queryClient]);
+
   /* ─── Retry a failed bot message ─── */
   const retryMessage = useCallback(async (errorMsgId: string, userText: string) => {
     if (typing) return;
@@ -665,9 +851,15 @@ export function CampaignAssistant() {
         return;
       }
 
+      const reportRequest = parseReportRequest(text);
+      if (reportRequest) {
+        await createReportFromChat(text.trim(), reportRequest);
+        return;
+      }
+
       await callChatApi(text.trim());
     },
-    [typing, pushNoti, callChatApi],
+    [typing, pushNoti, callChatApi, createReportFromChat],
   );
 
   /* ─── Render helpers ─── */
@@ -729,6 +921,60 @@ export function CampaignAssistant() {
                 )}
               </div>
             ))}
+          </div>
+        );
+      }
+      if (block.type === 'report' && block.report) {
+        const report = block.report;
+        return (
+          <div
+            key={i}
+            className="rounded-xl p-3 space-y-3 min-w-0"
+            style={{
+              background: 'var(--bg-inset)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div className="flex items-start gap-2 min-w-0">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
+              >
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                  {report.title}
+                </div>
+                <div className="text-[10px] mt-0.5 capitalize" style={{ color: 'var(--text-muted)' }}>
+                  {report.type} · {report.status}
+                </div>
+                {report.description && (
+                  <div className="text-[11px] mt-1 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                    {report.description}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={report.href}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open report
+              </a>
+              <button
+                type="button"
+                onClick={() => setActiveTab('Reports')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
+                style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+              >
+                <BarChart3 className="w-3 h-3" />
+                Reports tab
+              </button>
+            </div>
           </div>
         );
       }

@@ -22,6 +22,8 @@ export function PlatformOverviewCard({
   name, platform, mentions, mentionsChange, engagement, sentiment, status, color, className,
 }: PlatformOverviewCardProps) {
   const isUp = mentionsChange >= 0;
+  const sentimentColor = sentiment >= 10 ? 'var(--success)' : sentiment <= -10 ? 'var(--danger)' : 'var(--warning)';
+  const sentimentText = `${sentiment > 0 ? '+' : ''}${sentiment}`;
 
   return (
     <div
@@ -63,9 +65,9 @@ export function PlatformOverviewCard({
           <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: 'var(--text-primary)' }}>{engagement}</p>
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider mb-1 truncate" style={{ color: 'var(--text-muted)' }}>Sentiment</p>
-          <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: sentiment >= 70 ? 'var(--success)' : sentiment >= 40 ? 'var(--warning)' : 'var(--danger)' }}>
-            {sentiment}%
+          <p className="text-[10px] uppercase tracking-wider mb-1 truncate" style={{ color: 'var(--text-muted)' }}>Net Sent.</p>
+          <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: sentimentColor }}>
+            {sentimentText}
           </p>
         </div>
       </div>

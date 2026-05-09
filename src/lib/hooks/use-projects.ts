@@ -8,6 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   projectApi,
   type Project,
+  type ProjectStatus,
+  type ProjectDomain,
   type CreateProjectInput,
   type UpdateProjectInput,
 } from '../api/projects';
@@ -18,6 +20,7 @@ import { campaignKeys } from './use-campaigns';
 
 export const projectKeys = {
   all: ['projects'] as const,
+  domains: () => [...projectKeys.all, 'domains'] as const,
   byCampaign: (campaignId: string) => [...projectKeys.all, 'campaign', campaignId] as const,
   detail: (id: string) => [...projectKeys.all, 'detail', id] as const,
 };
@@ -33,6 +36,14 @@ export function useProjectsByCampaign(campaignId: string | null | undefined) {
     queryFn: () => projectApi.listByCampaign(campaignId!),
     enabled: !!campaignId,
     staleTime: 30_000,
+  });
+}
+
+export function useProjectDomains() {
+  return useQuery<ProjectDomain[]>({
+    queryKey: projectKeys.domains(),
+    queryFn: () => projectApi.listDomains(),
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -55,8 +66,8 @@ export function usePauseProject(campaignId: string) {
 
   return useMutation({
     mutationFn: (id: string) => projectApi.pause(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+    onSuccess: (project) => {
+      updateProjectCache(queryClient, campaignId, project);
     },
   });
 }
@@ -66,8 +77,8 @@ export function useResumeProject(campaignId: string) {
 
   return useMutation({
     mutationFn: (id: string) => projectApi.resume(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+    onSuccess: (project) => {
+      updateProjectCache(queryClient, campaignId, project);
     },
   });
 }
@@ -77,10 +88,59 @@ export function useActivateProject(campaignId: string) {
 
   return useMutation({
     mutationFn: (id: string) => projectApi.activate(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+    onSuccess: (project) => {
+      updateProjectCache(queryClient, campaignId, project);
     },
   });
+}
+
+export function useArchiveProject(campaignId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => projectApi.archive(id),
+    onSuccess: (project) => {
+      updateProjectCache(queryClient, campaignId, project);
+      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
+    },
+  });
+}
+
+export function useUnarchiveProject(campaignId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => projectApi.unarchive(id),
+    onSuccess: (project) => {
+      updateProjectCache(queryClient, campaignId, project);
+      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
+    },
+  });
+}
+
+function updateProjectCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  campaignId: string,
+  project: Project,
+) {
+  queryClient.setQueryData<Project[]>(projectKeys.byCampaign(campaignId), (old) => {
+    if (!old) return old;
+    return old.map((item) => (item.id === project.id ? project : item));
+  });
+  queryClient.setQueryData<Project>(projectKeys.detail(project.id), project);
+}
+
+export function projectStatusLabel(status: ProjectStatus): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'Active';
+    case 'PAUSED':
+      return 'Paused';
+    case 'ARCHIVED':
+      return 'Archived';
+    default:
+      return 'Pending';
+  }
 }
 
 /**

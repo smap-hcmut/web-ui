@@ -2,12 +2,13 @@
 
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
 import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard";
 import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
-import { ProjectFlipCard, CreateProjectModal } from "@/components/cards/ProjectCardsRow";
+import { ProjectFlipCard, CreateProjectModal, toProjectCardStatus } from "@/components/cards/ProjectCardsRow";
 import { CrisisConfigEditorModal } from "@/components/crisis/CrisisConfigEditor";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
@@ -17,11 +18,6 @@ import { SentimentPulse } from "@/components/animated/SentimentPulse";
 import { LineChart } from "@/components/charts/LineChart";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
-import { BarChart } from "@/components/charts/BarChart";
-import { WordCloud } from "@/components/charts/WordCloud";
-import { RadarChart } from "@/components/charts/RadarChart";
-import { GaugeChart } from "@/components/charts/GaugeChart";
-import { RankList } from "@/components/ui/RankList";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -29,7 +25,15 @@ import { Modal } from "@/components/ui/Modal";
 import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
-import type { Platform, StalkerTarget, StalkerAlert, PostDetail, ReportItem } from "@/lib/types";
+import type { Platform, PostDetail, ReportItem } from "@/lib/types";
+import {
+  datasourceApi,
+  type DataSource,
+  type SourceType,
+  type TargetWithSource,
+} from "@/lib/api/datasources";
+import { reportsApi } from "@/lib/api/reports";
+import { datasourceKeys, useCampaignTargets } from "@/lib/hooks/use-datasources";
 import {
   useCampaignKPIs,
   usePlatformStats,
@@ -38,11 +42,21 @@ import {
   useRecentActivity,
   useProjectsByCampaign,
   useCreateProject,
+  usePauseProject,
+  useResumeProject,
+  useActivateProject,
+  useArchiveProject,
+  useUnarchiveProject,
+  useDryrunProject,
   useProjectStats,
   useReports,
   useGenerateCompetitor,
+  reportKeys,
   type PostItem,
   type ProjectStat,
+  type PlatformStat,
+  type KeywordItem,
+  type SentimentDonutItem,
 } from "@/lib/hooks";
 import { detectPlatform, PLATFORM_LABEL } from "@/lib/utils/platform";
 import {
@@ -96,12 +110,6 @@ const platformColors: Record<string, string> = {
   youtube: "#ff0000",
 };
 
-const chartColors: Record<string, string> = {
-  tiktok: "var(--chart-1)",
-  facebook: "var(--chart-2)",
-  youtube: "var(--chart-3)",
-};
-
 const platformLabel: Record<string, string> = {
   tiktok: "TikTok",
   facebook: "Facebook",
@@ -110,17 +118,48 @@ const platformLabel: Record<string, string> = {
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function parseMetricValue(v: string): number {
-  const cleaned = v.replace(/[,%]/g, "");
-  if (cleaned.endsWith("M")) return parseFloat(cleaned) * 1_000_000;
-  if (cleaned.endsWith("K")) return parseFloat(cleaned) * 1_000;
-  return parseFloat(cleaned);
-}
-
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
+}
+
+function formatSigned(value: number, suffix = ""): string {
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${rounded}${suffix}`;
+}
+
+function formatChange(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return formatSigned(value / 1000, "K%");
+  return formatSigned(value, "%");
+}
+
+function formatMonthLabel(value: string): string {
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function netSentimentColor(value: number): string {
+  if (value >= 10) return "var(--success)";
+  if (value <= -10) return "var(--danger)";
+  return "var(--warning)";
+}
+
+function netSentimentLabel(value: number): string {
+  if (value >= 10) return "Positive";
+  if (value <= -10) return "Negative";
+  return "Mixed";
+}
+
+function sentimentShare(donut: SentimentDonutItem[] | undefined, label: string): number {
+  const rows = donut ?? [];
+  const total = rows.reduce((sum, item) => sum + item.value, 0);
+  if (!total) return 0;
+  const value = rows.find((item) => item.label === label)?.value ?? 0;
+  return Math.round((value / total) * 100);
 }
 
 /* ── Shared components ── */
@@ -152,6 +191,195 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
 
 const sentimentVariant = { positive: "success", negative: "danger", neutral: "warning" } as const;
 const alertSeverityVariant = { info: "info", warning: "warning", critical: "danger" } as const;
+
+function TopicHealthList({ keywords, maxItems = 8 }: { keywords: KeywordItem[]; maxItems?: number }) {
+  const items = keywords.slice(0, maxItems);
+  const maxVolume = Math.max(...items.map((item) => item.volume), 1);
+
+  if (!items.length) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No topic data available</p>;
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {items.map((item, idx) => {
+        const color = netSentimentColor(item.sentiment);
+        const volumePct = Math.max(4, (item.volume / maxVolume) * 100);
+        return (
+          <div key={`${item.text}-${idx}`} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
+                  {idx + 1}
+                </span>
+                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.text}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] tabular-nums" style={{ color }}>
+                  {formatSigned(item.sentiment)}
+                </span>
+                <span className="text-[10px] tabular-nums" style={{ color: item.change >= 0 ? "var(--success)" : "var(--danger)" }}>
+                  {formatChange(item.change)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 rounded-full overflow-hidden flex-1" style={{ background: "var(--bg-hover)" }}>
+                <div className="h-full rounded-full" style={{ width: `${volumePct}%`, background: color, opacity: 0.85 }} />
+              </div>
+              <span className="w-10 text-right text-[10px] font-semibold tabular-nums" style={{ color: "var(--text-muted)" }}>
+                {fmt(item.volume)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SentimentMixPanel({ donut, pulse }: { donut: SentimentDonutItem[] | undefined; pulse: number }) {
+  const total = (donut ?? []).reduce((sum, item) => sum + item.value, 0);
+  const shares = [
+    { label: "Positive", key: "positive", color: "var(--success)" },
+    { label: "Neutral", key: "neutral", color: "var(--warning)" },
+    { label: "Negative", key: "negative", color: "var(--danger)" },
+  ];
+
+  return (
+    <div className="flex items-center gap-5 min-w-0">
+      <SentimentPulse value={pulse} mode="net" size={84} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
+          Net Sentiment {formatSigned(pulse)}
+        </p>
+        <p className="text-[11px] mb-3" style={{ color: "var(--text-muted)" }}>
+          {fmt(total)} analyzed mentions · {netSentimentLabel(pulse)} conversation mood
+        </p>
+        <div className="space-y-1.5">
+          {shares.map((share) => (
+            <div key={share.key} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: share.color }} />
+              <span className="text-[10px] flex-1" style={{ color: "var(--text-secondary)" }}>{share.label}</span>
+              <span className="text-[10px] font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {sentimentShare(donut, share.key)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShareOfVoicePanel({ stats }: { stats: PlatformStat[] }) {
+  const total = stats.reduce((sum, item) => sum + item.mentions, 0);
+
+  if (!stats.length || !total) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No channel data available</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {stats.map((item) => {
+        const share = Math.round((item.mentions / total) * 100);
+        return (
+          <div key={item.platform} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color }} />
+                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              </div>
+              <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+                {share}% · {fmt(item.mentions)}
+              </span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
+              <div className="h-full rounded-full" style={{ width: `${Math.max(4, share)}%`, background: item.color }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChannelSentimentPanel({ stats }: { stats: PlatformStat[] }) {
+  if (!stats.length) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No sentiment data available</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {stats.map((item) => {
+        const normalized = Math.max(0, Math.min(100, (item.sentiment + 100) / 2));
+        const color = netSentimentColor(item.sentiment);
+        return (
+          <div key={item.platform} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color }}>
+                {formatSigned(item.sentiment)}
+              </span>
+            </div>
+            <div className="relative h-3 rounded-full" style={{ background: "var(--bg-hover)" }}>
+              <div className="absolute top-[-3px] bottom-[-3px] left-1/2 w-px" style={{ background: "var(--border)" }} />
+              <div
+                className="absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full"
+                style={{
+                  left: `calc(${normalized}% - 7px)`,
+                  background: color,
+                  boxShadow: "0 0 0 3px var(--bg-surface-solid)",
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex justify-between text-[9px] uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
+        <span>Negative</span>
+        <span>Neutral</span>
+        <span>Positive</span>
+      </div>
+    </div>
+  );
+}
+
+function EngagementEfficiencyPanel({ stats }: { stats: PlatformStat[] }) {
+  const rows = stats.map((item) => ({
+    ...item,
+    efficiency: item.mentions > 0 ? item.engagementRaw / item.mentions : 0,
+  }));
+  const maxEfficiency = Math.max(...rows.map((item) => item.efficiency), 1);
+
+  if (!rows.length) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No engagement data available</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map((item) => {
+        const pct = Math.max(4, (item.efficiency / maxEfficiency) * 100);
+        return (
+          <div key={item.platform} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+                {item.efficiency.toFixed(1)} / mention
+              </span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: item.color }} />
+            </div>
+            <p className="text-[9px] mt-1" style={{ color: "var(--text-faint)" }}>
+              {item.engagement} engagements from {fmt(item.mentions)} mentions
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* ── Skeleton loader with shimmer ── */
 function SkeletonBlock({ className = "", delay = 0 }: { className?: string; delay?: number }) {
@@ -243,8 +471,8 @@ function MapTab() {
   const kpiMetrics = kpisData?.metrics ?? [];
 
   // Trending topics for sidebar
-  const scopedTrending = useMemo(
-    () => (keywordsData?.keywords ?? []).slice(0, 7).map((k) => ({ label: k.text, value: k.volume })),
+  const topConversationDrivers = useMemo(
+    () => (keywordsData?.keywords ?? []).slice(0, 7),
     [keywordsData],
   );
 
@@ -329,25 +557,13 @@ function MapTab() {
 
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <Card className="flex-1">
-            <SectionTitle sub="Top hashtags by volume">Trending Topics</SectionTitle>
-            {scopedTrending.length > 0 ? (
-              <RankList items={scopedTrending} maxItems={7} />
-            ) : (
-              <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No trending topics yet</p>
-            )}
+            <SectionTitle sub="Volume · net sentiment · momentum">Conversation Drivers</SectionTitle>
+            <TopicHealthList keywords={topConversationDrivers} maxItems={7} />
           </Card>
 
-          <Card className="flex items-center justify-center gap-6">
-            <SentimentPulse value={scopedSentiment} size={80} />
-            <div>
-              <p className="text-[13px] font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
-                Overall Sentiment
-              </p>
-              <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {keywordCount} keywords tracked<br />
-                {sentimentData?.donut?.length ?? 0} sentiment segments
-              </p>
-            </div>
+          <Card>
+            <SectionTitle sub={`${keywordCount} topics tracked`}>Market Mood</SectionTitle>
+            <SentimentMixPanel donut={sentimentData?.donut} pulse={scopedSentiment} />
           </Card>
         </div>
       </div>
@@ -362,9 +578,16 @@ function ProjectsTab() {
   const { activeCampaignId, projectIds, toggleProject } = useScope();
   const [configModalProject, setConfigModalProject] = useState<import('@/lib/types').Project | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [dryrunStartedIds, setDryrunStartedIds] = useState<Set<string>>(new Set());
 
   const { data: apiProjects, isLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
   const createProject = useCreateProject(activeCampaignId ?? '');
+  const pauseProject = usePauseProject(activeCampaignId ?? '');
+  const resumeProject = useResumeProject(activeCampaignId ?? '');
+  const activateProject = useActivateProject(activeCampaignId ?? '');
+  const archiveProject = useArchiveProject(activeCampaignId ?? '');
+  const unarchiveProject = useUnarchiveProject(activeCampaignId ?? '');
+  const dryrunProject = useDryrunProject();
   const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
 
   const statsMap = useMemo(() => {
@@ -381,8 +604,8 @@ function ProjectsTab() {
         domain_type_code: p.domain_type_code,
         keywords: [] as import('@/lib/types').Keyword[],
         platforms: undefined,
-        status: p.status === 'ACTIVE' ? ('active' as const) : ('paused' as const),
-        crisis_config: undefined,
+        status: toProjectCardStatus(p.status),
+        crisis_config: p.crisis_config,
       })),
     [apiProjects],
   );
@@ -429,6 +652,27 @@ function ProjectsTab() {
               isSelected={projectIds.has(proj.id)}
               onSelect={() => toggleProject(proj.id)}
               onOpenConfig={() => setConfigModalProject(proj)}
+              onPause={() => pauseProject.mutate(proj.id)}
+              onResume={() => resumeProject.mutate(proj.id)}
+              onActivate={() => activateProject.mutate(proj.id)}
+              onArchive={() => archiveProject.mutate(proj.id)}
+              onUnarchive={() => unarchiveProject.mutate(proj.id)}
+              onDryrun={() => {
+                dryrunProject.mutate(proj.id, {
+                  onSuccess: () => {
+                    setDryrunStartedIds((prev) => new Set(prev).add(proj.id));
+                  },
+                });
+              }}
+              isDryrunStarted={dryrunStartedIds.has(proj.id)}
+              isToggling={
+                (pauseProject.isPending && pauseProject.variables === proj.id) ||
+                (resumeProject.isPending && resumeProject.variables === proj.id) ||
+                (activateProject.isPending && activateProject.variables === proj.id) ||
+                (archiveProject.isPending && archiveProject.variables === proj.id) ||
+                (unarchiveProject.isPending && unarchiveProject.variables === proj.id) ||
+                (dryrunProject.isPending && dryrunProject.variables === proj.id)
+              }
             />
           ))}
         </div>
@@ -475,7 +719,7 @@ function InsightsTab() {
     platform: platformFilter !== "all" ? platformFilter : undefined,
     sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
     sort: sortBy,
-    limit: 30,
+    limit: platformFilter !== "all" || sentimentFilter !== "all" ? 100 : 30,
   });
 
   const isLoading = platformLoading || sentimentLoading || keywordsLoading;
@@ -489,7 +733,9 @@ function InsightsTab() {
       mentions: p.mentions,
       mentionsChange: p.mentionsChange,
       engagement: p.engagement,
+      engagementRaw: p.engagementRaw,
       sentiment: p.sentiment,
+      reach: p.reach,
       status: p.mentions > 0 ? ("active" as const) : ("inactive" as const),
       color: platformColors[p.platform] ?? "var(--text-muted)",
     }));
@@ -506,7 +752,7 @@ function InsightsTab() {
     [platformData],
   );
   const mentionsLabels = useMemo(
-    () => platformData?.months ?? [],
+    () => (platformData?.months ?? []).map(formatMonthLabel),
     [platformData],
   );
 
@@ -516,54 +762,10 @@ function InsightsTab() {
     const colorMap: Record<string, string> = { positive: "var(--success)", neutral: "var(--warning)", negative: "var(--danger)" };
     return donut.map((d) => ({
       label: d.label.charAt(0).toUpperCase() + d.label.slice(1),
-      value: d.value || 1,
+      value: d.value,
       color: colorMap[d.label] ?? "var(--text-faint)",
     }));
   }, [sentimentData]);
-
-  // Word cloud from keywords
-  const wordCloudItems = useMemo(
-    () =>
-      (keywordsData?.wordCloud ?? []).map((w) => ({
-        text: w.text,
-        value: w.value,
-        color: w.color,
-        opacity: w.opacity,
-      })),
-    [keywordsData],
-  );
-
-  // Bar chart (per-platform performance)
-  const barCategories = scopedPlatformStats.map((p) => ({
-    label: p.name,
-    values: [
-      { key: "Engagement", value: parseMetricValue(p.engagement) / 1000, color: "var(--chart-1)", formatted: p.engagement },
-      { key: "Sentiment", value: p.sentiment, color: "var(--chart-2)", formatted: `${p.sentiment}%` },
-      { key: "Growth", value: Math.abs(p.mentionsChange) * 3, color: "var(--chart-3)", formatted: `${p.mentionsChange >= 0 ? "+" : ""}${p.mentionsChange}%` },
-    ],
-  }));
-
-  // Radar chart
-  const radarAxes = [
-    { key: "mentions", label: "Mentions" },
-    { key: "engagement", label: "Engagement" },
-    { key: "sentiment", label: "Sentiment" },
-    { key: "growth", label: "Growth" },
-    { key: "reach", label: "Reach" },
-  ];
-
-  const maxMentions = Math.max(...scopedPlatformStats.map((p) => p.mentions), 1);
-  const radarSeries = scopedPlatformStats.map((p) => ({
-    label: p.name,
-    color: chartColors[p.platform] ?? "var(--chart-1)",
-    values: {
-      mentions: Math.min((p.mentions / maxMentions) * 100, 100),
-      engagement: Math.min(parseMetricValue(p.engagement) / (maxMentions * 2) * 100, 100),
-      sentiment: p.sentiment,
-      growth: Math.min(Math.abs(p.mentionsChange) * 3, 100),
-      reach: Math.min((p.mentions / maxMentions) * 80, 100),
-    },
-  }));
 
   // Sentiment timeline per platform
   const sentimentTimeline = useMemo(
@@ -576,29 +778,40 @@ function InsightsTab() {
     [sentimentData],
   );
   const sentimentTimelineLabels = useMemo(
-    () => sentimentData?.months ?? [],
+    () => (sentimentData?.months ?? []).map(formatMonthLabel),
     [sentimentData],
   );
 
-  // Engagement funnel from KPIs engagement breakdown (approximate from posts data)
-  const totalMentions = scopedPlatformStats.reduce((s, p) => s + p.mentions, 0);
-  const engagementFunnel = [
-    { label: "Views", value: Math.round(totalMentions * 3.35), pct: 100 },
-    { label: "Likes", value: Math.round(totalMentions * 1.9), pct: totalMentions > 0 ? 57 : 0 },
-    { label: "Comments", value: Math.round(totalMentions * 0.23), pct: totalMentions > 0 ? 7 : 0 },
-    { label: "Shares", value: Math.round(totalMentions * 0.095), pct: totalMentions > 0 ? 3 : 0 },
-  ];
-
-  // Trending topics ranked
-  const rankedKeywords = useMemo(() => {
-    const kws = keywordsData?.keywords ?? [];
-    return kws.map((k) => ({ label: k.text, value: k.volume }));
+  const topTopics = useMemo(() => (keywordsData?.keywords ?? []).slice(0, 8), [keywordsData]);
+  const momentumTopics = useMemo(() => {
+    return (keywordsData?.keywords ?? [])
+      .slice()
+      .sort((a, b) => {
+        const aRisk = a.sentiment <= -10 ? 1 : 0;
+        const bRisk = b.sentiment <= -10 ? 1 : 0;
+        if (aRisk !== bRisk) return bRisk - aRisk;
+        return b.change - a.change;
+      })
+      .slice(0, 10);
   }, [keywordsData]);
-  const firstHalf = rankedKeywords.slice(0, Math.ceil(rankedKeywords.length / 2));
-  const secondHalf = rankedKeywords.slice(Math.ceil(rankedKeywords.length / 2));
 
   // Posts
-  const filteredPosts = postsData?.posts ?? [];
+  const filteredPosts = useMemo<PostItem[]>(() => {
+    const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
+    const byTime = (post: PostItem) => Date.parse(post.time || "") || 0;
+    let list = [...(postsData?.posts ?? [])];
+
+    if (platformFilter !== "all") {
+      list = list.filter((post) => normalize(post.platform) === platformFilter);
+    }
+    if (sentimentFilter !== "all") {
+      list = list.filter((post) => normalize(post.sentiment) === sentimentFilter);
+    }
+
+    return list.sort((a, b) =>
+      sortBy === "time" ? byTime(b) - byTime(a) : (b.engagement || 0) - (a.engagement || 0),
+    );
+  }, [platformFilter, postsData?.posts, sentimentFilter, sortBy]);
 
   // Post detail — build from PostItem instead of generatePostDetail
   const selectedPost = postDetailId
@@ -654,79 +867,54 @@ function InsightsTab() {
         ))}
       </div>
 
-      {/* Row 2: Mentions trend (compact) + Sentiment donut + Radar */}
+      {/* Row 2: Mentions trend + sentiment split + channel sentiment */}
       <div className="grid grid-cols-12 gap-3 mb-4">
         <Card className="col-span-12 lg:col-span-5">
-          <SectionTitle sub="12-month trend">Mentions Over Time</SectionTitle>
+          <SectionTitle sub="Monthly volume by channel">Mentions Over Time</SectionTitle>
           <AreaChart series={mentionsSeries} xLabels={mentionsLabels.length > 0 ? mentionsLabels : months} height={180} />
         </Card>
 
         <Card className="col-span-6 lg:col-span-3 flex flex-col">
-          <SectionTitle sub="Keyword distribution">Sentiment</SectionTitle>
+          <SectionTitle sub="Share of analyzed mentions">Mood Split</SectionTitle>
           <div className="flex-1 flex items-center justify-center">
             <DonutChart segments={sentimentSegments} size={130} />
           </div>
         </Card>
 
-        <Card className="col-span-6 lg:col-span-4 flex flex-col items-center">
-          <SectionTitle sub="Multi-dimensional">Platform Radar</SectionTitle>
-          <RadarChart axes={radarAxes} series={radarSeries} size={180} showLegend={false} />
+        <Card className="col-span-6 lg:col-span-4">
+          <SectionTitle sub="Net sentiment per channel">Channel Sentiment</SectionTitle>
+          <ChannelSentimentPanel stats={scopedPlatformStats} />
         </Card>
       </div>
 
-      {/* Row 3: Bar chart + Word cloud + Heatmap */}
+      {/* Row 3: channel mix + topic health + sentiment trend */}
       <div className="grid grid-cols-12 gap-3 mb-4">
         <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Engagement · Sentiment · Growth">Performance</SectionTitle>
-          <BarChart categories={barCategories} height={170} showLegend={false} />
+          <SectionTitle sub="Mention share by platform">Share of Voice</SectionTitle>
+          <ShareOfVoicePanel stats={scopedPlatformStats} />
         </Card>
 
         <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Size = volume, opacity = sentiment">Keyword Cloud</SectionTitle>
-          {wordCloudItems.length > 0 ? (
-            <WordCloud words={wordCloudItems} maxWords={15} height={170} />
-          ) : (
-            <div className="flex items-center justify-center" style={{ height: 170 }}>
-              <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
-            </div>
-          )}
+          <SectionTitle sub="Volume · net sentiment · momentum">Topic Health</SectionTitle>
+          <TopicHealthList keywords={topTopics} maxItems={8} />
         </Card>
 
         <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Per-platform trend">Sentiment Timeline</SectionTitle>
-          <AreaChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
+          <SectionTitle sub="Net sentiment by month">Sentiment Trend</SectionTitle>
+          <LineChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
         </Card>
       </div>
 
-      {/* Row 4: Engagement funnel + Trending topics compact */}
+      {/* Row 4: engagement quality + rising issues */}
       <div className="grid grid-cols-12 gap-3 mb-4">
         <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Content conversion">Engagement Funnel</SectionTitle>
-          <div className="space-y-2.5">
-            {engagementFunnel.map((stage) => (
-              <div key={stage.label} className="min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] font-medium truncate" style={{ color: "var(--text-secondary)" }}>{stage.label}</span>
-                  <span className="text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0" style={{ color: "var(--text-primary)" }}>
-                    {fmt(stage.value)} <span className="font-normal" style={{ color: "var(--text-faint)" }}>({stage.pct}%)</span>
-                  </span>
-                </div>
-                <ProgressBar value={stage.pct} size="sm" />
-              </div>
-            ))}
-          </div>
+          <SectionTitle sub="Engagement normalized by mention volume">Engagement Efficiency</SectionTitle>
+          <EngagementEfficiencyPanel stats={scopedPlatformStats} />
         </Card>
 
         <Card className="col-span-12 lg:col-span-8">
-          <SectionTitle sub="All keywords ranked by volume">Trending Topics</SectionTitle>
-          {rankedKeywords.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <RankList items={firstHalf} maxItems={10} />
-              <RankList items={secondHalf} maxItems={10} startRank={firstHalf.length + 1} />
-            </div>
-          ) : (
-            <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
-          )}
+          <SectionTitle sub="Fast-growing or negative themes to review first">Momentum Watchlist</SectionTitle>
+          <TopicHealthList keywords={momentumTopics} maxItems={10} />
         </Card>
       </div>
 
@@ -1125,21 +1313,102 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
    TAB: Stalker
    ════════════════════════════════════════════ */
 function StalkerTab() {
-  const [stalkers] = useState<StalkerTarget[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { activeCampaignId } = useScope();
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [loading, setLoading] = useState(true);
+  const [actionTargetId, setActionTargetId] = useState<string | null>(null);
+  const { data: apiProjects, isLoading: projectsLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
+  const projectIds = useMemo(() => (apiProjects ?? []).map((project) => project.id), [apiProjects]);
+  const { data: targets, isLoading: targetsLoading } = useCampaignTargets(projectIds);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 900);
-    return () => clearTimeout(t);
-  }, []);
+  const projectNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const project of apiProjects ?? []) names.set(project.id, project.name);
+    return names;
+  }, [apiProjects]);
 
-  const filtered = stalkers.filter((s) => filterStatus === "all" || s.status === filterStatus);
-  const unreadTotal = stalkers.reduce((sum, s) => sum + s.alerts.filter((a) => !a.read).length, 0);
+  const stalkers = useMemo(() => {
+    return (targets ?? [])
+      .filter((target) => target.target_type === "PROFILE" && (target.source_type === "FACEBOOK" || target.source_type === "TIKTOK"))
+      .map((target) => ({
+        ...target,
+        project_name: target.project_id ? projectNameById.get(target.project_id) : undefined,
+      }));
+  }, [projectNameById, targets]);
 
-  if (loading) return <ListSkeleton count={4} />;
+  const filtered = stalkers.filter((target) => {
+    if (filterStatus === "all") return true;
+    return filterStatus === "active" ? target.is_active : !target.is_active;
+  });
+
+  const createStalker = useMutation({
+    mutationFn: async (input: CreateFocusedSourceInput) => {
+      const sourceType = toSourceType(input.platform);
+      const existingSources = await datasourceApi.listByProject(input.projectId);
+      const reusableStatuses = new Set<DataSource["status"]>(["PENDING", "READY", "ACTIVE", "PAUSED"]);
+      let source = existingSources.find((item) => item.source_type === sourceType && reusableStatuses.has(item.status));
+
+      if (!source) {
+        source = await datasourceApi.create({
+          project_id: input.projectId,
+          name: `${platformLabel[input.platform]} Focused Sources`,
+          description: `Focused ${platformLabel[input.platform]} profile/page monitoring`,
+          source_type: sourceType,
+          source_category: "CRAWL",
+          crawl_mode: "NORMAL",
+          crawl_interval_minutes: input.intervalMinutes,
+        });
+      }
+
+      const target = await datasourceApi.createProfileTarget(source.id, {
+        values: [input.url],
+        label: input.label,
+        platform_meta: input.platformMeta,
+        crawl_interval_minutes: input.intervalMinutes,
+        priority: 20,
+      });
+
+      await datasourceApi.activateTarget(source.id, target.id);
+      await ensureDatasourceRuntime(source);
+      return target;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+      for (const projectId of projectIds) {
+        queryClient.invalidateQueries({ queryKey: datasourceKeys.byProject(projectId) });
+      }
+      setShowCreate(false);
+    },
+  });
+
+  const toggleTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      if (target.is_active) {
+        return datasourceApi.deactivateTarget(target.data_source_id, target.id);
+      }
+      const updated = await datasourceApi.activateTarget(target.data_source_id, target.id);
+      await ensureDatasourceRuntime({
+        id: target.data_source_id,
+        status: target.datasource_status ?? "READY",
+        source_type: target.source_type,
+        source_category: "CRAWL",
+        crawl_mode: "NORMAL",
+        name: target.datasource_name,
+        project_id: target.project_id ?? "",
+        created_at: "",
+        updated_at: "",
+      });
+      return updated;
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+    },
+  });
+
+  if (projectsLoading || targetsLoading) return <ListSkeleton count={4} />;
 
   return (
     <div className="content-reveal">
@@ -1148,17 +1417,9 @@ function StalkerTab() {
         <div>
           <h2 className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
             Stalker
-            {unreadTotal > 0 && (
-              <span
-                className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
-                style={{ background: "var(--danger)" }}
-              >
-                {unreadTotal}
-              </span>
-            )}
           </h2>
           <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-            Monitor profiles and posts for real-time changes
+            Focused profile/page sources for campaign-owned crawling
           </p>
         </div>
 
@@ -1181,8 +1442,9 @@ function StalkerTab() {
           </div>
           <button
             onClick={() => setShowCreate(true)}
+            disabled={(apiProjects ?? []).length === 0}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
-            style={{ background: "var(--accent)" }}
+            style={{ background: "var(--accent)", opacity: (apiProjects ?? []).length === 0 ? 0.5 : 1 }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
           >
@@ -1195,134 +1457,78 @@ function StalkerTab() {
       {/* Stalker cards */}
       {filtered.length > 0 ? (
         <div className="space-y-3">
-          {filtered.map((stalker) => {
-            const expanded = expandedId === stalker.id;
-            const unread = stalker.alerts.filter((a) => !a.read).length;
+          {filtered.map((target) => {
+            const platform = sourceTypeToPlatform(target.source_type);
+            const meta = target.platform_meta ?? {};
+            const identity = platform === "facebook"
+              ? String(meta.page_id ?? "")
+              : String(meta.username ?? meta.sec_uid ?? "");
+            const isPending = toggleTarget.isPending && actionTargetId === target.id;
 
             return (
-              <Card key={stalker.id} className="!p-0 overflow-hidden">
-                {/* Card header */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setExpandedId(expanded ? null : stalker.id)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(expanded ? null : stalker.id); } }}
-                  className="w-full flex items-center gap-3 p-4 text-left cursor-pointer"
-                >
+              <Card key={target.id} className="!p-0 overflow-hidden">
+                <div className="w-full flex items-center gap-3 p-4 text-left">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: "var(--accent-subtle)" }}
                   >
-                    {stalker.type === "profile" ? (
-                      <Target className="w-5 h-5" style={{ color: "var(--accent)" }} />
-                    ) : (
-                      <FileText className="w-5 h-5" style={{ color: "var(--accent)" }} />
-                    )}
+                    <Target className="w-5 h-5" style={{ color: "var(--accent)" }} />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-[13px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                        {stalker.name}
+                        {target.label || target.values[0]}
                       </p>
                       <span className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-faint)" }}>
-                        {platformLabel[stalker.platform]}
+                        {platformLabel[platform]}
                       </span>
-                      <Badge variant={stalker.status === "active" ? "success" : "warning"} dot={stalker.status === "active"} size="sm">
-                        {stalker.status}
+                      <Badge variant={target.is_active ? "success" : "warning"} dot={target.is_active} size="sm">
+                        {target.is_active ? "active" : "paused"}
                       </Badge>
-                      {unread > 0 && (
-                        <span
-                          className="flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white"
-                          style={{ background: "var(--danger)" }}
-                        >
-                          {unread}
+                      <Badge variant={target.datasource_status === "ACTIVE" ? "success" : "neutral"} size="sm">
+                        {target.datasource_status ?? "source"}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-0.5">
+                      <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--text-faint)" }}>
+                        <Clock className="w-3 h-3" /> Every {target.crawl_interval_minutes ?? 30}m
+                      </span>
+                      {target.project_name && (
+                        <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                          {target.project_name}
                         </span>
                       )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--text-faint)" }}>
-                        <Clock className="w-3 h-3" /> Last checked: {stalker.lastChecked}
-                      </span>
-                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
-                        {stalker.totalAlerts} total alerts
-                      </span>
+                      {identity && (
+                        <span className="text-[10px] font-mono" style={{ color: "var(--text-faint)" }}>
+                          {identity}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={(e) => { e.stopPropagation(); }}
+                      onClick={() => toggleTarget.mutate(target)}
+                      disabled={isPending}
+                      className="p-1.5 rounded-lg transition-colors"
+                      style={{ color: "var(--text-muted)", opacity: isPending ? 0.5 : 1 }}
+                      title={target.is_active ? "Pause focused source" : "Resume focused source"}
+                    >
+                      {target.is_active ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                    <a
+                      href={target.values[0]}
+                      target="_blank"
+                      rel="noreferrer"
                       className="p-1.5 rounded-lg transition-colors"
                       style={{ color: "var(--text-muted)" }}
-                      title={stalker.status === "active" ? "Pause" : "Resume"}
+                      title="Open source"
                     >
-                      {stalker.status === "active" ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); }}
-                      className="p-1.5 rounded-lg transition-colors"
-                      style={{ color: "var(--danger)" }}
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    {expanded ? <ChevronDown className="w-4 h-4" style={{ color: "var(--text-faint)" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "var(--text-faint)" }} />}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
-
-                {/* Expanded alert feed */}
-                {expanded && (
-                  <div className="px-4 pb-4 pt-0">
-                    {/* Thresholds summary */}
-                    <div className="flex flex-wrap gap-2 mb-3 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: stalker.thresholds.newPost ? "var(--success-bg)" : "var(--bg-hover)", color: stalker.thresholds.newPost ? "var(--success)" : "var(--text-faint)" }}>
-                        {stalker.thresholds.newPost ? <Bell className="w-3 h-3 inline mr-1" /> : <BellOff className="w-3 h-3 inline mr-1" />}
-                        New posts
-                      </span>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: "var(--warning-bg)", color: "var(--warning)" }}>
-                        <AlertTriangle className="w-3 h-3 inline mr-1" />
-                        Neg. sentiment &gt; {stalker.thresholds.commentSentiment}%
-                      </span>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: "var(--info-bg)", color: "var(--info)" }}>
-                        <Heart className="w-3 h-3 inline mr-1" />
-                        Engagement &gt; {fmt(stalker.thresholds.engagementThreshold)}
-                      </span>
-                    </div>
-
-                    {/* Alert timeline */}
-                    <div className="space-y-1.5">
-                      {stalker.alerts.map((alert) => (
-                        <div
-                          key={alert.id}
-                          className="flex items-start gap-2.5 p-2.5 rounded-xl transition-colors"
-                          style={{
-                            background: alert.read ? "transparent" : "var(--bg-hover)",
-                            opacity: alert.read ? 0.7 : 1,
-                          }}
-                        >
-                          <div
-                            className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                            style={{ background: `var(--${alertSeverityVariant[alert.severity]}-bg)` }}
-                          >
-                            {alert.type === "new_post" && <FileText className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "comment_spike" && <MessageCircle className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "engagement_threshold" && <Heart className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "sentiment_shift" && <AlertTriangle className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[12px] font-semibold" style={{ color: "var(--text-primary)" }}>{alert.title}</p>
-                              {!alert.read && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--accent)" }} />}
-                            </div>
-                            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{alert.description}</p>
-                          </div>
-                          <span className="text-[9px] shrink-0" style={{ color: "var(--text-faint)" }}>{alert.time}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </Card>
             );
           })}
@@ -1331,12 +1537,13 @@ function StalkerTab() {
         <EmptyState
           icon={<Target />}
           title="No stalkers yet"
-          description="Create a stalker to start monitoring profiles and posts in real-time"
+          description="Add a Facebook page or TikTok profile to collect posts and comments from that source only."
           action={
             <button
               onClick={() => setShowCreate(true)}
+              disabled={(apiProjects ?? []).length === 0}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white"
-              style={{ background: "var(--accent)" }}
+              style={{ background: "var(--accent)", opacity: (apiProjects ?? []).length === 0 ? 0.5 : 1 }}
             >
               <Plus className="w-3.5 h-3.5" /> New Stalker
             </button>
@@ -1345,193 +1552,263 @@ function StalkerTab() {
       )}
 
       {/* Create Stalker Modal */}
-      <CreateStalkerModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <CreateStalkerModal
+        open={showCreate}
+        projects={apiProjects ?? []}
+        isPending={createStalker.isPending}
+        errorMessage={createStalker.error ? getMutationErrorMessage(createStalker.error) : ""}
+        onClose={() => setShowCreate(false)}
+        onSubmit={(input) => createStalker.mutate(input)}
+      />
     </div>
   );
 }
 
 /* ── Create Stalker Modal ── */
-function CreateStalkerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const [type, setType] = useState<"profile" | "post">("profile");
+type StalkerPlatform = Extract<Platform, "facebook" | "tiktok">;
+
+type CreateFocusedSourceInput = {
+  projectId: string;
+  platform: StalkerPlatform;
+  url: string;
+  label: string;
+  intervalMinutes: number;
+  platformMeta: Record<string, unknown>;
+};
+
+function CreateStalkerModal({
+  open,
+  projects,
+  isPending,
+  errorMessage,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  projects: Array<{ id: string; name: string }>;
+  isPending: boolean;
+  errorMessage?: string;
+  onClose: () => void;
+  onSubmit: (input: CreateFocusedSourceInput) => void;
+}) {
+  const [projectId, setProjectId] = useState("");
   const [url, setUrl] = useState("");
-  const [platform, setPlatform] = useState<Platform>("tiktok");
-  const [newPost, setNewPost] = useState(true);
-  const [sentimentThreshold, setSentimentThreshold] = useState("50");
-  const [engagementThreshold, setEngagementThreshold] = useState("1000");
-  const [creating, setCreating] = useState(false);
+  const [platform, setPlatform] = useState<StalkerPlatform>("facebook");
+  const [label, setLabel] = useState("");
+  const [pageId, setPageId] = useState("");
+  const [username, setUsername] = useState("");
+  const [intervalMinutes, setIntervalMinutes] = useState("30");
+
+  useEffect(() => {
+    if (open && !projectId && projects.length > 0) {
+      setProjectId(projects[0].id);
+    }
+  }, [open, projectId, projects]);
 
   const inputClass = "w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-all duration-200";
   const inputStyle = { background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
 
-  const reset = () => { setStep(0); setType("profile"); setUrl(""); setPlatform("tiktok"); setNewPost(true); setSentimentThreshold("50"); setEngagementThreshold("1000"); };
+  const reset = () => {
+    setProjectId(projects[0]?.id ?? "");
+    setUrl("");
+    setPlatform("facebook");
+    setLabel("");
+    setPageId("");
+    setUsername("");
+    setIntervalMinutes("30");
+  };
+
+  const resolvedPageId = pageId.trim() || extractFacebookPageId(url);
+  const resolvedUsername = username.trim().replace(/^@/, "") || extractTikTokUsername(url);
+  const parsedInterval = Math.max(5, Number(intervalMinutes) || 30);
+  const canSubmit = Boolean(
+    projectId &&
+    url.trim() &&
+    label.trim() &&
+    (platform === "facebook" ? /^\d{5,}$/.test(resolvedPageId) : resolvedUsername),
+  );
+
+  const submit = () => {
+    if (!canSubmit || isPending) return;
+    onSubmit({
+      projectId,
+      platform,
+      url: url.trim(),
+      label: label.trim(),
+      intervalMinutes: parsedInterval,
+      platformMeta: platform === "facebook"
+        ? { page_id: resolvedPageId, source_kind: "focused_page" }
+        : { username: resolvedUsername, source_kind: "focused_profile" },
+    });
+  };
 
   return (
     <Modal open={open} onClose={() => { onClose(); reset(); }} title="Create Stalker" size="md">
-      {step === 0 && (
+      <div className="space-y-4">
         <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>What do you want to monitor?</p>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {([
-              { id: "profile" as const, label: "Profile / Page", desc: "Track a social media profile", icon: <Target className="w-5 h-5" /> },
-              { id: "post" as const, label: "Specific Post", desc: "Monitor a single post", icon: <FileText className="w-5 h-5" /> },
-            ]).map((opt) => (
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Project</label>
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className={inputClass} style={inputStyle}>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{project.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Platform</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["facebook", "tiktok"] as StalkerPlatform[]).map((p) => (
               <button
-                key={opt.id}
-                onClick={() => setType(opt.id)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl text-center transition-all"
+                key={p}
+                onClick={() => setPlatform(p)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all"
                 style={{
-                  background: type === opt.id ? "var(--accent-subtle)" : "var(--bg-hover)",
-                  border: `1.5px solid ${type === opt.id ? "var(--accent)" : "var(--border)"}`,
-                  color: type === opt.id ? "var(--accent)" : "var(--text-muted)",
+                  background: platform === p ? "var(--accent-subtle)" : "var(--bg-hover)",
+                  border: `1.5px solid ${platform === p ? "var(--accent)" : "var(--border)"}`,
+                  color: platform === p ? "var(--accent)" : "var(--text-muted)",
                 }}
               >
-                {opt.icon}
-                <span className="text-[12px] font-semibold">{opt.label}</span>
-                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{opt.desc}</span>
+                {platformLabel[p]}
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Display name</label>
+          <input
+            type="text"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder={platform === "facebook" ? "Ahamove Facebook Page" : "Ahamove TikTok Profile"}
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Source URL</label>
+          <div className="relative">
+            <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-faint)" }} />
+            <input
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder={platform === "facebook" ? "https://www.facebook.com/profile.php?id=100066224874581" : "https://www.tiktok.com/@username"}
+              className={`${inputClass} pl-10`}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {platform === "facebook" ? (
+          <div>
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Facebook numeric page ID</label>
+            <input
+              type="text"
+              value={pageId}
+              onChange={(event) => setPageId(event.target.value.replace(/\D/g, ""))}
+              placeholder="100066224874581"
+              className={inputClass}
+              style={inputStyle}
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>TikTok username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value.replace(/^@/, ""))}
+              placeholder="username"
+              className={inputClass}
+              style={inputStyle}
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Crawl interval minutes</label>
+          <input
+            type="number"
+            value={intervalMinutes}
+            onChange={(event) => setIntervalMinutes(event.target.value)}
+            className={inputClass}
+            style={inputStyle}
+            min={5}
+          />
+        </div>
+
+        {errorMessage && (
+          <p className="text-[11px]" style={{ color: "var(--danger)" }}>{errorMessage}</p>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button onClick={() => { onClose(); reset(); }} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Cancel</button>
           <button
-            onClick={() => setStep(1)}
-            className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white"
+            onClick={submit}
+            disabled={!canSubmit || isPending}
+            className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-40"
             style={{ background: "var(--accent)" }}
           >
-            Continue
+            {isPending ? "Creating..." : "Create Stalker"}
           </button>
         </div>
-      )}
-
-      {step === 1 && (
-        <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>Enter the URL and select platform</p>
-          <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>URL</label>
-              <div className="relative">
-                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-faint)" }} />
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder={type === "profile" ? "https://tiktok.com/@username" : "https://tiktok.com/@user/video/123"}
-                  className={`${inputClass} pl-10`}
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Platform</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["tiktok", "facebook", "youtube"] as Platform[]).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPlatform(p)}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all"
-                    style={{
-                      background: platform === p ? "var(--accent-subtle)" : "var(--bg-hover)",
-                      border: `1.5px solid ${platform === p ? "var(--accent)" : "var(--border)"}`,
-                      color: platform === p ? "var(--accent)" : "var(--text-muted)",
-                    }}
-                  >
-                    {platformLabel[p]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setStep(0)} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Back</button>
-            <button
-              onClick={() => setStep(2)}
-              disabled={!url}
-              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-40"
-              style={{ background: "var(--accent)" }}
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>Configure alert thresholds</p>
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--bg-hover)" }}>
-              <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                <span className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>Alert on new posts</span>
-              </div>
-              <button
-                onClick={() => setNewPost(!newPost)}
-                className="w-9 h-5 rounded-full transition-colors relative"
-                style={{ background: newPost ? "var(--accent)" : "var(--bg-inset)" }}
-              >
-                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: newPost ? 18 : 2 }} />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Negative sentiment threshold (%)
-              </label>
-              <input
-                type="number"
-                value={sentimentThreshold}
-                onChange={(e) => setSentimentThreshold(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-                min={0}
-                max={100}
-              />
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Alert when negative comments exceed this percentage
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Engagement threshold
-              </label>
-              <input
-                type="number"
-                value={engagementThreshold}
-                onChange={(e) => setEngagementThreshold(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-                min={0}
-              />
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Alert when likes/reactions exceed this number
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Back</button>
-            <button
-              onClick={() => {
-                setCreating(true);
-                setTimeout(() => { setCreating(false); onClose(); reset(); }, 1500);
-              }}
-              disabled={creating}
-              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-70 flex items-center justify-center gap-2"
-              style={{ background: "var(--accent)" }}
-            >
-              {creating ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create Stalker"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </Modal>
   );
+}
+
+function toSourceType(platform: StalkerPlatform): SourceType {
+  return platform === "facebook" ? "FACEBOOK" : "TIKTOK";
+}
+
+function sourceTypeToPlatform(sourceType: SourceType): Platform {
+  if (sourceType === "FACEBOOK") return "facebook";
+  if (sourceType === "TIKTOK") return "tiktok";
+  return "youtube";
+}
+
+async function ensureDatasourceRuntime(source: DataSource) {
+  if (source.status === "ACTIVE") return;
+  if (source.status === "PAUSED") {
+    await datasourceApi.resume(source.id);
+    return;
+  }
+  if (source.status === "READY" || source.status === "PENDING") {
+    await datasourceApi.activate(source.id);
+    return;
+  }
+  throw new Error(`Datasource is ${source.status.toLowerCase()}`);
+}
+
+function extractFacebookPageId(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const queryId = url.searchParams.get("id")?.trim();
+    if (queryId && /^\d{5,}$/.test(queryId)) return queryId;
+    const pathId = url.pathname.split("/").find((part) => /^\d{5,}$/.test(part));
+    return pathId ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function extractTikTokUsername(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const handle = url.pathname.split("/").find((part) => part.startsWith("@"));
+    return handle?.replace(/^@/, "") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function getMutationErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return "Could not save focused source";
 }
 
 /* ════════════════════════════════════════════
@@ -1561,6 +1838,11 @@ function ReportsTab() {
   const reports = data?.items ?? [];
   const openDetail = (id: string) => {
     router.push(`/smap/reports/${id}?camp_id=${activeCampaignId}`);
+  };
+  const downloadReport = async (report: ReportItem) => {
+    if (report.status !== "ready") return;
+    const file = await reportsApi.download(report.id);
+    window.open(file.downloadUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -1664,6 +1946,8 @@ function ReportsTab() {
                       <ExternalLink className="w-3.5 h-3.5" /> Open
                     </button>
                     <button
+                      onClick={() => downloadReport(report)}
+                      disabled={report.status !== "ready"}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
                       style={{ color: "var(--text-muted)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -1721,10 +2005,13 @@ interface GenerateReportModalProps {
 }
 
 function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalProps) {
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<"existing" | "competitor">("existing");
   const [competitorUrls, setCompetitorUrls] = useState("");
   const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(["tiktok", "facebook", "youtube"]));
   const [maxPosts, setMaxPosts] = useState<number>(50);
+  const [campaignPending, setCampaignPending] = useState(false);
+  const [campaignGenerateError, setCampaignGenerateError] = useState(false);
   const [selectedSections, setSelectedSections] = useState<Set<string>>(
     new Set(["Overview", "Sentiment Analysis", "Trends", "Top Posts", "Platform Breakdown"])
   );
@@ -1778,9 +2065,24 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
 
   const handleGenerate = async () => {
     if (mode !== "competitor") {
-      // The existing-data branch isn't wired yet — just close.
-      onClose();
-      return;
+      try {
+        setCampaignPending(true);
+        setCampaignGenerateError(false);
+        await reportsApi.generateCampaign({
+          campaignId,
+          title: `Campaign intelligence report · ${new Date().toLocaleDateString("vi-VN")}`,
+          sections: Array.from(selectedSections),
+          source: "manual",
+        });
+        queryClient.invalidateQueries({ queryKey: reportKeys.list(campaignId) });
+        onClose();
+        return;
+      } catch {
+        setCampaignGenerateError(true);
+        return;
+      } finally {
+        setCampaignPending(false);
+      }
     }
     try {
       await generate.mutateAsync({
@@ -1807,7 +2109,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
         <div className="grid grid-cols-2 gap-3 mb-5">
           {([
             { id: "existing" as const, label: "From Campaign Data", desc: "Use existing tracked data", icon: <BarChart3 className="w-5 h-5" /> },
-            { id: "competitor" as const, label: "Competitor Analysis", desc: "Crawl & analyze new URLs", icon: <Globe className="w-5 h-5" /> },
+            { id: "competitor" as const, label: "Benchmark Brief", desc: "Use tracked knowledge plus source context", icon: <Globe className="w-5 h-5" /> },
           ]).map((opt) => (
             <button
               key={opt.id}
@@ -1922,7 +2224,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
             {/* Max posts */}
             <div>
               <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Maximum posts per competitor
+                Evidence posts to review
               </label>
               <input
                 type="number"
@@ -1934,7 +2236,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
                 style={inputStyle}
               />
               <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Between 1 and 500. Default 50.
+                Knowledge-srv will use the strongest indexed evidence available. Default 50.
               </p>
             </div>
           </div>
@@ -1972,7 +2274,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
           </div>
         </div>
 
-        {generate.isError && (
+        {(generate.isError || campaignGenerateError) && (
           <div className="mt-4 p-3 rounded-xl text-[12px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
             Failed to start report. Please try again.
           </div>
@@ -1981,13 +2283,13 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
         {/* Generate button */}
         <button
           onClick={handleGenerate}
-          disabled={generate.isPending || !canGenerate}
+          disabled={generate.isPending || campaignPending || !canGenerate}
           className="w-full mt-6 py-2.5 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "var(--accent)" }}
           onMouseEnter={(e) => { if (!generate.isPending && canGenerate) e.currentTarget.style.background = "var(--accent-hover)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
         >
-          {generate.isPending ? (
+          {generate.isPending || campaignPending ? (
             <>
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Starting...

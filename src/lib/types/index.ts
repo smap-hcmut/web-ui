@@ -130,7 +130,7 @@ export interface ReportItem {
   scope: string;
   generatedAt: string;
   pages: number;
-  format: 'PDF' | 'CSV';
+  format: 'PDF' | 'CSV' | 'MD';
   status: ReportStatus;
   sections: string[];
 
@@ -142,6 +142,8 @@ export interface ReportItem {
   process?: CrawlerProcess;      // present while generating / after failure / cancelled
   totals?: { posts: number; comments: number };
   errorMessage?: string;
+  source?: 'manual' | 'assistant';
+  prompt?: string;
 }
 
 export type CrawlerStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
@@ -222,19 +224,27 @@ export interface SuggestedQuestion {
 }
 
 export interface BotResponseBlock {
-  type: 'text' | 'bullets' | 'stats';
+  type: 'text' | 'bullets' | 'stats' | 'report';
   content?: string;
   items?: string[];
   stats?: { label: string; value: string; change?: number }[];
+  report?: {
+    id: string;
+    title: string;
+    type: ReportItem['type'];
+    status: ReportStatus;
+    href: string;
+    description?: string;
+  };
 }
 
 // ─── Crisis config (project-level) ────────────────────────────────────────────
 
 export interface SentimentRule {
   type: string;
-  threshold_percent: number;
-  negative_threshold_percent: number;
-  critical_aspects: string[];
+  threshold_percent?: number;
+  negative_threshold_percent?: number;
+  critical_aspects?: string[];
 }
 
 export interface VolumeRule {
@@ -252,14 +262,14 @@ export interface KeywordGroup {
 
 export interface InfluencerRule {
   type: string;
-  min_followers: number;
-  min_comments: number;
-  min_shares: number;
-  required_sentiment: string;
+  min_followers?: number;
+  min_comments?: number;
+  min_shares?: number;
+  required_sentiment?: string;
 }
 
 export interface CrisisConfig {
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'NORMAL' | 'WATCH' | 'WARNING' | 'CRITICAL';
   sentiment_trigger: {
     enabled: boolean;
     min_sample_size: number;
@@ -280,6 +290,19 @@ export interface CrisisConfig {
     logic: 'AND' | 'OR';
     rules: InfluencerRule[];
   };
+  response_policy?: {
+    adaptive_crawl: {
+      enabled: boolean;
+      trigger_level: 'WATCH' | 'WARNING' | 'CRITICAL';
+      cooldown_minutes: number;
+    };
+    notification: {
+      enabled: boolean;
+      trigger_level: 'WARNING' | 'CRITICAL';
+      repeat_cooldown_minutes: number;
+      ops_alert_on_critical: boolean;
+    };
+  };
   cron_schedule?: string;
 }
 
@@ -299,6 +322,6 @@ export interface Project {
   domain_type_code?: string;
   keywords: Keyword[];
   platforms?: Platform[];
-  status?: 'active' | 'paused' | 'pending';
+  status?: 'active' | 'paused' | 'pending' | 'archived';
   crisis_config?: CrisisConfig;
 }

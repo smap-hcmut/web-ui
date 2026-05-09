@@ -9,7 +9,7 @@ const ANALYSIS_API_URL =
   'http://analysis-api.smap.svc.cluster.local';
 
 const TIMEOUT_CACHE_TTL_MS = 60_000;
-const timeoutCampaignCache = new Map<string, number>();
+const timeoutEndpointCache = new Map<string, number>();
 
 function getCampaignIdFromSearch(search: string): string | null {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
@@ -18,20 +18,27 @@ function getCampaignIdFromSearch(search: string): string | null {
   return campaignId.trim() || null;
 }
 
-function isCampaignInTimeoutWindow(campaignId: string | null): boolean {
-  if (!campaignId) return false;
-  const until = timeoutCampaignCache.get(campaignId);
+function timeoutCacheKey(campaignId: string | null, path: string, search = ''): string | null {
+  if (!campaignId) return null;
+  return `${campaignId}:${path}:${search}`;
+}
+
+function isEndpointInTimeoutWindow(campaignId: string | null, path: string, search = ''): boolean {
+  const key = timeoutCacheKey(campaignId, path, search);
+  if (!key) return false;
+  const until = timeoutEndpointCache.get(key);
   if (!until) return false;
   if (until <= Date.now()) {
-    timeoutCampaignCache.delete(campaignId);
+    timeoutEndpointCache.delete(key);
     return false;
   }
   return true;
 }
 
-function markCampaignTimeout(campaignId: string | null): void {
-  if (!campaignId) return;
-  timeoutCampaignCache.set(campaignId, Date.now() + TIMEOUT_CACHE_TTL_MS);
+function markEndpointTimeout(campaignId: string | null, path: string, search = ''): void {
+  const key = timeoutCacheKey(campaignId, path, search);
+  if (!key) return;
+  timeoutEndpointCache.set(key, Date.now() + TIMEOUT_CACHE_TTL_MS);
 }
 
 async function requestAnalysis(url: URL): Promise<{ body: string; contentType: string; status: number }> {
@@ -74,7 +81,7 @@ export async function fetchAnalysis(request: NextRequest, path: string): Promise
   url.search = request.nextUrl.search;
 
   const campaignId = getCampaignIdFromSearch(url.search);
-  if (isCampaignInTimeoutWindow(campaignId)) {
+  if (isEndpointInTimeoutWindow(campaignId, path, url.search)) {
     return new Response(JSON.stringify({ error: 'analytics query exceeded server time limit' }), {
       status: 504,
       headers: { 'Content-Type': 'application/json' },
@@ -83,7 +90,7 @@ export async function fetchAnalysis(request: NextRequest, path: string): Promise
 
   const upstream = await requestAnalysis(url);
   if (upstream.status === 504) {
-    markCampaignTimeout(campaignId);
+    markEndpointTimeout(campaignId, path, url.search);
   }
   return new Response(upstream.body, {
     status: upstream.status,
@@ -107,7 +114,7 @@ export async function proxyAnalysis(request: NextRequest, path: string): Promise
     const status = message.toLowerCase().includes('timeout') ? 504 : 502;
     if (status === 504) {
       const campaignId = getCampaignIdFromSearch(request.nextUrl.search);
-      markCampaignTimeout(campaignId);
+      markEndpointTimeout(campaignId, path, request.nextUrl.search);
     }
     return new Response(JSON.stringify({ error: message }), {
       status,

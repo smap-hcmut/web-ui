@@ -6,5 +6,5 @@ export const analyticsQueryOptions = {
   gcTime: 10 * 60_000,
   refetchInterval: false,
   refetchOnReconnect: false,
-  refetchOnMount: false,
+  refetchOnMount: true,
 } as const;

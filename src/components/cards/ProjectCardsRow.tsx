@@ -4,10 +4,21 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CrisisConfigEditorModal } from '@/components/crisis/CrisisConfigEditor';
 import { useScope } from '@/components/ScopeProvider';
-import { useProjectsByCampaign, useCreateProject, useProjectStats, usePauseProject, useResumeProject, useActivateProject, useDryrunProject } from '@/lib/hooks';
+import {
+  useProjectsByCampaign,
+  useProjectDomains,
+  useCreateProject,
+  useProjectStats,
+  usePauseProject,
+  useResumeProject,
+  useActivateProject,
+  useArchiveProject,
+  useUnarchiveProject,
+  useDryrunProject,
+} from '@/lib/hooks';
 import type { ProjectStat } from '@/lib/hooks';
 import type { Project, CrisisConfig, Platform } from '@/lib/types';
-import type { EntityType } from '@/lib/api/projects';
+import type { EntityType, ProjectDomain } from '@/lib/api/projects';
 import { PlatformIcon } from '@/components/icons/PlatformIcon';
 import {
   ChevronLeft,
@@ -26,9 +37,42 @@ import {
   Smile,
   Pause,
   Play,
+  Archive,
+  RotateCcw,
   Zap,
   Loader2,
 } from 'lucide-react';
+
+type ProjectCardStatus = NonNullable<Project['status']>;
+
+export function toProjectCardStatus(status?: string): ProjectCardStatus {
+  if (!status) return 'active';
+  switch ((status ?? '').toUpperCase()) {
+    case 'ACTIVE':
+      return 'active';
+    case 'PENDING':
+      return 'pending';
+    case 'ARCHIVED':
+      return 'archived';
+    case 'PAUSED':
+      return 'paused';
+    default:
+      return 'active';
+  }
+}
+
+function statusMeta(status: ProjectCardStatus) {
+  switch (status) {
+    case 'active':
+      return { label: 'ACTIVE', color: 'var(--success)' };
+    case 'pending':
+      return { label: 'PENDING', color: 'var(--accent)' };
+    case 'archived':
+      return { label: 'ARCHIVED', color: 'var(--text-faint)' };
+    default:
+      return { label: 'PAUSED', color: 'var(--warning)' };
+  }
+}
 
 /* ─── Trigger badge ─── */
 function TriggerBadge({ label, enabled, detail }: { label: string; enabled: boolean; detail?: string }) {
@@ -55,9 +99,14 @@ function TriggerBadge({ label, enabled, detail }: { label: string; enabled: bool
 
 /* ─── Config summary for back face ─── */
 function ConfigSummary({ config }: { config: CrisisConfig }) {
+  const firstSentimentRule = config.sentiment_trigger.rules[0];
+  const sentimentThreshold =
+    firstSentimentRule?.threshold_percent ?? firstSentimentRule?.negative_threshold_percent;
   const sentimentDetail = config.sentiment_trigger.enabled
-    ? config.sentiment_trigger.rules[0]
-      ? `neg>${config.sentiment_trigger.rules[0].negative_threshold_percent}%`
+    ? firstSentimentRule
+      ? sentimentThreshold !== undefined
+        ? `neg>${sentimentThreshold}%`
+        : 'ON'
       : 'ON'
     : undefined;
 
@@ -73,7 +122,9 @@ function ConfigSummary({ config }: { config: CrisisConfig }) {
 
   const influencerDetail = config.influencer_trigger.enabled
     ? config.influencer_trigger.rules[0]
-      ? `>${(config.influencer_trigger.rules[0].min_followers / 1000).toFixed(0)}k followers`
+      ? config.influencer_trigger.rules[0].min_followers
+        ? `>${(config.influencer_trigger.rules[0].min_followers / 1000).toFixed(0)}k followers`
+        : 'viral rule'
       : 'ON'
     : undefined;
 
@@ -91,6 +142,14 @@ function ConfigSummary({ config }: { config: CrisisConfig }) {
           </span>
         </div>
       )}
+      {config.response_policy && (
+        <div className="flex items-center gap-1.5 pt-1 mt-0.5" style={{ borderTop: '1px solid var(--border)' }}>
+          <Activity className="w-2.5 h-2.5" style={{ color: 'var(--accent)' }} />
+          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+            Crawl {config.response_policy.adaptive_crawl.trigger_level} · Alert {config.response_policy.notification.trigger_level}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -105,6 +164,8 @@ export function ProjectFlipCard({
   onPause,
   onResume,
   onActivate,
+  onArchive,
+  onUnarchive,
   onDryrun,
   isDryrunStarted,
   isToggling,
@@ -117,6 +178,8 @@ export function ProjectFlipCard({
   onPause?: () => void;
   onResume?: () => void;
   onActivate?: () => void;
+  onArchive?: () => void;
+  onUnarchive?: () => void;
   onDryrun?: () => void;
   isDryrunStarted?: boolean;
   isToggling?: boolean;
@@ -126,17 +189,29 @@ export function ProjectFlipCard({
   const mentions = stat?.mentions ?? 0;
   const avgSentiment = stat?.avg_sentiment ?? 0;
   const platforms = stat?.platforms ?? [];
-  const status = project.status ?? 'active';
+  const status = toProjectCardStatus(project.status);
+  const statusInfo = statusMeta(status);
 
   const sentimentColor = avgSentiment >= 60 ? 'var(--success)' : avgSentiment >= 40 ? 'var(--warning)' : 'var(--error)';
 
   return (
     <div
-      className="shrink-0"
+      className="shrink-0 relative"
       style={{ perspective: '800px', width: 224, height: 160, cursor: 'default' }}
       onMouseEnter={() => setFlipped(true)}
       onMouseLeave={() => setFlipped(false)}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpenConfig(); }}
+        className="absolute top-2 right-2 z-20 w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+        style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-subtle)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+        title="Edit crisis config"
+        aria-label="Edit crisis config"
+      >
+        <Settings className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
+      </button>
       <div
         className="relative w-full h-full transition-transform duration-500"
         style={{
@@ -157,14 +232,16 @@ export function ProjectFlipCard({
         >
           {/* Header */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 160 }}>
+            <div className="flex items-center justify-between mb-1.5 pr-7">
+              <span className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)', maxWidth: 112 }}>
                 {project.name}
               </span>
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ background: status === 'active' ? 'var(--success)' : status === 'pending' ? 'var(--accent)' : 'var(--warning)' }}
-              />
+              <span className="flex items-center gap-1 shrink-0" title={`Project status: ${statusInfo.label}`}>
+                <span className="w-2 h-2 rounded-full" style={{ background: statusInfo.color }} />
+                <span className="text-[8px] font-semibold" style={{ color: statusInfo.color }}>
+                  {statusInfo.label}
+                </span>
+              </span>
             </div>
             <div className="flex items-center gap-1.5 mb-2">
               {platforms.map((p) => (
@@ -195,12 +272,12 @@ export function ProjectFlipCard({
             <div className="text-right">
               {project.crisis_config && (
                 <div className="flex items-center gap-1">
-                  {project.crisis_config.status === 'ACTIVE' ? (
+                  {project.crisis_config.status !== 'NORMAL' ? (
                     <Shield className="w-3 h-3" style={{ color: 'var(--success)' }} />
                   ) : (
                     <ShieldOff className="w-3 h-3" style={{ color: 'var(--text-faint)' }} />
                   )}
-                  <span className="text-[9px]" style={{ color: project.crisis_config.status === 'ACTIVE' ? 'var(--success)' : 'var(--text-faint)' }}>
+                  <span className="text-[9px]" style={{ color: project.crisis_config.status !== 'NORMAL' ? 'var(--success)' : 'var(--text-faint)' }}>
                     Crisis
                   </span>
                 </div>
@@ -285,6 +362,34 @@ export function ProjectFlipCard({
                   }
                 </button>
               )}
+              {status !== 'archived' && onArchive && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onArchive(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--danger-bg)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Archive project"
+                  aria-label="Archive project"
+                >
+                  <Archive className="w-3 h-3" style={{ color: 'var(--danger)' }} />
+                </button>
+              )}
+              {status === 'archived' && onUnarchive && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onUnarchive(); }}
+                  disabled={isToggling}
+                  className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ background: 'var(--bg-hover)', opacity: isToggling ? 0.5 : 1 }}
+                  onMouseEnter={(e) => { if (!isToggling) e.currentTarget.style.background = 'var(--accent-subtle)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  title="Restore archived project"
+                  aria-label="Restore archived project"
+                >
+                  <RotateCcw className="w-3 h-3" style={{ color: 'var(--accent)' }} />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenConfig(); }}
                 className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
@@ -328,7 +433,7 @@ export function CreateProjectModal({
   isPending,
 }: {
   onClose: () => void;
-  onSubmit: (data: { name: string; description?: string; brand?: string; entity_type: EntityType; entity_name: string }) => void;
+  onSubmit: (data: { name: string; description?: string; brand?: string; entity_type: EntityType; entity_name: string; domain_type_code: string }) => void;
   isPending: boolean;
 }) {
   const [name, setName] = useState('');
@@ -336,11 +441,24 @@ export function CreateProjectModal({
   const [brand, setBrand] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('product');
   const [entityName, setEntityName] = useState('');
+  const [domainTypeCode, setDomainTypeCode] = useState('');
+  const { data: domains, isLoading: domainsLoading } = useProjectDomains();
+
+  const domainOptions = useMemo<ProjectDomain[]>(() => {
+    const options = domains ?? [];
+    const visible = options.filter((domain) => domain.domain_code !== '_default');
+    return visible.length > 0 ? visible : options;
+  }, [domains]);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    if (!domainTypeCode && domainOptions.length > 0) {
+      setDomainTypeCode(domainOptions[0].domain_code);
+    }
+  }, [domainOptions, domainTypeCode]);
 
-  const canSubmit = name.trim() && entityName.trim() && !isPending;
+  const canSubmit = name.trim() && entityName.trim() && domainTypeCode && !isPending;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -351,6 +469,7 @@ export function CreateProjectModal({
       brand: brand.trim() || undefined,
       entity_type: entityType,
       entity_name: entityName.trim(),
+      domain_type_code: domainTypeCode,
     });
   };
 
@@ -411,6 +530,28 @@ export function CreateProjectModal({
               className={modalInputClass}
               style={modalInputStyle}
             />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Analysis Domain *
+            </label>
+            <select
+              value={domainTypeCode}
+              onChange={(e) => setDomainTypeCode(e.target.value)}
+              className={modalInputClass}
+              style={modalInputStyle}
+              disabled={domainsLoading || domainOptions.length === 0}
+            >
+              {domainOptions.length === 0 ? (
+                <option value="">{domainsLoading ? 'Loading domains...' : 'No domains available'}</option>
+              ) : (
+                domainOptions.map((domain) => (
+                  <option key={domain.domain_code} value={domain.domain_code}>
+                    {domain.display_name || domain.domain_code}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
           <div>
             <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
@@ -513,6 +654,8 @@ export function ProjectCardsRow() {
   const pauseProject = usePauseProject(activeCampaignId ?? '');
   const resumeProject = useResumeProject(activeCampaignId ?? '');
   const activateProject = useActivateProject(activeCampaignId ?? '');
+  const archiveProject = useArchiveProject(activeCampaignId ?? '');
+  const unarchiveProject = useUnarchiveProject(activeCampaignId ?? '');
   const dryrunProject = useDryrunProject();
 
   // Fetch per-project analytics (mentions, sentiment, platforms) from analysis-api
@@ -533,8 +676,8 @@ export function ProjectCardsRow() {
       domain_type_code: p.domain_type_code,
       keywords: [],
       platforms: undefined,
-      status: p.status === 'ACTIVE' ? 'active' as const : p.status === 'PENDING' ? 'pending' as const : 'paused' as const,
-      crisis_config: undefined,
+      status: toProjectCardStatus(p.status),
+      crisis_config: p.crisis_config,
     }));
   }, [apiProjects]);
 
@@ -607,6 +750,8 @@ export function ProjectCardsRow() {
                 onPause={() => pauseProject.mutate(proj.id)}
                 onResume={() => resumeProject.mutate(proj.id)}
                 onActivate={() => activateProject.mutate(proj.id)}
+                onArchive={() => archiveProject.mutate(proj.id)}
+                onUnarchive={() => unarchiveProject.mutate(proj.id)}
                 onDryrun={() => {
                   dryrunProject.mutate(proj.id, {
                     onSuccess: () => {
@@ -619,6 +764,8 @@ export function ProjectCardsRow() {
                   (pauseProject.isPending && pauseProject.variables === proj.id) ||
                   (resumeProject.isPending && resumeProject.variables === proj.id) ||
                   (activateProject.isPending && activateProject.variables === proj.id) ||
+                  (archiveProject.isPending && archiveProject.variables === proj.id) ||
+                  (unarchiveProject.isPending && unarchiveProject.variables === proj.id) ||
                   (dryrunProject.isPending && dryrunProject.variables === proj.id)
                 }
               />
@@ -687,7 +834,7 @@ export function ProjectConfigModal({ project, onClose }: { project: Project; onC
   const [sentimentEnabled, setSentimentEnabled] = useState(config?.sentiment_trigger.enabled ?? false);
   const [sentimentThreshold, setSentimentThreshold] = useState(config?.sentiment_trigger.rules[0]?.threshold_percent ?? 25);
   const [sentimentNegative, setSentimentNegative] = useState(config?.sentiment_trigger.rules[0]?.negative_threshold_percent ?? 50);
-  const [sentimentAspects, setSentimentAspects] = useState(config?.sentiment_trigger.rules[0]?.critical_aspects.join(', ') ?? '');
+  const [sentimentAspects, setSentimentAspects] = useState(config?.sentiment_trigger.rules[0]?.critical_aspects?.join(', ') ?? '');
   const [sentimentMinSample, setSentimentMinSample] = useState(config?.sentiment_trigger.min_sample_size ?? 10);
 
   const [volumeEnabled, setVolumeEnabled] = useState(config?.volume_trigger.enabled ?? false);

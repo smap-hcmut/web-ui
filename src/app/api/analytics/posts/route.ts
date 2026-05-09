@@ -33,13 +33,82 @@ export interface PostItem {
   hashtags: string[];
 }
 
+function normalizeFilter(value: string | null): string {
+  return (value || 'all').trim().toLowerCase();
+}
+
+function normalizeText(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function sortPosts(list: PostItem[], sort: string): PostItem[] {
+  return list.sort((a, b) => {
+    if (sort === 'time') {
+      const bTime = Date.parse(b.time || '') || 0;
+      const aTime = Date.parse(a.time || '') || 0;
+      return bTime - aTime;
+    }
+    return (Number(b.engagement) || 0) - (Number(a.engagement) || 0);
+  });
+}
+
+function filterPosts(list: PostItem[], platform: string, sentiment: string, sort: string): PostItem[] {
+  let filtered = [...list];
+  if (platform !== 'all') {
+    filtered = filtered.filter((p) => normalizeText(p.platform) === platform);
+  }
+  if (sentiment !== 'all') {
+    filtered = filtered.filter((p) => normalizeText(p.sentiment) === sentiment);
+  }
+  return sortPosts(filtered, sort);
+}
+
+function getPostsPayload(body: unknown): { posts: PostItem[]; location: 'root' | 'data' | null } {
+  if (!body || typeof body !== 'object') {
+    return { posts: [], location: null };
+  }
+
+  const root = body as { posts?: unknown; data?: { posts?: unknown } };
+  if (Array.isArray(root.posts)) {
+    return { posts: root.posts as PostItem[], location: 'root' };
+  }
+  if (root.data && Array.isArray(root.data.posts)) {
+    return { posts: root.data.posts as PostItem[], location: 'data' };
+  }
+  return { posts: [], location: null };
+}
+
+function withFilteredPosts(body: unknown, posts: PostItem[], total: number, location: 'root' | 'data') {
+  if (!body || typeof body !== 'object') {
+    return { posts, total };
+  }
+
+  if (location === 'data') {
+    const current = body as { data?: Record<string, unknown> };
+    return {
+      ...current,
+      data: {
+        ...(current.data ?? {}),
+        posts,
+        total,
+      },
+    };
+  }
+
+  return {
+    ...(body as Record<string, unknown>),
+    posts,
+    total,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const campaignId = params.get('campaignId');
-    const platform = params.get('platform') || 'all';
-    const sentiment = params.get('sentiment') || 'all';
-    const sort = params.get('sort') || 'engagement';
+    const platform = normalizeFilter(params.get('platform'));
+    const sentiment = normalizeFilter(params.get('sentiment'));
+    const sort = normalizeFilter(params.get('sort')) === 'time' ? 'time' : 'engagement';
     const limit = Number(params.get('limit') || '30');
     const offset = Number(params.get('offset') || '0');
 
@@ -48,19 +117,34 @@ export async function GET(request: NextRequest) {
     }
 
     if (IS_MOCK) {
-      let list = [...mockPostsAll];
-      if (platform !== 'all') list = list.filter((p) => p.platform === platform.toUpperCase());
-      if (sentiment !== 'all') list = list.filter((p) => p.sentiment === sentiment);
-      list.sort((a, b) =>
-        sort === 'time' ? (b.time > a.time ? 1 : -1) : b.engagement - a.engagement,
-      );
+      const list = filterPosts(mockPostsAll as PostItem[], platform, sentiment, sort);
       const total = list.length;
       const paged = list.slice(offset, offset + limit);
       return NextResponse.json({ posts: paged, total });
     }
 
+    const upstream = await proxyAnalysis(request, '/api/v1/analytics/posts');
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    const text = await upstream.text();
 
-    return proxyAnalysis(request, '/api/v1/analytics/posts');
+    if (!upstream.ok || !contentType.includes('application/json')) {
+      return new Response(text, {
+        status: upstream.status,
+        headers: { 'Content-Type': contentType },
+      });
+    }
+
+    const body = JSON.parse(text) as unknown;
+    const payload = getPostsPayload(body);
+    if (!payload.location) {
+      return NextResponse.json(body, { status: upstream.status });
+    }
+
+    const filtered = filterPosts(payload.posts, platform, sentiment, sort).slice(0, limit);
+    return NextResponse.json(
+      withFilteredPosts(body, filtered, filtered.length, payload.location),
+      { status: upstream.status },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analytics/posts]', message);

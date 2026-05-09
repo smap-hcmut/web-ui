@@ -32,7 +32,6 @@ export const API_CONFIG = {
     knowledge: '/knowledge',
     notification: '/notification',
     scraper: '/scraper',
-    reports: '/reports',
   },
 
   // Full endpoint paths by service
@@ -54,12 +53,14 @@ export const API_CONFIG = {
       campaignFavorite: (id: string) => `/project/api/v1/campaigns/${id}/favorite`,
       campaignFavorites: '/project/api/v1/campaigns/favorites',
       campaignProjects: (id: string) => `/project/api/v1/campaigns/${id}/projects`,
+      domains: '/project/api/v1/domains',
       projects: '/project/api/v1/projects',
       project: (id: string) => `/project/api/v1/projects/${id}`,
       projectActivate: (id: string) => `/project/api/v1/projects/${id}/activate`,
       projectPause: (id: string) => `/project/api/v1/projects/${id}/pause`,
       projectResume: (id: string) => `/project/api/v1/projects/${id}/resume`,
       projectArchive: (id: string) => `/project/api/v1/projects/${id}/archive`,
+      projectUnarchive: (id: string) => `/project/api/v1/projects/${id}/unarchive`,
       projectActivationReadiness: (id: string) => `/project/api/v1/projects/${id}/activation-readiness`,
       projectCrisisConfig: (id: string) => `/project/api/v1/projects/${id}/crisis-config`,
       workspaces: '/project/api/v1/workspaces',
@@ -74,9 +75,14 @@ export const API_CONFIG = {
       post: (id: string) => `/ingest/api/v1/posts/${id}`,
       datasources: '/ingest/api/v1/datasources',
       datasource: (id: string) => `/ingest/api/v1/datasources/${id}`,
+      datasourceActivate: (id: string) => `/ingest/api/v1/datasources/${id}/activate`,
+      datasourcePause: (id: string) => `/ingest/api/v1/datasources/${id}/pause`,
+      datasourceResume: (id: string) => `/ingest/api/v1/datasources/${id}/resume`,
       datasourceTargets: (id: string) => `/ingest/api/v1/datasources/${id}/targets`,
       datasourceTargetKeywords: (id: string) => `/ingest/api/v1/datasources/${id}/targets/keywords`,
+      datasourceTargetProfiles: (id: string) => `/ingest/api/v1/datasources/${id}/targets/profiles`,
       datasourceActivateTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}/activate`,
+      datasourceDeactivateTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}/deactivate`,
       datasourceTriggerDryrun: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun`,
       datasourceDryrunLatest: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun/latest`,
     },
@@ -85,8 +91,8 @@ export const API_CONFIG = {
       suggestions: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/suggestions`,
       conversations: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/conversations`,
       conversation: (conversationId: string) => `/knowledge/api/v1/knowledge/conversations/${conversationId}`,
-      reports: '/knowledge/api/v1/reports',
-      report: (id: string) => `/knowledge/api/v1/reports/${id}`,
+      reports: '/knowledge/api/v1/knowledge/reports',
+      report: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}`,
       insights: '/knowledge/api/v1/insights',
     },
     notification: {
@@ -96,19 +102,18 @@ export const API_CONFIG = {
       tasks: '/scraper/api/v1/tasks',
       task: (id: string) => `/scraper/api/v1/tasks/${id}`,
     },
-    // NOTE: reports-srv is not implemented yet. FE calls these paths; they are
-    // served by local Next.js mock handlers under src/app/api/proxy/reports/...
-    // When backend lands, delete those mock routes and the catch-all proxy
-    // forwards identically-shaped requests.
+    // Reports are owned by knowledge-srv because report artifacts depend on
+    // campaign RAG/search context and MinIO/Postgres storage.
     reports: {
-      list: '/reports/api/v1',
-      competitor: '/reports/api/v1/competitor',
-      report: (id: string) => `/reports/api/v1/${id}`,
-      process: (id: string) => `/reports/api/v1/${id}/process`,
-      posts: (id: string) => `/reports/api/v1/${id}/posts`,
-      cancel: (id: string) => `/reports/api/v1/${id}/cancel`,
-      retry: (id: string) => `/reports/api/v1/${id}/retry`,
-      postComments: (postId: string) => `/reports/api/v1/posts/${postId}/comments`,
+      list: '/knowledge/api/v1/knowledge/reports',
+      generate: '/knowledge/api/v1/knowledge/reports/generate',
+      report: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}`,
+      process: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/process`,
+      posts: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/posts`,
+      download: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/download`,
+      cancel: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/cancel`,
+      retry: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/retry`,
+      postComments: (postId: string) => `/knowledge/api/v1/knowledge/reports/posts/${postId}/comments`,
     },
   },
 } as const;

@@ -12,8 +12,9 @@ import { API_CONFIG } from './config';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SourceType = 'TIKTOK' | 'FACEBOOK' | 'YOUTUBE';
+export type SourceCategory = 'CRAWL' | 'PASSIVE';
 export type CrawlMode = 'SLEEP' | 'NORMAL' | 'CRISIS';
-export type DataSourceStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'ERROR';
+export type DataSourceStatus = 'PENDING' | 'READY' | 'ACTIVE' | 'PAUSED' | 'FAILED' | 'COMPLETED' | 'ARCHIVED';
 export type TargetType = 'KEYWORD' | 'PROFILE' | 'POST_URL';
 export type DryrunStatus = 'NOT_REQUIRED' | 'PENDING' | 'RUNNING' | 'SUCCESS' | 'WARNING' | 'FAILED';
 
@@ -21,7 +22,9 @@ export interface DataSource {
   id: string;
   name: string;
   source_type: SourceType;
+  source_category?: SourceCategory;
   crawl_mode: CrawlMode;
+  crawl_interval_minutes?: number;
   status: DataSourceStatus;
   project_id: string;
   created_at: string;
@@ -34,7 +37,9 @@ export interface CrawlTarget {
   target_type: TargetType;
   values: string[];
   label: string;
+  platform_meta?: Record<string, unknown>;
   is_active: boolean;
+  crawl_interval_minutes?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -59,7 +64,10 @@ export interface DryrunResult {
 /** Flattened target with datasource info for UI display */
 export interface TargetWithSource extends CrawlTarget {
   source_type: SourceType;
+  project_id?: string;
+  project_name?: string;
   datasource_name: string;
+  datasource_status?: DataSourceStatus;
 }
 
 // ─── Input Types ──────────────────────────────────────────────────────────────
@@ -69,6 +77,7 @@ export interface CreateDataSourceInput {
   name: string;
   description?: string;
   source_type: SourceType;
+  source_category?: SourceCategory;
   crawl_mode: CrawlMode;
   crawl_interval_minutes: number;
 }
@@ -76,6 +85,15 @@ export interface CreateDataSourceInput {
 export interface CreateKeywordTargetInput {
   values: string[];
   label?: string;
+  platform_meta?: Record<string, unknown>;
+  crawl_interval_minutes: number;
+  priority?: number;
+}
+
+export interface CreateProfileTargetInput {
+  values: string[];
+  label?: string;
+  platform_meta?: Record<string, unknown>;
   crawl_interval_minutes: number;
   priority?: number;
 }
@@ -152,7 +170,9 @@ export const datasourceApi = {
         result.push({
           ...t,
           source_type: ds.source_type,
+          project_id: ds.project_id,
           datasource_name: ds.name,
+          datasource_status: ds.status,
         });
       }
     });
@@ -164,13 +184,30 @@ export const datasourceApi = {
   create: (data: CreateDataSourceInput): Promise<DataSource> =>
     apiClient.post<DataSource>(API_CONFIG.ENDPOINTS.ingest.datasources, data),
 
+  activate: (id: string): Promise<DataSource> =>
+    apiClient.post<DataSource>(API_CONFIG.ENDPOINTS.ingest.datasourceActivate(id)),
+
+  pause: (id: string): Promise<DataSource> =>
+    apiClient.post<DataSource>(API_CONFIG.ENDPOINTS.ingest.datasourcePause(id)),
+
+  resume: (id: string): Promise<DataSource> =>
+    apiClient.post<DataSource>(API_CONFIG.ENDPOINTS.ingest.datasourceResume(id)),
+
   /** Add keyword targets to a datasource */
   createKeywordTarget: (datasourceId: string, data: CreateKeywordTargetInput): Promise<CrawlTarget> =>
     apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceTargetKeywords(datasourceId), data),
 
+  /** Add profile/page targets to a datasource */
+  createProfileTarget: (datasourceId: string, data: CreateProfileTargetInput): Promise<CrawlTarget> =>
+    apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceTargetProfiles(datasourceId), data),
+
   /** Activate a single crawl target */
   activateTarget: (datasourceId: string, targetId: string): Promise<CrawlTarget> =>
     apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceActivateTarget(datasourceId, targetId)),
+
+  /** Deactivate a single crawl target */
+  deactivateTarget: (datasourceId: string, targetId: string): Promise<CrawlTarget> =>
+    apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceDeactivateTarget(datasourceId, targetId)),
 
   /** Trigger a dryrun for a datasource (optionally scoped to a specific target) */
   triggerDryrun: (datasourceId: string, data?: TriggerDryrunInput): Promise<DryrunResult> =>

@@ -289,9 +289,6 @@ export const proxyGetMatchers: ProxyMatch[] = [
   // Datasources (empty)
   { test: (p) => p === '/ingest/api/v1/datasources' || p.startsWith('/ingest/api/v1/datasources?'),
     body: { datasources: [], paginator: { total: 0, page: 1, limit: 20 } } },
-  // Reports list (empty)
-  { test: (p) => p === '/reports/api/v1' || p.startsWith('/reports/api/v1?'),
-    body: { data: [], total: 0 } },
 ];
 
 /**
