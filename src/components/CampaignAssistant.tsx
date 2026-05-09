@@ -604,6 +604,7 @@ export function CampaignAssistant() {
 
   /* ─── Core API call (used by both sendMessage and retry) ─── */
   const callChatApi = useCallback(async (userText: string) => {
+    const question = userText.trim();
     setTyping(true);
     try {
       if (!activeCampaignId) {
@@ -611,7 +612,7 @@ export function CampaignAssistant() {
       }
       const resp = await knowledgeApi.chat({
         campaign_id: activeCampaignId,
-        message: userText,
+        message: question,
         conversation_id: conversationId,
       });
       if (resp.conversation_id) {
@@ -641,7 +642,7 @@ export function CampaignAssistant() {
         blocks: [{ type: 'text', content: errMsg }],
         timestamp: new Date(),
         error: true,
-        retryOf: userText,
+        retryOf: question,
       };
       setMessages((prev) => [...prev, botMsg]);
     } finally {
@@ -776,19 +777,43 @@ export function CampaignAssistant() {
   /* ─── Send message ─── */
   const sendMessage = useCallback(
     async (text: string) => {
-      if (!text.trim() || typing) return;
+      const trimmed = text.trim();
+      if (!trimmed || typing) return;
 
       const userMsg: ChatMessage = {
         id: uid(),
         role: 'user',
-        blocks: [{ type: 'text', content: text.trim() }],
+        blocks: [{ type: 'text', content: trimmed }],
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, userMsg]);
       setInput('');
 
+      if (trimmed.length < 3) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: 'bot',
+            blocks: [
+              {
+                type: 'text',
+                content: 'Tớ cần thêm một chút context để trả lời đúng. Bạn hỏi rõ hơn về campaign, nền tảng, sentiment, topic hoặc report nhé.',
+              },
+            ],
+            timestamp: new Date(),
+            suggestions: [
+              'Tóm tắt các vấn đề nổi bật trong campaign này',
+              'Vì sao sentiment đang tiêu cực?',
+              'Nền tảng nào đang kéo engagement cao nhất?',
+            ],
+          },
+        ]);
+        return;
+      }
+
       /* Intercept !noti command — demo trigger, skip API */
-      const parsed = parseNotiCommand(text);
+      const parsed = parseNotiCommand(trimmed);
       if (parsed) {
         if ('error' in parsed) {
           setMessages((prev) => [
@@ -825,7 +850,7 @@ export function CampaignAssistant() {
       }
 
       /* Intercept !demo command — rich content showcase, skip API */
-      const demoResult = parseDemoCommand(text);
+      const demoResult = parseDemoCommand(trimmed);
       if (demoResult) {
         if ('error' in demoResult) {
           setMessages((prev) => [
@@ -851,13 +876,13 @@ export function CampaignAssistant() {
         return;
       }
 
-      const reportRequest = parseReportRequest(text);
+      const reportRequest = parseReportRequest(trimmed);
       if (reportRequest) {
-        await createReportFromChat(text.trim(), reportRequest);
+        await createReportFromChat(trimmed, reportRequest);
         return;
       }
 
-      await callChatApi(text.trim());
+      await callChatApi(trimmed);
     },
     [typing, pushNoti, callChatApi, createReportFromChat],
   );

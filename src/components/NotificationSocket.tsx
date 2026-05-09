@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { useNotificationStore } from "@/lib/stores/notifications";
+import { useNotificationStore, type NotificationCategory } from "@/lib/stores/notifications";
 
 type NotificationEnvelope = {
   type?: string;
@@ -118,6 +118,8 @@ function parseNotification(rawData: string) {
   const timestamp = envelope.timestamp ?? new Date().toISOString();
   const mapped = mapEnvelope(envelope.type ?? "SYSTEM", payload);
 
+  const isCrisis = mapped.category === "crisis";
+
   return {
     id: crypto.randomUUID(),
     title: mapped.title,
@@ -126,16 +128,21 @@ function parseNotification(rawData: string) {
     content: mapped.message,
     type: mapped.kind,
     severity: mapped.kind,
-    category: envelope.type ?? "SYSTEM",
+    category: mapped.category,
     source: "websocket",
     timestamp,
     createdAt: timestamp,
     read: false,
+    showToast: isCrisis,
+    showBanner: isCrisis && mapped.kind === "critical",
     payload,
   };
 }
 
-function mapEnvelope(type: string, payload: Record<string, unknown>): { title: string; message: string; kind: NotificationKind } {
+function mapEnvelope(
+  type: string,
+  payload: Record<string, unknown>,
+): { title: string; message: string; kind: NotificationKind; category: NotificationCategory } {
   if (type === "ANALYTICS_PIPELINE") {
     const projectId = stringValue(payload.project_id);
     const sourceId = stringValue(payload.source_id);
@@ -148,6 +155,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: "Analysis updated",
       message: `Digest ${phase}${sourceText}: ${recordText} processed for project ${projectId || "current project"}.`,
       kind: "success",
+      category: "analysis",
     };
   }
 
@@ -159,6 +167,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
         stringValue(payload.message) ||
         `${stringValue(payload.project_name) || "A project"} reached a crisis response threshold.`,
       kind: severity === "critical" || severity === "high" ? "critical" : "warning",
+      category: "crisis",
     };
   }
 
@@ -167,6 +176,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: stringValue(payload.title) || "Campaign update",
       message: stringValue(payload.message) || "Campaign state changed.",
       kind: "info",
+      category: "campaign",
     };
   }
 
@@ -175,6 +185,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: stringValue(payload.title) || "Data onboarding update",
       message: stringValue(payload.message) || "A datasource onboarding event was received.",
       kind: "info",
+      category: "data",
     };
   }
 
@@ -182,6 +193,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
     title: stringValue(payload.title) || "System notification",
     message: stringValue(payload.message) || "A new system event was received.",
     kind: "info",
+    category: "system",
   };
 }
 

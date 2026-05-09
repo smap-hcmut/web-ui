@@ -14,14 +14,34 @@ interface DonutChartProps {
   size?: number;
   showLegend?: boolean;
   className?: string;
+  centerLabel?: string;
+  centerValue?: string;
+  formatValue?: (value: number) => string;
+  valueLabel?: string;
 }
 
-export function DonutChart({ segments, size = 140, showLegend = true, className }: DonutChartProps) {
+function defaultFormatValue(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  if (Number.isInteger(value)) return value.toString();
+  return value.toFixed(1);
+}
+
+export function DonutChart({
+  segments,
+  size = 140,
+  showLegend = true,
+  className,
+  centerLabel = 'Total',
+  centerValue,
+  formatValue = defaultFormatValue,
+  valueLabel = 'items',
+}: DonutChartProps) {
   const [tipIdx, setTipIdx] = useState<number | null>(null);
   const [mouse, setMouse] = useState<{ cx: number; cy: number } | null>(null);
 
   const rawTotal = segments.reduce((s, seg) => s + seg.value, 0);
   const total = rawTotal || 1;
+  const displayTotal = centerValue ?? formatValue(rawTotal);
   const cxC = size / 2, cyC = size / 2;
   const r = (size - 20) / 2;
   const strokeW = size * 0.14;
@@ -98,9 +118,9 @@ export function DonutChart({ segments, size = 140, showLegend = true, className 
         {/* Center label */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span className="text-lg font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
-            {rawTotal >= 1000 ? `${(rawTotal / 1000).toFixed(1)}K` : rawTotal}
+            {displayTotal}
           </span>
-          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Total</span>
+          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{centerLabel}</span>
         </div>
       </div>
 
@@ -137,7 +157,7 @@ export function DonutChart({ segments, size = 140, showLegend = true, className 
           </div>
           <div className="mt-0.5" style={{ color: 'var(--text-secondary)' }}>
             <span className="font-bold tabular-nums">{rawTotal ? (arcs[tipIdx].pct * 100).toFixed(0) : 0}%</span>
-            {' · '}{arcs[tipIdx].value} items
+            {' · '}{formatValue(arcs[tipIdx].value)} {valueLabel}
           </div>
         </div>
       )}

@@ -14,6 +14,7 @@ import {
 import {
   useNotificationStore,
   type Notification,
+  type NotificationCategory,
   type NotificationSeverity,
 } from '@/lib/stores';
 
@@ -25,6 +26,16 @@ const severityConfig: Record<
   success:  { icon: CheckCircle2,  color: 'var(--success)', bg: 'var(--success-bg)', label: 'Success' },
   warning:  { icon: AlertTriangle, color: 'var(--warning)', bg: 'var(--warning-bg)', label: 'Warning' },
   critical: { icon: AlertOctagon,  color: 'var(--danger)',  bg: 'var(--danger-bg)',  label: 'Critical' },
+};
+
+const categoryLabel: Record<NotificationCategory, string> = {
+  crisis: 'Crisis',
+  analysis: 'Analysis',
+  campaign: 'Campaign',
+  data: 'Data',
+  report: 'Report',
+  system: 'System',
+  user: 'User',
 };
 
 function formatRelative(ts: number): string {
@@ -236,7 +247,7 @@ function NotificationRow({
           className="text-[10px] mt-1 uppercase tracking-wide font-medium"
           style={{ color: 'var(--text-muted)' }}
         >
-          {cfg.label} · {formatRelative(n.timestamp)}
+          {categoryLabel[n.category] ?? 'System'} · {cfg.label} · {formatRelative(n.timestamp)}
         </div>
       </div>
       <button

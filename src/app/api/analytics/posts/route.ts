@@ -78,6 +78,19 @@ function getPostsPayload(body: unknown): { posts: PostItem[]; location: 'root' |
   return { posts: [], location: null };
 }
 
+function getPayloadTotal(body: unknown, location: 'root' | 'data'): number | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  const container =
+    location === 'data'
+      ? (body as { data?: Record<string, unknown> }).data
+      : (body as Record<string, unknown>);
+  const total = Number(container?.total);
+  return Number.isFinite(total) && total >= 0 ? total : null;
+}
+
 function withFilteredPosts(body: unknown, posts: PostItem[], total: number, location: 'root' | 'data') {
   if (!body || typeof body !== 'object') {
     return { posts, total };
@@ -140,9 +153,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(body, { status: upstream.status });
     }
 
-    const filtered = filterPosts(payload.posts, platform, sentiment, sort).slice(0, limit);
+    const upstreamTotal = getPayloadTotal(body, payload.location) ?? payload.posts.length;
     return NextResponse.json(
-      withFilteredPosts(body, filtered, filtered.length, payload.location),
+      withFilteredPosts(body, payload.posts, upstreamTotal, payload.location),
       { status: upstream.status },
     );
   } catch (err) {

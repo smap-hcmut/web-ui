@@ -116,6 +116,8 @@ const platformLabel: Record<string, string> = {
   youtube: "YouTube",
 };
 
+const POSTS_PER_PAGE = 12;
+
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function fmt(n: number): string {
@@ -140,6 +142,43 @@ function formatMonthLabel(value: string): string {
   if (!year || !month) return value;
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function isValidHttpUrl(value: string | undefined | null): value is string {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function paginationWindow(current: number, total: number): Array<number | "gap"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index);
+  }
+
+  const pages = new Set<number>([0, total - 1, current, current - 1, current + 1]);
+  if (current <= 2) {
+    [1, 2, 3].forEach((page) => pages.add(page));
+  }
+  if (current >= total - 3) {
+    [total - 4, total - 3, total - 2].forEach((page) => pages.add(page));
+  }
+
+  const sorted = Array.from(pages)
+    .filter((page) => page >= 0 && page < total)
+    .sort((a, b) => a - b);
+
+  return sorted.reduce<Array<number | "gap">>((acc, page) => {
+    const previous = acc[acc.length - 1];
+    if (typeof previous === "number" && page - previous > 1) {
+      acc.push("gap");
+    }
+    acc.push(page);
+    return acc;
+  }, []);
 }
 
 function netSentimentColor(value: number): string {
@@ -274,32 +313,33 @@ function SentimentMixPanel({ donut, pulse }: { donut: SentimentDonutItem[] | und
 
 function ShareOfVoicePanel({ stats }: { stats: PlatformStat[] }) {
   const total = stats.reduce((sum, item) => sum + item.mentions, 0);
+  const segments = stats.map((item) => ({
+    label: item.name,
+    value: item.mentions,
+    color: item.color,
+  }));
 
   if (!stats.length || !total) {
     return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No channel data available</p>;
   }
 
   return (
-    <div className="space-y-3">
-      {stats.map((item) => {
-        const share = Math.round((item.mentions / total) * 100);
-        return (
-          <div key={item.platform} className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color }} />
-                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
-              </div>
-              <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+    <div className="flex flex-col items-center gap-3 min-w-0">
+      <DonutChart segments={segments} size={150} showLegend={false} />
+      <div className="grid grid-cols-1 gap-2 w-full">
+        {stats.map((item) => {
+          const share = Math.round((item.mentions / total) * 100);
+          return (
+            <div key={item.platform} className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color }} />
+              <span className="text-[11px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="ml-auto text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
                 {share}% · {fmt(item.mentions)}
               </span>
             </div>
-            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
-              <div className="h-full rounded-full" style={{ width: `${Math.max(4, share)}%`, background: item.color }} />
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -350,33 +390,48 @@ function EngagementEfficiencyPanel({ stats }: { stats: PlatformStat[] }) {
     ...item,
     efficiency: item.mentions > 0 ? item.engagementRaw / item.mentions : 0,
   }));
-  const maxEfficiency = Math.max(...rows.map((item) => item.efficiency), 1);
+  const totalEfficiency = rows.reduce((sum, item) => sum + item.efficiency, 0);
 
-  if (!rows.length) {
+  if (!rows.length || totalEfficiency <= 0) {
     return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No engagement data available</p>;
   }
 
+  const weightedAverage = rows.reduce((sum, item) => sum + item.engagementRaw, 0) / Math.max(rows.reduce((sum, item) => sum + item.mentions, 0), 1);
+  const segments = rows.map((item) => ({
+    label: item.name,
+    value: item.efficiency,
+    color: item.color,
+  }));
+
   return (
-    <div className="space-y-3">
-      {rows.map((item) => {
-        const pct = Math.max(4, (item.efficiency / maxEfficiency) * 100);
-        return (
-          <div key={item.platform} className="min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
-              <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
-                {item.efficiency.toFixed(1)} / mention
-              </span>
+    <div className="flex flex-col items-center gap-3 min-w-0">
+      <DonutChart
+        segments={segments}
+        size={150}
+        showLegend={false}
+        centerLabel="Avg / mention"
+        centerValue={weightedAverage.toFixed(1)}
+        formatValue={(value) => value.toFixed(1)}
+        valueLabel="/ mention"
+      />
+      <div className="grid grid-cols-1 gap-2 w-full min-w-0">
+        {rows.map((item) => (
+          <div key={item.platform} className="flex items-start gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ background: item.color }} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+                <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+                  {item.efficiency.toFixed(1)} / mention
+                </span>
+              </div>
+              <p className="text-[9px]" style={{ color: "var(--text-faint)" }}>
+                {item.engagement} engagements from {fmt(item.mentions)} mentions
+              </p>
             </div>
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--bg-hover)" }}>
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: item.color }} />
-            </div>
-            <p className="text-[9px] mt-1" style={{ color: "var(--text-faint)" }}>
-              {item.engagement} engagements from {fmt(item.mentions)} mentions
-            </p>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -708,7 +763,8 @@ function InsightsTab() {
   const [postDetailId, setPostDetailId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"engagement" | "time">("engagement");
+  const [postPage, setPostPage] = useState(0);
+  const sortBy: "engagement" = "engagement";
 
   // Real data hooks
   const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined);
@@ -719,7 +775,8 @@ function InsightsTab() {
     platform: platformFilter !== "all" ? platformFilter : undefined,
     sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
     sort: sortBy,
-    limit: platformFilter !== "all" || sentimentFilter !== "all" ? 100 : 30,
+    limit: POSTS_PER_PAGE,
+    offset: postPage * POSTS_PER_PAGE,
   });
 
   const isLoading = platformLoading || sentimentLoading || keywordsLoading;
@@ -798,7 +855,6 @@ function InsightsTab() {
   // Posts
   const filteredPosts = useMemo<PostItem[]>(() => {
     const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
-    const byTime = (post: PostItem) => Date.parse(post.time || "") || 0;
     let list = [...(postsData?.posts ?? [])];
 
     if (platformFilter !== "all") {
@@ -808,10 +864,24 @@ function InsightsTab() {
       list = list.filter((post) => normalize(post.sentiment) === sentimentFilter);
     }
 
-    return list.sort((a, b) =>
-      sortBy === "time" ? byTime(b) - byTime(a) : (b.engagement || 0) - (a.engagement || 0),
-    );
-  }, [platformFilter, postsData?.posts, sentimentFilter, sortBy]);
+    return list.sort((a, b) => (b.engagement || 0) - (a.engagement || 0));
+  }, [platformFilter, postsData?.posts, sentimentFilter]);
+
+  useEffect(() => {
+    setPostPage(0);
+  }, [activeCampaignId, platformFilter, sentimentFilter]);
+
+  const totalPosts = postsData?.total ?? filteredPosts.length;
+  const totalPostPages = Math.max(1, Math.ceil(totalPosts / POSTS_PER_PAGE));
+  const pageStart = totalPosts > 0 ? postPage * POSTS_PER_PAGE + 1 : 0;
+  const pageEnd = Math.min(postPage * POSTS_PER_PAGE + filteredPosts.length, totalPosts);
+  const postPages = paginationWindow(postPage, totalPostPages);
+
+  useEffect(() => {
+    if (totalPosts > 0 && postPage >= totalPostPages) {
+      setPostPage(totalPostPages - 1);
+    }
+  }, [postPage, totalPostPages, totalPosts]);
 
   // Post detail — build from PostItem instead of generatePostDetail
   const selectedPost = postDetailId
@@ -926,12 +996,15 @@ function InsightsTab() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* Platform filter */}
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {(["all", "tiktok", "facebook", "youtube"] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPlatformFilter(p)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
-                  style={{
+	              {(["all", "tiktok", "facebook", "youtube"] as const).map((p) => (
+	                <button
+	                  key={p}
+	                  onClick={() => {
+	                    setPlatformFilter(p);
+	                    setPostPage(0);
+	                  }}
+	                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
+	                  style={{
                     background: platformFilter === p ? "var(--bg-surface-solid)" : "transparent",
                     color: platformFilter === p ? "var(--text-primary)" : "var(--text-muted)",
                     boxShadow: platformFilter === p ? "var(--shadow-sm)" : "none",
@@ -944,12 +1017,15 @@ function InsightsTab() {
 
             {/* Sentiment filter */}
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {["all", "positive", "neutral", "negative"].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSentimentFilter(s)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
-                  style={{
+	              {["all", "positive", "neutral", "negative"].map((s) => (
+	                <button
+	                  key={s}
+	                  onClick={() => {
+	                    setSentimentFilter(s);
+	                    setPostPage(0);
+	                  }}
+	                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
+	                  style={{
                     background: sentimentFilter === s ? "var(--bg-surface-solid)" : "transparent",
                     color: sentimentFilter === s ? "var(--text-primary)" : "var(--text-muted)",
                     boxShadow: sentimentFilter === s ? "var(--shadow-sm)" : "none",
@@ -960,35 +1036,30 @@ function InsightsTab() {
               ))}
             </div>
 
-            {/* Sort */}
-            <button
-              onClick={() => setSortBy(sortBy === "engagement" ? "time" : "engagement")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap"
+            <div
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap"
               style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
             >
               <ArrowUpDown className="w-3 h-3 shrink-0" />
-              {sortBy === "engagement" ? "By Engagement" : "By Time"}
-            </button>
+              Sorted by Engagement
+            </div>
           </div>
         </div>
 
         {filteredPosts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {filteredPosts.slice(0, 12).map((post) => (
-              <button
+            {filteredPosts.map((post) => (
+              <PostCard
                 key={post.id}
-                onClick={() => setPostDetailId(post.id)}
-                className="text-left w-full"
-              >
-                <PostCard
-                  author={post.author}
-                  content={post.content}
-                  platform={post.platform as Platform}
-                  sentiment={post.sentiment}
-                  engagement={post.engagement}
-                  time={post.time}
-                />
-              </button>
+                author={post.author}
+                content={post.content}
+                platform={post.platform as Platform}
+                sentiment={post.sentiment}
+                engagement={post.engagement}
+                time={post.time}
+                originalUrl={isValidHttpUrl(post.url) ? post.url : undefined}
+                onOpen={() => setPostDetailId(post.id)}
+              />
             ))}
           </div>
         ) : postsLoading ? (
@@ -997,10 +1068,58 @@ function InsightsTab() {
           <EmptyState title="No posts found" description="Try adjusting your filters" />
         )}
 
-        {filteredPosts.length > 12 && (
-          <p className="text-center text-[11px] mt-4" style={{ color: "var(--text-faint)" }}>
-            Showing 12 of {filteredPosts.length} posts
-          </p>
+        {totalPosts > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+            <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+              Showing {pageStart}-{pageEnd} of {totalPosts} posts
+            </p>
+            {totalPostPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPostPage((page) => Math.max(0, page - 1))}
+                  disabled={postPage === 0 || postsLoading}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+                >
+                  Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {postPages.map((page, index) =>
+                    page === "gap" ? (
+                      <span key={`gap-${index}`} className="px-1 text-[10px]" style={{ color: "var(--text-faint)" }}>
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setPostPage(page)}
+                        disabled={postsLoading}
+                        className="w-7 h-7 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40"
+                        style={{
+                          background: postPage === page ? "var(--accent)" : "var(--bg-hover)",
+                          color: postPage === page ? "white" : "var(--text-muted)",
+                          boxShadow: postPage === page ? "var(--shadow-sm)" : "none",
+                        }}
+                      >
+                        {page + 1}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPostPage((page) => Math.min(totalPostPages - 1, page + 1))}
+                  disabled={postPage >= totalPostPages - 1 || postsLoading}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </Card>
 
@@ -1047,6 +1166,7 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
 
   const totalPages = Math.ceil(sortedComments.length / COMMENTS_PER_PAGE);
   const pagedComments = sortedComments.slice(commentPage * COMMENTS_PER_PAGE, (commentPage + 1) * COMMENTS_PER_PAGE);
+  const originalUrl = isValidHttpUrl(post.url) ? post.url : null;
 
   return (
     <Modal open={open} onClose={onClose} title="Post Details" size="lg">
@@ -1102,19 +1222,26 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
               <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{post.author}</p>
               <Badge variant={sentimentVariant[post.sentiment]} size="sm">{post.sentiment}</Badge>
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
               <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
                 {platformLabel[post.platform]} · {post.time}
               </span>
-              <a
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] flex items-center gap-0.5"
-                style={{ color: "var(--accent)" }}
-              >
-                <ExternalLink className="w-3 h-3" /> View original
-              </a>
+              {originalUrl ? (
+                <a
+                  href={originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={originalUrl}
+                  className="text-[10px] flex items-center gap-0.5"
+                  style={{ color: "var(--accent)" }}
+                >
+                  <ExternalLink className="w-3 h-3" /> Open original post
+                </a>
+              ) : (
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                  Original link unavailable
+                </span>
+              )}
             </div>
           </div>
         </div>

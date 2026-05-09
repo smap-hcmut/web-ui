@@ -1,6 +1,6 @@
 'use client';
 
-import { Heart, MessageCircle, Share2 } from 'lucide-react';
+import { ExternalLink, Heart, MessageCircle, Share2 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import clsx from 'clsx';
 
@@ -11,6 +11,8 @@ interface PostCardProps {
   sentiment: 'positive' | 'negative' | 'neutral';
   engagement: number;
   time: string;
+  originalUrl?: string;
+  onOpen?: () => void;
   className?: string;
 }
 
@@ -22,10 +24,34 @@ function formatNum(n: number): string {
 
 const sentimentVariant = { positive: 'success', negative: 'danger', neutral: 'warning' } as const;
 
-export function PostCard({ author, content, platform, sentiment, engagement, time, className }: PostCardProps) {
+export function PostCard({
+  author,
+  content,
+  platform,
+  sentiment,
+  engagement,
+  time,
+  originalUrl,
+  onOpen,
+  className,
+}: PostCardProps) {
   return (
     <div
-      className={clsx('rounded-2xl p-4 transition-all duration-300 hover:translate-y-[-2px]', className)}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (!onOpen) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={clsx(
+        'rounded-2xl p-4 transition-all duration-300 hover:translate-y-[-2px]',
+        onOpen && 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--bg)]',
+        className,
+      )}
       style={{
         background: 'var(--bg-surface)',
         border: '1px solid var(--border)',
@@ -64,6 +90,19 @@ export function PostCard({ author, content, platform, sentiment, engagement, tim
         <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
           <Share2 className="w-3 h-3 shrink-0" /> {formatNum(Math.floor(engagement * 0.05))}
         </span>
+        {originalUrl && (
+          <a
+            href={originalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={originalUrl}
+            onClick={(event) => event.stopPropagation()}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold whitespace-nowrap transition-colors"
+            style={{ color: 'var(--accent)' }}
+          >
+            <ExternalLink className="w-3 h-3 shrink-0" /> Source
+          </a>
+        )}
       </div>
     </div>
   );

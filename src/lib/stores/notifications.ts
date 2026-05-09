@@ -2,14 +2,25 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical';
+export type NotificationCategory =
+  | 'crisis'
+  | 'analysis'
+  | 'campaign'
+  | 'data'
+  | 'report'
+  | 'system'
+  | 'user';
 
 export interface Notification {
   id: string;
   severity: NotificationSeverity;
+  category: NotificationCategory;
   content: string;
   title?: string;
   timestamp: number;
   read: boolean;
+  showToast: boolean;
+  showBanner: boolean;
   toastDismissed: boolean;
   bannerDismissed: boolean;
 }
@@ -18,6 +29,9 @@ interface PushInput {
   severity: NotificationSeverity;
   content: string;
   title?: string;
+  category?: NotificationCategory;
+  showToast?: boolean;
+  showBanner?: boolean;
 }
 
 interface NotificationState {
@@ -41,14 +55,17 @@ export const useNotificationStore = create<NotificationState>()(
     (set) => ({
       notifications: [],
 
-      push: ({ severity, content, title }) => {
+      push: ({ severity, content, title, category = 'system', showToast = false, showBanner = false }) => {
         const n: Notification = {
           id: genId(),
           severity,
+          category,
           content,
           title,
           timestamp: Date.now(),
           read: false,
+          showToast,
+          showBanner,
           toastDismissed: false,
           bannerDismissed: false,
         };

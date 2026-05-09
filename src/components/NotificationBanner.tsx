@@ -11,7 +11,7 @@ export function NotificationBanner({ rightOffset }: { rightOffset?: string }) {
   const active = useMemo(
     () =>
       notifications.find(
-        (n) => n.severity === 'critical' && !n.bannerDismissed,
+        (n) => n.category === 'crisis' && n.showBanner && !n.bannerDismissed,
       ),
     [notifications],
   );
