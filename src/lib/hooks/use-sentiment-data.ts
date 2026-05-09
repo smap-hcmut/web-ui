@@ -39,13 +39,15 @@ export interface SentimentResponse {
 
 export const sentimentKeys = {
   all: ['analytics', 'sentiment'] as const,
-  campaign: (campaignId: string) => [...sentimentKeys.all, campaignId] as const,
+  campaign: (campaignId: string, sourceKind = 'all') => [...sentimentKeys.all, campaignId, { sourceKind }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchSentiment(campaignId: string): Promise<SentimentResponse> {
-  const res = await fetch(`/api/analytics/sentiment?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchSentiment(campaignId: string, sourceKind = 'all'): Promise<SentimentResponse> {
+  const params = new URLSearchParams({ campaignId });
+  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  const res = await fetch(`/api/analytics/sentiment?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch sentiment data (${res.status})`);
@@ -65,12 +67,14 @@ async function fetchSentiment(campaignId: string): Promise<SentimentResponse> {
  * - pulse: overall sentiment score (0-100)
  * - total: total posts analyzed
  */
-export function useSentimentData(campaignId: string | undefined) {
-  const queryKey = campaignId ? sentimentKeys.campaign(campaignId) : [...sentimentKeys.all, '__pending__'] as const;
+export function useSentimentData(campaignId: string | undefined, sourceKind = 'all') {
+  const queryKey = campaignId
+    ? sentimentKeys.campaign(campaignId, sourceKind)
+    : [...sentimentKeys.all, '__pending__', { sourceKind }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchSentiment(campaignId!),
+    queryFn: () => fetchSentiment(campaignId!, sourceKind),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<SentimentResponse>(queryKey) : undefined,

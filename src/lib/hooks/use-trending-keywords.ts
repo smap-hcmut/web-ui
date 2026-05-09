@@ -38,17 +38,18 @@ export interface KeywordsResponse {
 
 export const keywordKeys = {
   all: ['analytics', 'keywords'] as const,
-  campaign: (campaignId: string, limit?: number) =>
-    [...keywordKeys.all, campaignId, { limit }] as const,
+  campaign: (campaignId: string, limit?: number, sourceKind = 'all') =>
+    [...keywordKeys.all, campaignId, { limit, sourceKind }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchKeywords(campaignId: string, limit = 50): Promise<KeywordsResponse> {
+async function fetchKeywords(campaignId: string, limit = 50, sourceKind = 'all'): Promise<KeywordsResponse> {
   const params = new URLSearchParams({
     campaignId,
     limit: String(limit),
   });
+  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
   const res = await fetch(`/api/analytics/keywords?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -66,14 +67,14 @@ async function fetchKeywords(campaignId: string, limit = 50): Promise<KeywordsRe
  * - keywords: ranked list with text, volume, sentiment, change%
  * - wordCloud: items with text, value, color, opacity (for word cloud visualization)
  */
-export function useTrendingKeywords(campaignId: string | undefined, limit = 50) {
+export function useTrendingKeywords(campaignId: string | undefined, limit = 50, sourceKind = 'all') {
   const queryKey = campaignId
-    ? keywordKeys.campaign(campaignId, limit)
-    : [...keywordKeys.all, '__pending__', { limit }] as const;
+    ? keywordKeys.campaign(campaignId, limit, sourceKind)
+    : [...keywordKeys.all, '__pending__', { limit, sourceKind }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchKeywords(campaignId!, limit),
+    queryFn: () => fetchKeywords(campaignId!, limit, sourceKind),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KeywordsResponse>(queryKey) : undefined,

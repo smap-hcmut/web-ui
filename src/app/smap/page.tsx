@@ -117,6 +117,12 @@ const platformLabel: Record<string, string> = {
 };
 
 const POSTS_PER_PAGE = 12;
+type AnalyticsSourceScope = "all" | "stalker" | "keyword";
+const analyticsSourceScopes: { value: AnalyticsSourceScope; label: string }[] = [
+  { value: "all", label: "All sources" },
+  { value: "stalker", label: "Stalker" },
+  { value: "keyword", label: "Keyword crawl" },
+];
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -224,6 +230,43 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
         {children}
       </h2>
       {sub && <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: "var(--text-muted)" }}>{sub}</p>}
+    </div>
+  );
+}
+
+function SourceScopeControl({
+  value,
+  onChange,
+}: {
+  value: AnalyticsSourceScope;
+  onChange: (value: AnalyticsSourceScope) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+        style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+      >
+        <SlidersHorizontal className="w-3 h-3" />
+        Source
+      </div>
+      <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+        {analyticsSourceScopes.map((scope) => (
+          <button
+            key={scope.value}
+            type="button"
+            onClick={() => onChange(scope.value)}
+            className="px-2.5 py-1 rounded-md text-[10px] font-medium transition-all whitespace-nowrap"
+            style={{
+              background: value === scope.value ? "var(--bg-surface-solid)" : "transparent",
+              color: value === scope.value ? "var(--text-primary)" : "var(--text-muted)",
+              boxShadow: value === scope.value ? "var(--shadow-sm)" : "none",
+            }}
+          >
+            {scope.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -513,11 +556,12 @@ function ListSkeleton({ count = 4 }: { count?: number }) {
    ════════════════════════════════════════════ */
 function MapTab() {
   const { activeCampaignId } = useScope();
+  const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
 
   // Real data hooks
-  const { data: kpisData, isLoading: kpisLoading } = useCampaignKPIs(activeCampaignId ?? undefined);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
+  const { data: kpisData, isLoading: kpisLoading } = useCampaignKPIs(activeCampaignId ?? undefined, sourceScope);
+  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined, 50, sourceScope);
+  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined, sourceScope);
 
   const isLoading = kpisLoading || keywordsLoading || sentimentLoading;
   const waitingForCampaign = !activeCampaignId;
@@ -539,6 +583,10 @@ function MapTab() {
 
   return (
     <>
+      <div className="flex justify-end mb-4">
+        <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
+      </div>
+
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpiMetrics.length > 0 ? kpiMetrics.map((m) => (
@@ -606,7 +654,7 @@ function MapTab() {
               boxShadow: "var(--shadow-sm)",
             }}
           >
-            <HeapSpace />
+            <HeapSpace sourceKind={sourceScope} />
           </div>
         </div>
 
@@ -763,17 +811,19 @@ function InsightsTab() {
   const [postDetailId, setPostDetailId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
+  const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
   const [postPage, setPostPage] = useState(0);
   const sortBy: "engagement" = "engagement";
 
   // Real data hooks
-  const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
+  const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined, sourceScope);
+  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined, sourceScope);
+  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined, 50, sourceScope);
   const { data: postsData, isLoading: postsLoading } = useRecentActivity({
     campaignId: activeCampaignId ?? undefined,
     platform: platformFilter !== "all" ? platformFilter : undefined,
     sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
+    sourceKind: sourceScope,
     sort: sortBy,
     limit: POSTS_PER_PAGE,
     offset: postPage * POSTS_PER_PAGE,
@@ -869,7 +919,7 @@ function InsightsTab() {
 
   useEffect(() => {
     setPostPage(0);
-  }, [activeCampaignId, platformFilter, sentimentFilter]);
+  }, [activeCampaignId, platformFilter, sentimentFilter, sourceScope]);
 
   const totalPosts = postsData?.total ?? filteredPosts.length;
   const totalPostPages = Math.max(1, Math.ceil(totalPosts / POSTS_PER_PAGE));
@@ -920,6 +970,10 @@ function InsightsTab() {
 
   return (
     <div className="content-reveal">
+      <div className="flex justify-end mb-4">
+        <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
+      </div>
+
       {/* Row 1: Platform overview cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         {scopedPlatformStats.map((p) => (

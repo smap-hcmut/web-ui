@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const ANALYTICS_CACHE_PREFIX = 'smap:analytics-cache:v2:';
+const ANALYTICS_CACHE_PREFIX = 'smap:analytics-cache:v3:';
 const ANALYTICS_CACHE_TTL_MS = 15 * 60 * 1000;
 
 type AnalyticsQueryKey = readonly unknown[];

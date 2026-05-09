@@ -44,13 +44,15 @@ export interface PlatformStatsResponse {
 
 export const platformKeys = {
   all: ['analytics', 'platforms'] as const,
-  campaign: (campaignId: string) => [...platformKeys.all, campaignId] as const,
+  campaign: (campaignId: string, sourceKind = 'all') => [...platformKeys.all, campaignId, { sourceKind }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchPlatformStats(campaignId: string): Promise<PlatformStatsResponse> {
-  const res = await fetch(`/api/analytics/platforms?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchPlatformStats(campaignId: string, sourceKind = 'all'): Promise<PlatformStatsResponse> {
+  const params = new URLSearchParams({ campaignId });
+  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  const res = await fetch(`/api/analytics/platforms?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch platform stats (${res.status})`);
@@ -68,12 +70,14 @@ async function fetchPlatformStats(campaignId: string): Promise<PlatformStatsResp
  * - timeSeries: 12-month mentions per platform (for line/bar chart)
  * - months: month labels (YYYY-MM)
  */
-export function usePlatformStats(campaignId: string | undefined) {
-  const queryKey = campaignId ? platformKeys.campaign(campaignId) : [...platformKeys.all, '__pending__'] as const;
+export function usePlatformStats(campaignId: string | undefined, sourceKind = 'all') {
+  const queryKey = campaignId
+    ? platformKeys.campaign(campaignId, sourceKind)
+    : [...platformKeys.all, '__pending__', { sourceKind }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchPlatformStats(campaignId!),
+    queryFn: () => fetchPlatformStats(campaignId!, sourceKind),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,

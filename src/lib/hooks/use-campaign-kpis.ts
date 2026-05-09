@@ -41,13 +41,15 @@ export interface KPIsResponse {
 
 export const kpiKeys = {
   all: ['analytics', 'kpis'] as const,
-  campaign: (campaignId: string) => [...kpiKeys.all, campaignId] as const,
+  campaign: (campaignId: string, sourceKind = 'all') => [...kpiKeys.all, campaignId, { sourceKind }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchKPIs(campaignId: string): Promise<KPIsResponse> {
-  const res = await fetch(`/api/analytics/kpis?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchKPIs(campaignId: string, sourceKind = 'all'): Promise<KPIsResponse> {
+  const params = new URLSearchParams({ campaignId });
+  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  const res = await fetch(`/api/analytics/kpis?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch KPIs (${res.status})`);
@@ -64,12 +66,14 @@ async function fetchKPIs(campaignId: string): Promise<KPIsResponse> {
  * each with value, formatted string, change%, and 12-point sparkline.
  * Also returns engagement breakdown (views, likes, comments, shares).
  */
-export function useCampaignKPIs(campaignId: string | undefined) {
-  const queryKey = campaignId ? kpiKeys.campaign(campaignId) : [...kpiKeys.all, '__pending__'] as const;
+export function useCampaignKPIs(campaignId: string | undefined, sourceKind = 'all') {
+  const queryKey = campaignId
+    ? kpiKeys.campaign(campaignId, sourceKind)
+    : [...kpiKeys.all, '__pending__', { sourceKind }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchKPIs(campaignId!),
+    queryFn: () => fetchKPIs(campaignId!, sourceKind),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KPIsResponse>(queryKey) : undefined,

@@ -36,6 +36,9 @@ export interface PostItem {
   keywords: string[];
   riskLevel: string;
   hashtags: string[];
+  sourceKind?: string;
+  dataSourceId?: string;
+  targetId?: string;
 }
 
 export interface PostsResponse {
@@ -50,6 +53,7 @@ export interface PostsParams {
   sort?: 'engagement' | 'time';
   limit?: number;
   offset?: number;
+  sourceKind?: string;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -70,6 +74,7 @@ async function fetchPosts(params: PostsParams): Promise<PostsResponse> {
     ...(params.platform && params.platform !== 'all' && { platform: params.platform }),
     ...(params.sentiment && params.sentiment !== 'all' && { sentiment: params.sentiment }),
     ...(params.sort && { sort: params.sort }),
+    ...(params.sourceKind && params.sourceKind !== 'all' && { sourceKind: params.sourceKind }),
     limit: String(params.limit || 30),
     offset: String(params.offset || 0),
   });

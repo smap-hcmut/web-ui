@@ -39,13 +39,15 @@ export interface HeapResponse {
 
 export const heapKeys = {
   all: ['analytics', 'heap'] as const,
-  campaign: (campaignId: string) => [...heapKeys.all, campaignId] as const,
+  campaign: (campaignId: string, sourceKind = 'all') => [...heapKeys.all, campaignId, { sourceKind }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchHeapData(campaignId: string): Promise<HeapResponse> {
-  const res = await fetch(`/api/analytics/heap?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchHeapData(campaignId: string, sourceKind = 'all'): Promise<HeapResponse> {
+  const params = new URLSearchParams({ campaignId });
+  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  const res = await fetch(`/api/analytics/heap?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch heap data (${res.status})`);
@@ -62,12 +64,14 @@ async function fetchHeapData(campaignId: string): Promise<HeapResponse> {
  * Each node has metrics: mentions, engagement, sentiment, childCount.
  * Returns null tree if no projects exist for the campaign.
  */
-export function useHeapData(campaignId: string | undefined) {
-  const queryKey = campaignId ? heapKeys.campaign(campaignId) : [...heapKeys.all, '__pending__'] as const;
+export function useHeapData(campaignId: string | undefined, sourceKind = 'all') {
+  const queryKey = campaignId
+    ? heapKeys.campaign(campaignId, sourceKind)
+    : [...heapKeys.all, '__pending__', { sourceKind }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchHeapData(campaignId!),
+    queryFn: () => fetchHeapData(campaignId!, sourceKind),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<HeapResponse>(queryKey) : undefined,
