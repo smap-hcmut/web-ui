@@ -31,6 +31,9 @@ export interface PostItem {
   keywords: string[];
   riskLevel: string;
   hashtags: string[];
+  contentType?: string;
+  rootId?: string;
+  parentId?: string;
 }
 
 function normalizeFilter(value: string | null): string {
@@ -52,13 +55,24 @@ function sortPosts(list: PostItem[], sort: string): PostItem[] {
   });
 }
 
-function filterPosts(list: PostItem[], platform: string, sentiment: string, sort: string): PostItem[] {
+function normalizeContentType(value: string | null): string {
+  const normalized = normalizeFilter(value);
+  if (normalized === 'posts') return 'post';
+  if (normalized === 'comments') return 'comment';
+  if (normalized === 'replies') return 'reply';
+  return ['all', 'post', 'comment', 'reply'].includes(normalized) ? normalized : 'all';
+}
+
+function filterPosts(list: PostItem[], platform: string, sentiment: string, contentType: string, sort: string): PostItem[] {
   let filtered = [...list];
   if (platform !== 'all') {
     filtered = filtered.filter((p) => normalizeText(p.platform) === platform);
   }
   if (sentiment !== 'all') {
     filtered = filtered.filter((p) => normalizeText(p.sentiment) === sentiment);
+  }
+  if (contentType !== 'all') {
+    filtered = filtered.filter((p) => normalizeText(p.contentType || 'mention') === contentType);
   }
   return sortPosts(filtered, sort);
 }
@@ -121,6 +135,7 @@ export async function GET(request: NextRequest) {
     const campaignId = params.get('campaignId');
     const platform = normalizeFilter(params.get('platform'));
     const sentiment = normalizeFilter(params.get('sentiment'));
+    const requestedContentType = normalizeContentType(params.get('contentType'));
     const sort = normalizeFilter(params.get('sort')) === 'time' ? 'time' : 'engagement';
     const limit = Number(params.get('limit') || '30');
     const offset = Number(params.get('offset') || '0');
@@ -130,7 +145,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (IS_MOCK) {
-      const list = filterPosts(mockPostsAll as PostItem[], platform, sentiment, sort);
+      const list = filterPosts(mockPostsAll as PostItem[], platform, sentiment, requestedContentType, sort);
       const total = list.length;
       const paged = list.slice(offset, offset + limit);
       return NextResponse.json({ posts: paged, total });

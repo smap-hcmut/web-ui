@@ -12,6 +12,7 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import { appendAnalyticsScope } from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,6 +40,9 @@ export interface PostItem {
   sourceKind?: string;
   dataSourceId?: string;
   targetId?: string;
+  contentType?: 'post' | 'comment' | 'reply' | 'mention' | string;
+  rootId?: string;
+  parentId?: string;
 }
 
 export interface PostsResponse {
@@ -54,6 +58,9 @@ export interface PostsParams {
   limit?: number;
   offset?: number;
   sourceKind?: string;
+  projectIds?: readonly string[];
+  keywords?: readonly string[];
+  contentType?: string;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -74,10 +81,10 @@ async function fetchPosts(params: PostsParams): Promise<PostsResponse> {
     ...(params.platform && params.platform !== 'all' && { platform: params.platform }),
     ...(params.sentiment && params.sentiment !== 'all' && { sentiment: params.sentiment }),
     ...(params.sort && { sort: params.sort }),
-    ...(params.sourceKind && params.sourceKind !== 'all' && { sourceKind: params.sourceKind }),
     limit: String(params.limit || 30),
     offset: String(params.offset || 0),
   });
+  appendAnalyticsScope(searchParams, params, true);
   const res = await fetch(`/api/analytics/posts?${searchParams}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

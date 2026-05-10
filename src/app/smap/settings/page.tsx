@@ -18,10 +18,12 @@ import {
   Save,
   Trash2,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrisisConfigEditor } from '@/components/crisis/CrisisConfigEditor';
+import { OntologyRulesEditor } from '@/components/ontology/OntologyRulesEditor';
 import {
   useCampaign,
   useProjectsByCampaign,
@@ -39,6 +41,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
   { id: 'crisis', label: 'Crisis', icon: AlertTriangle },
+  { id: 'ontology', label: 'Signals', icon: BookOpen },
   { id: 'targets', label: 'Targets', icon: Target },
   { id: 'team', label: 'Team', icon: Users },
 ] as const;
@@ -186,6 +189,70 @@ function CrisisSettingsPanel({ projects }: { projects: Project[] }) {
           projectId={selectedProject.id}
           projectName={selectedProject.name}
           domainTypeCode={selectedProject.domain_type_code}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function OntologySettingsPanel({ projects }: { projects: Project[] }) {
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
+    }
+    if (selectedProjectId && !projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]?.id ?? '');
+    }
+  }, [projects, selectedProjectId]);
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+
+  if (projects.length === 0) {
+    return (
+      <EmptyState
+        title="No projects yet"
+        description="Create a project first, then tune the signal dictionary for marketing topics and issues."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Signal Dictionary
+          </h2>
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+            Expose safe ontology rules so marketing teams can classify posts into the right topic, issue, or aspect.
+          </p>
+        </div>
+        <div className="w-full sm:w-80">
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Project
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className={inputClass}
+            style={inputStyle}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} · {project.entity_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {selectedProject ? (
+        <OntologyRulesEditor
+          key={selectedProject.id}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
         />
       ) : null}
     </div>
@@ -474,6 +541,10 @@ function CampaignSettingsContent() {
           {/* ── Crisis ── */}
           {tab === 'crisis' && (
             <CrisisSettingsPanel projects={projects ?? []} />
+          )}
+
+          {tab === 'ontology' && (
+            <OntologySettingsPanel projects={projects ?? []} />
           )}
 
           {/* ── Targets ── */}

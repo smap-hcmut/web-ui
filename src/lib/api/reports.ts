@@ -12,6 +12,7 @@ import type {
   PaginatedResponse,
   Platform,
   ReportComment,
+  ReportContent,
   ReportItem,
   ReportPost,
   ReportStatus,
@@ -184,6 +185,14 @@ interface KnowledgeListCommentsResponse {
 interface KnowledgeDownloadResponse {
   download_url: string;
   expires_at: string;
+  file_name: string;
+  file_size: number;
+}
+
+interface KnowledgeReportContentResponse {
+  report_id: string;
+  content: string;
+  content_type: string;
   file_name: string;
   file_size: number;
 }
@@ -488,6 +497,17 @@ export const reportsApi = {
     return {
       downloadUrl: resp.download_url,
       expiresAt: resp.expires_at,
+      fileName: resp.file_name,
+      fileSize: resp.file_size,
+    };
+  },
+
+  content: async (id: string): Promise<ReportContent> => {
+    const resp = await apiClient.get<KnowledgeReportContentResponse>(API_CONFIG.ENDPOINTS.reports.content(id));
+    return {
+      reportId: resp.report_id,
+      content: resp.content,
+      contentType: resp.content_type,
       fileName: resp.file_name,
       fileSize: resp.file_size,
     };

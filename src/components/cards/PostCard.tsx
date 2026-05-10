@@ -12,6 +12,7 @@ interface PostCardProps {
   engagement: number;
   time: string;
   originalUrl?: string;
+  contentType?: string;
   onOpen?: () => void;
   className?: string;
 }
@@ -32,9 +33,14 @@ export function PostCard({
   engagement,
   time,
   originalUrl,
+  contentType,
   onOpen,
   className,
 }: PostCardProps) {
+  const contentTypeLabel = contentType && contentType !== 'mention'
+    ? contentType.charAt(0).toUpperCase() + contentType.slice(1)
+    : null;
+
   return (
     <div
       role={onOpen ? 'button' : undefined}
@@ -68,7 +74,9 @@ export function PostCard({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{author}</p>
-            <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{platform} · {time}</p>
+            <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+              {platform} · {time}{contentTypeLabel ? ` · ${contentTypeLabel}` : ''}
+            </p>
           </div>
         </div>
         <div className="shrink-0">

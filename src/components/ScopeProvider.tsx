@@ -11,7 +11,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
    When nothing is selected → all data for the active campaign is included.
 
    Scope is synced to URL search params so links are shareable.
-   Params: camp_id=xxx  proj=id1,id2  kw=id1,id2
+   Params: camp_id=xxx  proj=id1,id2  kw=keyword1,keyword2
 */
 
 interface ScopeState {

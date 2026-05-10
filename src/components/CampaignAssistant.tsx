@@ -31,7 +31,7 @@ import { knowledgeApi, type ChatResponse } from '@/lib/api/knowledge';
 import { reportsApi } from '@/lib/api/reports';
 import { reportKeys } from '@/lib/hooks/use-reports';
 import { useCampaigns } from '@/lib/hooks';
-import { useNotificationStore, useReportJobsStore, type NotificationSeverity } from '@/lib/stores';
+import { useAuthStore, useNotificationStore, useReportJobsStore, type NotificationSeverity } from '@/lib/stores';
 import { detectPlatform, PLATFORM_LABEL } from '@/lib/utils/platform';
 
 /* ─── !noti command parser ─── */
@@ -351,7 +351,7 @@ function formatFullTime(d: Date): string {
   return d.toLocaleString();
 }
 
-/* ─── Persistence (per-campaign, TTL 4h, cap 100 msgs) ─── */
+/* ─── Persistence (per-user + per-campaign, TTL 4h, cap 100 msgs) ─── */
 
 const PERSIST_PREFIX = 'smap:assistant:v2:chat:';
 const PERSIST_TTL_MS = 4 * 60 * 60 * 1000;
@@ -363,18 +363,19 @@ interface PersistedChat {
   lastActivity: number;
 }
 
-function persistKey(campaignId: string | null) {
-  return `${PERSIST_PREFIX}${campaignId ?? '__none__'}`;
+function persistKey(campaignId: string | null, userId: string | null) {
+  return `${PERSIST_PREFIX}${userId ?? '__anonymous__'}:${campaignId ?? '__none__'}`;
 }
 
-function loadPersisted(campaignId: string | null): PersistedChat | null {
+function loadPersisted(campaignId: string | null, userId: string | null): PersistedChat | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(persistKey(campaignId));
+    const key = persistKey(campaignId, userId);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const data = JSON.parse(raw) as PersistedChat;
     if (Date.now() - data.lastActivity > PERSIST_TTL_MS) {
-      localStorage.removeItem(persistKey(campaignId));
+      localStorage.removeItem(key);
       return null;
     }
     // Revive Date objects
@@ -403,22 +404,22 @@ function loadPersisted(campaignId: string | null): PersistedChat | null {
   }
 }
 
-function savePersisted(campaignId: string | null, data: PersistedChat) {
+function savePersisted(campaignId: string | null, userId: string | null, data: PersistedChat) {
   if (typeof window === 'undefined') return;
   try {
     const trimmed: PersistedChat = {
       ...data,
       messages: data.messages.slice(-PERSIST_MAX_MESSAGES),
     };
-    localStorage.setItem(persistKey(campaignId), JSON.stringify(trimmed));
+    localStorage.setItem(persistKey(campaignId, userId), JSON.stringify(trimmed));
   } catch {
     /* quota exceeded or unavailable — ignore */
   }
 }
 
-function clearPersisted(campaignId: string | null) {
+function clearPersisted(campaignId: string | null, userId: string | null) {
   if (typeof window === 'undefined') return;
-  try { localStorage.removeItem(persistKey(campaignId)); } catch {}
+  try { localStorage.removeItem(persistKey(campaignId, userId)); } catch {}
 }
 
 /* ─── Component ─── */
@@ -428,6 +429,7 @@ export function CampaignAssistant() {
   const { setActiveTab } = useNav();
   const { open, setOpen, toggleOpen, mode, toggleMode } = useAssistant();
   const queryClient = useQueryClient();
+  const authUserId = useAuthStore((s) => s.user?.id ?? null);
   const isDocked = mode === 'docked';
   const pushNoti = useNotificationStore((s) => s.push);
   const addReportJob = useReportJobsStore((s) => s.addJob);
@@ -475,7 +477,7 @@ export function CampaignAssistant() {
 
   /* Load persisted chat when campaign changes */
   useEffect(() => {
-    const persisted = loadPersisted(activeCampaignId);
+    const persisted = loadPersisted(activeCampaignId, authUserId);
     if (persisted) {
       setMessages(persisted.messages);
       setConversationId(persisted.conversationId);
@@ -483,17 +485,17 @@ export function CampaignAssistant() {
       setMessages([]);
       setConversationId(undefined);
     }
-  }, [activeCampaignId]);
+  }, [activeCampaignId, authUserId]);
 
   /* Save chat to localStorage whenever it changes */
   useEffect(() => {
     if (messages.length === 0) return;
-    savePersisted(activeCampaignId, {
+    savePersisted(activeCampaignId, authUserId, {
       messages,
       conversationId,
       lastActivity: Date.now(),
     });
-  }, [messages, conversationId, activeCampaignId]);
+  }, [messages, conversationId, activeCampaignId, authUserId]);
 
   /* Manual reset (user-initiated) */
   const resetConversation = useCallback(() => {
@@ -501,8 +503,8 @@ export function CampaignAssistant() {
     setConversationId(undefined);
     setInput('');
     setShowResetConfirm(false);
-    clearPersisted(activeCampaignId);
-  }, [activeCampaignId]);
+    clearPersisted(activeCampaignId, authUserId);
+  }, [activeCampaignId, authUserId]);
 
   /* Smart auto-scroll — only stick to bottom if user is already near it */
   const SCROLL_NEAR_BOTTOM_PX = 80;

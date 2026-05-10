@@ -118,10 +118,17 @@ const platformLabel: Record<string, string> = {
 
 const POSTS_PER_PAGE = 12;
 type AnalyticsSourceScope = "all" | "stalker" | "keyword";
+type MentionContentType = "all" | "post" | "comment" | "reply";
 const analyticsSourceScopes: { value: AnalyticsSourceScope; label: string }[] = [
   { value: "all", label: "All sources" },
   { value: "stalker", label: "Stalker" },
   { value: "keyword", label: "Keyword crawl" },
+];
+const mentionContentTypeFilters: { value: MentionContentType; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "post", label: "Posts" },
+  { value: "comment", label: "Comments" },
+  { value: "reply", label: "Replies" },
 ];
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -148,6 +155,14 @@ function formatMonthLabel(value: string): string {
   if (!year || !month) return value;
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function contentTypeLabel(value: string | undefined): string {
+  const normalized = (value || "mention").toLowerCase();
+  if (normalized === "post") return "Post";
+  if (normalized === "comment") return "Comment";
+  if (normalized === "reply") return "Reply";
+  return "Mention";
 }
 
 function isValidHttpUrl(value: string | undefined | null): value is string {
@@ -508,6 +523,24 @@ function LoadingDots() {
   );
 }
 
+function FetchBadge({ show, label = "Updating", className = "" }: { show: boolean; label?: string; className?: string }) {
+  if (!show) return null;
+  return (
+    <div
+      className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${className}`}
+      style={{
+        background: "var(--bg-surface-solid)",
+        border: "1px solid var(--border)",
+        color: "var(--text-muted)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
+      <RotateCw className="h-3 w-3 animate-spin" />
+      {label}
+    </div>
+  );
+}
+
 function TabSkeleton({ rows = 3 }: { rows?: number }) {
   let idx = 0;
   return (
@@ -555,15 +588,21 @@ function ListSkeleton({ count = 4 }: { count?: number }) {
    TAB: MAP
    ════════════════════════════════════════════ */
 function MapTab() {
-  const { activeCampaignId } = useScope();
+  const { activeCampaignId, projectIds, keywordIds } = useScope();
   const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
+  const scopedProjectIds = useMemo(() => Array.from(projectIds), [projectIds]);
+  const scopedKeywords = useMemo(() => Array.from(keywordIds), [keywordIds]);
+  const analyticsScope = useMemo(
+    () => ({ sourceKind: sourceScope, projectIds: scopedProjectIds, keywords: scopedKeywords }),
+    [sourceScope, scopedProjectIds, scopedKeywords],
+  );
 
   // Real data hooks
-  const { data: kpisData, isLoading: kpisLoading } = useCampaignKPIs(activeCampaignId ?? undefined, sourceScope);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined, 50, sourceScope);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined, sourceScope);
+  const { data: kpisData, isFetching: kpisFetching } = useCampaignKPIs(activeCampaignId ?? undefined, analyticsScope);
+  const { data: keywordsData, isFetching: keywordsFetching } = useTrendingKeywords(activeCampaignId ?? undefined, 50, analyticsScope);
+  const { data: sentimentData, isFetching: sentimentFetching } = useSentimentData(activeCampaignId ?? undefined, analyticsScope);
 
-  const isLoading = kpisLoading || keywordsLoading || sentimentLoading;
+  const isFetching = kpisFetching || keywordsFetching || sentimentFetching;
   const waitingForCampaign = !activeCampaignId;
 
   // KPI metrics from API (or empty)
@@ -579,11 +618,12 @@ function MapTab() {
   const scopedSentiment = sentimentData?.pulse ?? 0;
   const keywordCount = keywordsData?.keywords?.length ?? 0;
 
-  if (waitingForCampaign || isLoading) return <TabSkeleton rows={2} />;
+  if (waitingForCampaign) return <TabSkeleton rows={2} />;
 
   return (
     <>
-      <div className="flex justify-end mb-4">
+      <div className="relative flex justify-end mb-4">
+        <FetchBadge show={isFetching} className="left-0 right-auto top-1" />
         <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
       </div>
 
@@ -654,7 +694,7 @@ function MapTab() {
               boxShadow: "var(--shadow-sm)",
             }}
           >
-            <HeapSpace sourceKind={sourceScope} />
+            <HeapSpace sourceKind={sourceScope} projectIds={scopedProjectIds} keywords={scopedKeywords} />
           </div>
         </div>
 
@@ -807,29 +847,42 @@ function ProjectsTab() {
    TAB: Insights (merged Platforms + Insights)
    ════════════════════════════════════════════ */
 function InsightsTab() {
-  const { activeCampaignId } = useScope();
+  const { activeCampaignId, projectIds, keywordIds } = useScope();
   const [postDetailId, setPostDetailId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
   const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<MentionContentType>("all");
   const [postPage, setPostPage] = useState(0);
   const sortBy: "engagement" = "engagement";
+  const scopedProjectIds = useMemo(() => Array.from(projectIds), [projectIds]);
+  const scopedKeywords = useMemo(() => Array.from(keywordIds), [keywordIds]);
+  const analyticsScope = useMemo(
+    () => ({ sourceKind: sourceScope, projectIds: scopedProjectIds, keywords: scopedKeywords }),
+    [sourceScope, scopedProjectIds, scopedKeywords],
+  );
 
   // Real data hooks
-  const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined, sourceScope);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined, sourceScope);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined, 50, sourceScope);
-  const { data: postsData, isLoading: postsLoading } = useRecentActivity({
+  const { data: platformData, isLoading: platformLoading, isFetching: platformFetching } = usePlatformStats(activeCampaignId ?? undefined, analyticsScope);
+  const { data: sentimentData, isLoading: sentimentLoading, isFetching: sentimentFetching } = useSentimentData(activeCampaignId ?? undefined, analyticsScope);
+  const { data: keywordsData, isLoading: keywordsLoading, isFetching: keywordsFetching } = useTrendingKeywords(activeCampaignId ?? undefined, 50, analyticsScope);
+  const { data: postsData, isLoading: postsLoading, isFetching: postsFetching } = useRecentActivity({
     campaignId: activeCampaignId ?? undefined,
     platform: platformFilter !== "all" ? platformFilter : undefined,
     sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
     sourceKind: sourceScope,
+    projectIds: scopedProjectIds,
+    keywords: scopedKeywords,
+    contentType: contentTypeFilter,
     sort: sortBy,
     limit: POSTS_PER_PAGE,
     offset: postPage * POSTS_PER_PAGE,
   });
 
-  const isLoading = platformLoading || sentimentLoading || keywordsLoading;
+  const isLoading =
+    (platformLoading && !platformData) ||
+    (sentimentLoading && !sentimentData) ||
+    (keywordsLoading && !keywordsData);
   const waitingForCampaign = !activeCampaignId;
 
   // Platform overview cards
@@ -904,34 +957,24 @@ function InsightsTab() {
 
   // Posts
   const filteredPosts = useMemo<PostItem[]>(() => {
-    const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
-    let list = [...(postsData?.posts ?? [])];
-
-    if (platformFilter !== "all") {
-      list = list.filter((post) => normalize(post.platform) === platformFilter);
-    }
-    if (sentimentFilter !== "all") {
-      list = list.filter((post) => normalize(post.sentiment) === sentimentFilter);
-    }
-
-    return list.sort((a, b) => (b.engagement || 0) - (a.engagement || 0));
-  }, [platformFilter, postsData?.posts, sentimentFilter]);
+    return [...(postsData?.posts ?? [])];
+  }, [postsData?.posts]);
 
   useEffect(() => {
     setPostPage(0);
-  }, [activeCampaignId, platformFilter, sentimentFilter, sourceScope]);
+  }, [activeCampaignId, platformFilter, sentimentFilter, sourceScope, contentTypeFilter, scopedProjectIds, scopedKeywords]);
 
-  const totalPosts = postsData?.total ?? filteredPosts.length;
-  const totalPostPages = Math.max(1, Math.ceil(totalPosts / POSTS_PER_PAGE));
-  const pageStart = totalPosts > 0 ? postPage * POSTS_PER_PAGE + 1 : 0;
-  const pageEnd = Math.min(postPage * POSTS_PER_PAGE + filteredPosts.length, totalPosts);
-  const postPages = paginationWindow(postPage, totalPostPages);
+  const totalMentions = postsData?.total ?? filteredPosts.length;
+  const totalMentionPages = Math.max(1, Math.ceil(totalMentions / POSTS_PER_PAGE));
+  const pageStart = totalMentions > 0 ? postPage * POSTS_PER_PAGE + 1 : 0;
+  const pageEnd = Math.min(postPage * POSTS_PER_PAGE + filteredPosts.length, totalMentions);
+  const mentionPages = paginationWindow(postPage, totalMentionPages);
 
   useEffect(() => {
-    if (totalPosts > 0 && postPage >= totalPostPages) {
-      setPostPage(totalPostPages - 1);
+    if (totalMentions > 0 && postPage >= totalMentionPages) {
+      setPostPage(totalMentionPages - 1);
     }
-  }, [postPage, totalPostPages, totalPosts]);
+  }, [postPage, totalMentionPages, totalMentions]);
 
   // Post detail — build from PostItem instead of generatePostDetail
   const selectedPost = postDetailId
@@ -961,51 +1004,61 @@ function InsightsTab() {
         topComments: [],
         keywords: selectedPost.keywords ?? [],
         url: selectedPost.url ?? "#",
+        contentType: selectedPost.contentType,
+        rootId: selectedPost.rootId,
+        parentId: selectedPost.parentId,
       }
     : null;
 
-  if (waitingForCampaign || isLoading) {
+  if (waitingForCampaign) {
     return <TabSkeleton rows={3} />;
   }
 
   return (
     <div className="content-reveal">
-      <div className="flex justify-end mb-4">
+      <div className="relative flex justify-end mb-4">
+        <FetchBadge show={platformFetching || sentimentFetching || keywordsFetching || postsFetching || isLoading} className="left-0 right-auto top-1" />
         <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
       </div>
 
       {/* Row 1: Platform overview cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        {scopedPlatformStats.map((p) => (
-          <PlatformOverviewCard
-            key={p.platform}
-            name={p.name}
-            platform={p.platform}
-            mentions={p.mentions}
-            mentionsChange={p.mentionsChange}
-            engagement={p.engagement}
-            sentiment={p.sentiment}
-            status={p.status}
-            color={p.color}
-          />
-        ))}
+      <div className="relative mb-4">
+        <FetchBadge show={platformFetching} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {scopedPlatformStats.map((p) => (
+            <PlatformOverviewCard
+              key={p.platform}
+              name={p.name}
+              platform={p.platform}
+              mentions={p.mentions}
+              mentionsChange={p.mentionsChange}
+              engagement={p.engagement}
+              sentiment={p.sentiment}
+              status={p.status}
+              color={p.color}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Row 2: Mentions trend + sentiment split + channel sentiment */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-5">
+        <Card className="relative col-span-12 lg:col-span-5">
+          <FetchBadge show={platformFetching} />
           <SectionTitle sub="Monthly volume by channel">Mentions Over Time</SectionTitle>
           <AreaChart series={mentionsSeries} xLabels={mentionsLabels.length > 0 ? mentionsLabels : months} height={180} />
         </Card>
 
-        <Card className="col-span-6 lg:col-span-3 flex flex-col">
+        <Card className="relative col-span-6 lg:col-span-3 flex flex-col">
+          <FetchBadge show={sentimentFetching} />
           <SectionTitle sub="Share of analyzed mentions">Mood Split</SectionTitle>
           <div className="flex-1 flex items-center justify-center">
             <DonutChart segments={sentimentSegments} size={130} />
           </div>
         </Card>
 
-        <Card className="col-span-6 lg:col-span-4">
+        <Card className="relative col-span-6 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
           <SectionTitle sub="Net sentiment per channel">Channel Sentiment</SectionTitle>
           <ChannelSentimentPanel stats={scopedPlatformStats} />
         </Card>
@@ -1013,17 +1066,20 @@ function InsightsTab() {
 
       {/* Row 3: channel mix + topic health + sentiment trend */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-4">
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
           <SectionTitle sub="Mention share by platform">Share of Voice</SectionTitle>
           <ShareOfVoicePanel stats={scopedPlatformStats} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-4">
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={keywordsFetching} />
           <SectionTitle sub="Volume · net sentiment · momentum">Topic Health</SectionTitle>
           <TopicHealthList keywords={topTopics} maxItems={8} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-4">
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={sentimentFetching} />
           <SectionTitle sub="Net sentiment by month">Sentiment Trend</SectionTitle>
           <LineChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
         </Card>
@@ -1031,21 +1087,24 @@ function InsightsTab() {
 
       {/* Row 4: engagement quality + rising issues */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-4">
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
           <SectionTitle sub="Engagement normalized by mention volume">Engagement Efficiency</SectionTitle>
           <EngagementEfficiencyPanel stats={scopedPlatformStats} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-8">
+        <Card className="relative col-span-12 lg:col-span-8">
+          <FetchBadge show={keywordsFetching} />
           <SectionTitle sub="Fast-growing or negative themes to review first">Momentum Watchlist</SectionTitle>
           <TopicHealthList keywords={momentumTopics} maxItems={10} />
         </Card>
       </div>
 
-      {/* Row 5: Top Posts with filters */}
-      <Card>
+      {/* Row 5: Top mentions with filters */}
+      <Card className="relative">
+        <FetchBadge show={postsFetching || postsLoading} />
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-          <SectionTitle sub="Click any post to view details & comments">Top Posts by Platform</SectionTitle>
+          <SectionTitle sub="Posts, comments, and replies ranked by engagement">Top Mentions by Platform</SectionTitle>
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Platform filter */}
@@ -1090,6 +1149,27 @@ function InsightsTab() {
               ))}
             </div>
 
+            {/* Content type filter */}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+              {mentionContentTypeFilters.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => {
+                    setContentTypeFilter(item.value);
+                    setPostPage(0);
+                  }}
+                  className="px-2 py-1 rounded-md text-[10px] font-medium transition-all whitespace-nowrap"
+                  style={{
+                    background: contentTypeFilter === item.value ? "var(--bg-surface-solid)" : "transparent",
+                    color: contentTypeFilter === item.value ? "var(--text-primary)" : "var(--text-muted)",
+                    boxShadow: contentTypeFilter === item.value ? "var(--shadow-sm)" : "none",
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
             <div
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap"
               style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
@@ -1112,6 +1192,7 @@ function InsightsTab() {
                 engagement={post.engagement}
                 time={post.time}
                 originalUrl={isValidHttpUrl(post.url) ? post.url : undefined}
+                contentType={post.contentType}
                 onOpen={() => setPostDetailId(post.id)}
               />
             ))}
@@ -1119,15 +1200,15 @@ function InsightsTab() {
         ) : postsLoading ? (
           <LoadingDots />
         ) : (
-          <EmptyState title="No posts found" description="Try adjusting your filters" />
+          <EmptyState title="No mentions found" description="Try adjusting your filters" />
         )}
 
-        {totalPosts > 0 && (
+        {totalMentions > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
             <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
-              Showing {pageStart}-{pageEnd} of {totalPosts} posts
+              Showing {pageStart}-{pageEnd} of {totalMentions} mentions
             </p>
-            {totalPostPages > 1 && (
+            {totalMentionPages > 1 && (
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -1139,7 +1220,7 @@ function InsightsTab() {
                   Prev
                 </button>
                 <div className="flex items-center gap-1">
-                  {postPages.map((page, index) =>
+                  {mentionPages.map((page, index) =>
                     page === "gap" ? (
                       <span key={`gap-${index}`} className="px-1 text-[10px]" style={{ color: "var(--text-faint)" }}>
                         ...
@@ -1164,8 +1245,8 @@ function InsightsTab() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPostPage((page) => Math.min(totalPostPages - 1, page + 1))}
-                  disabled={postPage >= totalPostPages - 1 || postsLoading}
+                  onClick={() => setPostPage((page) => Math.min(totalMentionPages - 1, page + 1))}
+                  disabled={postPage >= totalMentionPages - 1 || postsLoading}
                   className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-40"
                   style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
                 >
@@ -1223,7 +1304,7 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
   const originalUrl = isValidHttpUrl(post.url) ? post.url : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Post Details" size="lg">
+    <Modal open={open} onClose={onClose} title="Mention Details" size="lg">
       <div className="max-h-[70vh] overflow-y-auto -mx-6 px-6">
         {/* Loading skeleton with shimmer */}
         {detailLoading ? (
@@ -1274,6 +1355,7 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{post.author}</p>
+              <Badge variant="neutral" size="sm">{contentTypeLabel(post.contentType)}</Badge>
               <Badge variant={sentimentVariant[post.sentiment]} size="sm">{post.sentiment}</Badge>
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">

@@ -127,6 +127,44 @@ export interface CrisisResponsePolicy {
   };
 }
 
+export type OntologyTargetKind = 'ASPECT' | 'ISSUE' | 'TOPIC';
+export type OntologyMatchMode = 'ANY' | 'ALL' | 'REGEX';
+
+export interface OntologySignalRule {
+  id?: string;
+  label: string;
+  description?: string;
+  target_kind: OntologyTargetKind;
+  target_key: string;
+  match_mode: OntologyMatchMode;
+  phrases: string[];
+  patterns: string[];
+  negative_phrases?: string[];
+  enabled: boolean;
+  weight: number;
+  sample_text?: string;
+}
+
+export interface ProjectOntologyRulesInput {
+  enabled: boolean;
+  rules: OntologySignalRule[];
+}
+
+export interface ProjectOntologyRules extends ProjectOntologyRulesInput {
+  project_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OntologyRuleTestResult {
+  rule_id: string;
+  label: string;
+  target_kind: OntologyTargetKind;
+  target_key: string;
+  matched: boolean;
+  evidence: string[];
+}
+
 // ─── Paginated Response (from Go backend) ────────────────────────────────────
 
 interface PaginatedProjectsResponse {
@@ -190,6 +228,19 @@ export const projectApi = {
   /** Get project-level crisis detection config */
   getCrisisConfig: (id: string): Promise<CrisisConfig> =>
     apiClient.get<CrisisConfig>(API_CONFIG.ENDPOINTS.project.projectCrisisConfig(id)),
+
+  /** Create or update marketing ontology/signal matching rules */
+  upsertOntologyRules: (id: string, data: ProjectOntologyRulesInput): Promise<ProjectOntologyRules> =>
+    apiClient.put<ProjectOntologyRules>(API_CONFIG.ENDPOINTS.project.projectOntologyRules(id), data),
+
+  /** Get marketing ontology/signal matching rules */
+  getOntologyRules: (id: string): Promise<ProjectOntologyRules> =>
+    apiClient.get<ProjectOntologyRules>(API_CONFIG.ENDPOINTS.project.projectOntologyRules(id)),
+
+  /** Test a draft ruleset against sample text before saving */
+  testOntologyRules: (id: string, data: ProjectOntologyRulesInput & { text: string }): Promise<OntologyRuleTestResult[]> =>
+    apiClient.post<{ matches: OntologyRuleTestResult[] }>(API_CONFIG.ENDPOINTS.project.projectOntologyRulesTest(id), data)
+      .then((resp) => resp.matches ?? []),
 
   /** Archive a project */
   archive: (id: string): Promise<Project> =>

@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,14 +49,15 @@ export interface PlatformStatsResponse {
 
 export const platformKeys = {
   all: ['analytics', 'platforms'] as const,
-  campaign: (campaignId: string, sourceKind = 'all') => [...platformKeys.all, campaignId, { sourceKind }] as const,
+  campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
+    [...platformKeys.all, campaignId, analyticsScopeKey(scope)] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchPlatformStats(campaignId: string, sourceKind = 'all'): Promise<PlatformStatsResponse> {
+async function fetchPlatformStats(campaignId: string, scope?: AnalyticsScopeParams | string): Promise<PlatformStatsResponse> {
   const params = new URLSearchParams({ campaignId });
-  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  appendAnalyticsScope(params, scope);
   const res = await fetch(`/api/analytics/platforms?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -70,14 +76,15 @@ async function fetchPlatformStats(campaignId: string, sourceKind = 'all'): Promi
  * - timeSeries: 12-month mentions per platform (for line/bar chart)
  * - months: month labels (YYYY-MM)
  */
-export function usePlatformStats(campaignId: string | undefined, sourceKind = 'all') {
+export function usePlatformStats(campaignId: string | undefined, scope?: AnalyticsScopeParams | string) {
+  const scopeKey = analyticsScopeKey(scope);
   const queryKey = campaignId
-    ? platformKeys.campaign(campaignId, sourceKind)
-    : [...platformKeys.all, '__pending__', { sourceKind }] as const;
+    ? platformKeys.campaign(campaignId, scope)
+    : [...platformKeys.all, '__pending__', scopeKey] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchPlatformStats(campaignId!, sourceKind),
+    queryFn: () => fetchPlatformStats(campaignId!, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,

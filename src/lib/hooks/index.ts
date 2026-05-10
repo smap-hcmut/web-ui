@@ -39,6 +39,8 @@ export type { ProjectStat, ProjectStatsResponse } from './use-project-stats';
 export { useCampaignTargets, datasourceKeys } from './use-datasources';
 
 // ─── Analytics (Direct PG via Next.js API routes) ─────────────────────────────
+export type { AnalyticsScopeParams } from './analytics-scope';
+
 export { useCampaignKPIs, kpiKeys } from './use-campaign-kpis';
 export type { KPIMetric, EngagementBreakdown, KPIsResponse } from './use-campaign-kpis';
 
@@ -61,6 +63,7 @@ export type { HeapNode, HeapNodeMetrics, HeapResponse } from './use-heap-data';
 export {
   useReports,
   useReport,
+  useReportContent,
   useReportProcess,
   useReportPosts,
   usePostComments,

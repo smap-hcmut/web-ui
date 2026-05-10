@@ -21,6 +21,7 @@ import type {
   CrawlerProcess,
   PaginatedResponse,
   ReportComment,
+  ReportContent,
   ReportItem,
   ReportPost,
 } from '@/lib/types';
@@ -34,6 +35,7 @@ export const reportKeys = {
   details: () => [...reportKeys.all, 'detail'] as const,
   detail: (id: string) => [...reportKeys.details(), id] as const,
   process: (id: string) => [...reportKeys.all, 'process', id] as const,
+  content: (id: string) => [...reportKeys.all, 'content', id] as const,
   posts: (id: string, params?: ListPostsParams) =>
     [...reportKeys.all, 'posts', id, params ?? {}] as const,
   comments: (postId: string) => [...reportKeys.all, 'comments', postId] as const,
@@ -56,6 +58,15 @@ export function useReport(reportId: string | null) {
     queryFn: () => reportsApi.get(reportId!),
     enabled: !!reportId,
     staleTime: 15_000,
+  });
+}
+
+export function useReportContent(reportId: string | null, enabled = true) {
+  return useQuery<ReportContent>({
+    queryKey: reportKeys.content(reportId ?? ''),
+    queryFn: () => reportsApi.content(reportId!),
+    enabled: !!reportId && enabled,
+    staleTime: 5 * 60_000,
   });
 }
 

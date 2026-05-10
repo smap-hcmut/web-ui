@@ -88,6 +88,9 @@ export interface PostDetail {
   topComments: PostComment[];
   keywords: string[];
   url: string;
+  contentType?: string;
+  rootId?: string;
+  parentId?: string;
 }
 
 // ─── Stalker (post/profile monitoring) ────────────────────────────────────────
@@ -144,6 +147,14 @@ export interface ReportItem {
   errorMessage?: string;
   source?: 'manual' | 'assistant';
   prompt?: string;
+}
+
+export interface ReportContent {
+  reportId: string;
+  content: string;
+  contentType: string;
+  fileName: string;
+  fileSize: number;
 }
 
 export type CrawlerStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';

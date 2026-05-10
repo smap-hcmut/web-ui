@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,14 +44,15 @@ export interface HeapResponse {
 
 export const heapKeys = {
   all: ['analytics', 'heap'] as const,
-  campaign: (campaignId: string, sourceKind = 'all') => [...heapKeys.all, campaignId, { sourceKind }] as const,
+  campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
+    [...heapKeys.all, campaignId, analyticsScopeKey(scope)] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchHeapData(campaignId: string, sourceKind = 'all'): Promise<HeapResponse> {
+async function fetchHeapData(campaignId: string, scope?: AnalyticsScopeParams | string): Promise<HeapResponse> {
   const params = new URLSearchParams({ campaignId });
-  if (sourceKind !== 'all') params.set('sourceKind', sourceKind);
+  appendAnalyticsScope(params, scope);
   const res = await fetch(`/api/analytics/heap?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -64,14 +70,15 @@ async function fetchHeapData(campaignId: string, sourceKind = 'all'): Promise<He
  * Each node has metrics: mentions, engagement, sentiment, childCount.
  * Returns null tree if no projects exist for the campaign.
  */
-export function useHeapData(campaignId: string | undefined, sourceKind = 'all') {
+export function useHeapData(campaignId: string | undefined, scope?: AnalyticsScopeParams | string) {
+  const scopeKey = analyticsScopeKey(scope);
   const queryKey = campaignId
-    ? heapKeys.campaign(campaignId, sourceKind)
-    : [...heapKeys.all, '__pending__', { sourceKind }] as const;
+    ? heapKeys.campaign(campaignId, scope)
+    : [...heapKeys.all, '__pending__', scopeKey] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchHeapData(campaignId!, sourceKind),
+    queryFn: () => fetchHeapData(campaignId!, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<HeapResponse>(queryKey) : undefined,

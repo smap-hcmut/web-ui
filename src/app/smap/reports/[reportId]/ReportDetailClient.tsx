@@ -16,7 +16,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ReportPostList } from '@/components/reports/ReportPostList';
 import { BulkSelectionToolbar } from '@/components/reports/BulkSelectionToolbar';
 import { GeneratingReportCard } from '@/components/reports/GeneratingReportCard';
-import { useReport, useReportPosts } from '@/lib/hooks';
+import { ChatMarkdown } from '@/components/ChatMarkdown';
+import { useReport, useReportContent, useReportPosts } from '@/lib/hooks';
 import { useNotificationStore } from '@/lib/stores';
 
 interface Props {
@@ -36,6 +37,10 @@ export function ReportDetailClient({ reportId }: Props) {
   const campId = searchParams.get('camp_id');
 
   const { data: report, isLoading } = useReport(reportId);
+  const { data: reportContent, isLoading: contentLoading, isError: contentError } = useReportContent(
+    reportId,
+    report?.status === 'ready',
+  );
   // Knowledge-srv returns the current evidence window from indexed campaign data.
   const { data: postsData, isLoading: postsLoading } = useReportPosts(reportId, {
     page: 1,
@@ -247,6 +252,60 @@ export function ReportDetailClient({ reportId }: Props) {
       {/* Ready: show bulk toolbar + virtualised post list */}
       {report.status === 'ready' && (
         <>
+          <div
+            className="rounded-2xl p-5 mb-4"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Business brief
+                </h2>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Generated artifact from campaign RAG evidence
+                </p>
+              </div>
+              <Badge variant="neutral" size="sm">MD</Badge>
+            </div>
+
+            {contentLoading && (
+              <div className="space-y-2">
+                <Skeleton variant="rect" height={28} />
+                <Skeleton variant="rect" height={120} />
+                <Skeleton variant="rect" height={120} />
+              </div>
+            )}
+
+            {contentError && (
+              <div
+                className="rounded-xl px-4 py-3 text-[12px]"
+                style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}
+              >
+                Could not load the generated report body. The evidence posts below are still available.
+              </div>
+            )}
+
+            {!contentLoading && !contentError && reportContent?.content && (
+              <div
+                className="max-h-[680px] overflow-auto pr-2"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <ChatMarkdown>{reportContent.content}</ChatMarkdown>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-end justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Evidence posts
+              </h2>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Review the indexed evidence behind the brief
+              </p>
+            </div>
+          </div>
+
           <div className="mb-3">
             <BulkSelectionToolbar
               selectedCount={selected.size}
@@ -265,7 +324,7 @@ export function ReportDetailClient({ reportId }: Props) {
               isLoading={postsLoading}
               selectedIds={selected}
               onToggleSelect={toggle}
-              height={Math.max(400, viewportHeight - 280)}
+              height={Math.max(360, Math.min(640, viewportHeight - 360))}
             />
           </div>
         </>
