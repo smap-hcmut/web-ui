@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { useAuthStore } from "@/lib/stores/auth";
 import { useNotificationStore, type NotificationCategory } from "@/lib/stores/notifications";
 
 type NotificationEnvelope = {
@@ -14,9 +15,10 @@ type NotificationEnvelope = {
 type NotificationKind = "info" | "success" | "warning" | "critical";
 
 const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 15_000;
+const RECONNECT_MAX_MS = 120_000;
 
 export function NotificationSocket() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const push = useNotificationStore((state) => state.push);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -25,17 +27,22 @@ export function NotificationSocket() {
 
   useEffect(() => {
     stoppedRef.current = false;
+    if (!isAuthenticated) {
+      return;
+    }
 
     const connect = () => {
       if (stoppedRef.current) {
         return;
       }
 
+      let opened = false;
       const url = buildNotificationWsUrl();
       const socket = new WebSocket(url);
       socketRef.current = socket;
 
       socket.onopen = () => {
+        opened = true;
         reconnectAttemptRef.current = 0;
       };
 
@@ -49,6 +56,10 @@ export function NotificationSocket() {
 
       socket.onclose = () => {
         socketRef.current = null;
+        if (!opened) {
+          reconnectAttemptRef.current = 0;
+          return;
+        }
         scheduleReconnect(connect);
       };
 
@@ -68,11 +79,23 @@ export function NotificationSocket() {
 
       reconnectTimerRef.current = window.setTimeout(() => {
         reconnectTimerRef.current = null;
-        callback();
+        hasBackendSession().then((hasSession) => {
+          if (!stoppedRef.current && hasSession) {
+            callback();
+          }
+        });
       }, delay);
     };
 
-    connect();
+    const start = async () => {
+      const hasSession = await hasBackendSession();
+      if (stoppedRef.current || !hasSession) {
+        return;
+      }
+      connect();
+    };
+
+    start();
 
     return () => {
       stoppedRef.current = true;
@@ -83,9 +106,21 @@ export function NotificationSocket() {
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [push]);
+  }, [isAuthenticated, push]);
 
   return null;
+}
+
+async function hasBackendSession() {
+  try {
+    const res = await fetch("/api/proxy/identity/api/v1/authentication/me", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 function buildNotificationWsUrl() {
@@ -94,15 +129,8 @@ function buildNotificationWsUrl() {
     return configured;
   }
 
-  const endpoint = "/notification/ws";
-  const currentHost = window.location.host;
-  const apiBase =
-    currentHost === "smap.tantai.dev" || currentHost.endsWith(".tantai.dev")
-      ? "https://smap-api.tantai.dev"
-      : `${window.location.protocol}//${currentHost}`;
-
-  const url = new URL(endpoint, apiBase);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const url = new URL("/notification/ws", window.location.origin);
+  url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
 

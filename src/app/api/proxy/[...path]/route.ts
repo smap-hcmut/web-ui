@@ -8,9 +8,10 @@
  *       →   https://smap-api.tantai.dev/project/api/v1/campaigns
  *
  * Cookie handling:
- * - Backend sets cookies with Domain=tantai.dev which browsers won't send
- *   to localhost. The proxy rewrites Set-Cookie headers so they belong to
- *   the frontend's own domain (no Domain attr → defaults to current host).
+ * - On localhost, backend cookies for .tantai.dev would be rejected, so the
+ *   proxy strips Domain/Secure and lets the browser bind them to localhost.
+ * - On production, keep the backend Domain attribute so shared auth cookies
+ *   are also sent to smap-api.tantai.dev websocket endpoints.
  * - The OAuth login endpoint returns a 302 redirect. The proxy follows it
  *   manually (redirect: 'manual') so we can intercept Set-Cookie before
  *   the browser leaves our origin.
@@ -36,23 +37,24 @@ const HOP_BY_HOP = new Set([
 ]);
 
 /**
- * Rewrite a Set-Cookie header so it works on the frontend's domain.
- * - Strip Domain=... (let browser default to current host)
- * - Strip Secure flag when running on localhost (http)
+ * Rewrite a Set-Cookie header so it works in local dev and production.
+ * - Localhost: strip Domain=... (let browser default to current host)
+ * - Production: keep Domain so sibling subdomains receive the auth cookie
+ * - Localhost: strip Secure flag when running on http
  * - Keep everything else (Path, HttpOnly, SameSite, Max-Age, etc.)
  */
 function rewriteSetCookie(raw: string, requestHost: string): string {
   const isLocalhost = requestHost.startsWith('localhost') || requestHost.startsWith('127.0.0.1');
 
   let rewritten = raw
-    // Remove Domain attribute entirely
-    .replace(/;\s*Domain=[^;]*/gi, '')
     // Ensure Path=/ so the cookie is sent on all routes
     .replace(/;\s*Path=[^;]*/gi, '; Path=/');
 
-  // Drop Secure flag on localhost (no HTTPS)
+  // Local dev cannot accept a .tantai.dev cookie over http://localhost.
   if (isLocalhost) {
-    rewritten = rewritten.replace(/;\s*Secure/gi, '');
+    rewritten = rewritten
+      .replace(/;\s*Domain=[^;]*/gi, '')
+      .replace(/;\s*Secure/gi, '');
   }
 
   // Ensure SameSite=Lax for safety

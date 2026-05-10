@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       secure: !isLocalhost,
       sameSite: 'lax',
       path: '/',
+      domain: isLocalhost ? undefined : '.tantai.dev',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
