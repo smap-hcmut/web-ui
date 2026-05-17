@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
 import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard";
 import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
 import { ProjectFlipCard, CreateProjectModal, toProjectCardStatus } from "@/components/cards/ProjectCardsRow";
-import { CrisisConfigEditorModal } from "@/components/crisis/CrisisConfigEditor";
+import { CrisisConfigEditor } from "@/components/crisis/CrisisConfigEditor";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
@@ -32,6 +32,7 @@ import {
   type SourceType,
   type TargetWithSource,
 } from "@/lib/api/datasources";
+import { projectApi, type EntityType, type Project as ApiProject, type UpdateProjectInput } from "@/lib/api/projects";
 import { reportsApi } from "@/lib/api/reports";
 import { datasourceKeys, useCampaignTargets } from "@/lib/hooks/use-datasources";
 import {
@@ -49,6 +50,7 @@ import {
   useUnarchiveProject,
   useDryrunProject,
   useProjectStats,
+  projectKeys,
   useReports,
   useGenerateCompetitor,
   reportKeys,
@@ -719,7 +721,7 @@ function MapTab() {
    ════════════════════════════════════════════ */
 function ProjectsTab() {
   const { activeCampaignId, projectIds, toggleProject } = useScope();
-  const [configModalProject, setConfigModalProject] = useState<import('@/lib/types').Project | null>(null);
+  const [configModalProject, setConfigModalProject] = useState<ApiProject | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [dryrunStartedIds, setDryrunStartedIds] = useState<Set<string>>(new Set());
   const [projectStatusFilter, setProjectStatusFilter] = useState<"all" | "active" | "paused" | "pending" | "archived">("all");
@@ -739,6 +741,11 @@ function ProjectsTab() {
     for (const s of statsData?.stats ?? []) map.set(s.project_id, s);
     return map;
   }, [statsData]);
+  const apiProjectById = useMemo(() => {
+    const map = new Map<string, ApiProject>();
+    for (const project of apiProjects ?? []) map.set(project.id, project);
+    return map;
+  }, [apiProjects]);
 
   const projects = useMemo(
     () =>
@@ -784,7 +791,7 @@ function ProjectsTab() {
       stat={statsMap.get(proj.id)}
       isSelected={projectIds.has(proj.id)}
       onSelect={() => toggleProject(proj.id)}
-      onOpenConfig={() => setConfigModalProject(proj)}
+      onOpenConfig={() => setConfigModalProject(apiProjectById.get(proj.id) ?? null)}
       onPause={() => pauseProject.mutate(proj.id)}
       onResume={() => resumeProject.mutate(proj.id)}
       onActivate={() => activateProject.mutate(proj.id)}
@@ -889,10 +896,9 @@ function ProjectsTab() {
 
       {/* Modals */}
       {configModalProject && (
-        <CrisisConfigEditorModal
-          projectId={configModalProject.id}
-          projectName={configModalProject.name}
-          domainTypeCode={configModalProject.domain_type_code}
+        <ProjectSettingsModal
+          campaignId={activeCampaignId}
+          project={configModalProject}
           onClose={() => setConfigModalProject(null)}
         />
       )}
@@ -907,6 +913,473 @@ function ProjectsTab() {
       )}
     </div>
   );
+}
+
+type ProjectSettingsTab = "profile" | "collection" | "risk";
+
+function ProjectSettingsModal({
+  campaignId,
+  project,
+  onClose,
+}: {
+  campaignId: string;
+  project: ApiProject;
+  onClose: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<ProjectSettingsTab>("profile");
+  const tabs: Array<{ id: ProjectSettingsTab; label: string; icon: ReactNode }> = [
+    { id: "profile", label: "Project info", icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "collection", label: "Data collection", icon: <Search className="h-3.5 w-3.5" /> },
+    { id: "risk", label: "Brand risk", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
+  ];
+
+  return (
+    <Modal open onClose={onClose} title="Project settings" size="xl">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-1">
+          <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{project.name}</p>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Manage project metadata, append-only crawl keywords, and brand risk thresholds.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1 rounded-xl p-1" style={{ background: "var(--bg-hover)" }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all"
+              style={{
+                background: activeTab === tab.id ? "var(--bg-surface-solid)" : "transparent",
+                color: activeTab === tab.id ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: activeTab === tab.id ? "var(--shadow-sm)" : "none",
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "profile" && <ProjectProfileSettings campaignId={campaignId} project={project} />}
+        {activeTab === "collection" && <ProjectKeywordTargetsPanel project={project} />}
+        {activeTab === "risk" && (
+          <CrisisConfigEditor
+            projectId={project.id}
+            projectName={project.name}
+            domainTypeCode={project.domain_type_code}
+            compact
+          />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ProjectProfileSettings({ campaignId, project }: { campaignId: string; project: ApiProject }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState({
+    name: project.name,
+    description: project.description ?? "",
+    brand: project.brand ?? "",
+    entity_type: project.entity_type,
+    entity_name: project.entity_name ?? "",
+    domain_type_code: project.domain_type_code ?? "",
+  });
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft({
+      name: project.name,
+      description: project.description ?? "",
+      brand: project.brand ?? "",
+      entity_type: project.entity_type,
+      entity_name: project.entity_name ?? "",
+      domain_type_code: project.domain_type_code ?? "",
+    });
+    setMessage(null);
+  }, [project]);
+
+  const saveProfile = useMutation({
+    mutationFn: () => {
+      const payload: UpdateProjectInput = {
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+        brand: draft.brand.trim(),
+        entity_type: draft.entity_type,
+        entity_name: draft.entity_name.trim(),
+        domain_type_code: draft.domain_type_code.trim(),
+      };
+      return projectApi.update(project.id, payload);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ApiProject[]>(projectKeys.byCampaign(campaignId), (old) =>
+        old ? old.map((item) => (item.id === updated.id ? updated : item)) : old,
+      );
+      queryClient.setQueryData<ApiProject>(projectKeys.detail(updated.id), updated);
+      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+      setMessage("Project info saved.");
+    },
+  });
+
+  const inputClass = "w-full rounded-xl px-3 py-2 text-[12px] outline-none";
+  const inputStyle = { background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
+  const labelClass = "mb-1 block text-[10px] font-medium";
+
+  return (
+    <section className="rounded-2xl p-4" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>Project profile</h3>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Business identity used by dashboards, report generation, and analysis prompts.
+          </p>
+        </div>
+        <Badge variant={project.status === "ACTIVE" ? "success" : project.status === "ARCHIVED" ? "neutral" : "warning"} size="sm">
+          {project.status}
+        </Badge>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Project name</label>
+          <input value={draft.name} onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Brand</label>
+          <input value={draft.brand} onChange={(e) => setDraft((prev) => ({ ...prev, brand: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Entity type</label>
+          <select
+            value={draft.entity_type}
+            onChange={(e) => setDraft((prev) => ({ ...prev, entity_type: e.target.value as EntityType }))}
+            className={inputClass}
+            style={inputStyle}
+          >
+            <option value="product">Product</option>
+            <option value="campaign">Campaign</option>
+            <option value="service">Service</option>
+            <option value="competitor">Competitor</option>
+            <option value="topic">Topic</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Entity name</label>
+          <input value={draft.entity_name} onChange={(e) => setDraft((prev) => ({ ...prev, entity_name: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Domain type code</label>
+          <input value={draft.domain_type_code} onChange={(e) => setDraft((prev) => ({ ...prev, domain_type_code: e.target.value }))} className={inputClass} style={inputStyle} placeholder="LOGISTICS, HRM, CRM..." />
+        </div>
+        <div className="md:col-span-2">
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Description</label>
+          <textarea value={draft.description} onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))} rows={3} className={`${inputClass} resize-none`} style={inputStyle} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-[11px]" style={{ color: saveProfile.error ? "var(--danger)" : "var(--success)" }}>
+          {saveProfile.error ? getMutationErrorMessage(saveProfile.error) : message}
+        </div>
+        <button
+          type="button"
+          onClick={() => saveProfile.mutate()}
+          disabled={saveProfile.isPending || !draft.name.trim() || !draft.entity_name.trim()}
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+          style={{ background: "var(--accent)" }}
+        >
+          {saveProfile.isPending ? <RotateCw className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+          Save project info
+        </button>
+      </div>
+    </section>
+  );
+}
+
+const projectKeywordTargetsKey = (projectId: string) => [...datasourceKeys.byProject(projectId), "keyword-targets"] as const;
+
+function ProjectKeywordTargetsPanel({ project }: { project: ApiProject }) {
+  const queryClient = useQueryClient();
+  const [platform, setPlatform] = useState<Platform>("facebook");
+  const [label, setLabel] = useState("");
+  const [keywordsText, setKeywordsText] = useState("");
+  const [intervalMinutes, setIntervalMinutes] = useState("30");
+  const [actionTargetId, setActionTargetId] = useState<string | null>(null);
+
+  const targetsQuery = useQuery({
+    queryKey: projectKeywordTargetsKey(project.id),
+    queryFn: async () => {
+      const sources = await datasourceApi.listByProject(project.id);
+      const targetArrays = await Promise.all(sources.map((source) => datasourceApi.listTargets(source.id)));
+      const keywordTargets: TargetWithSource[] = [];
+      sources.forEach((source, index) => {
+        for (const target of targetArrays[index]) {
+          if (target.target_type !== "KEYWORD") continue;
+          keywordTargets.push({
+            ...target,
+            source_type: source.source_type,
+            project_id: source.project_id,
+            datasource_name: source.name,
+            datasource_status: source.status,
+          });
+        }
+      });
+      return { sources, keywordTargets };
+    },
+    staleTime: 30_000,
+  });
+
+  const resetForm = () => {
+    setLabel("");
+    setKeywordsText("");
+    setIntervalMinutes("30");
+  };
+
+  const invalidateCollection = () => {
+    queryClient.invalidateQueries({ queryKey: datasourceKeys.all });
+    queryClient.invalidateQueries({ queryKey: projectKeywordTargetsKey(project.id) });
+    queryClient.invalidateQueries({ queryKey: ["analytics"] });
+  };
+
+  const createKeywordTarget = useMutation({
+    mutationFn: async () => {
+      const values = parseKeywordValues(keywordsText);
+      if (values.length === 0) throw new Error("Add at least one keyword.");
+      const sourceType = collectionPlatformToSourceType(platform);
+      const reusableStatuses = new Set<DataSource["status"]>(["PENDING", "READY", "ACTIVE", "PAUSED"]);
+      const currentSources = await datasourceApi.listByProject(project.id);
+      let source = currentSources.find((item) => item.source_type === sourceType && reusableStatuses.has(item.status));
+      const interval = Math.max(5, Number(intervalMinutes) || 30);
+
+      if (!source) {
+        source = await datasourceApi.create({
+          project_id: project.id,
+          name: `${platformLabel[platform]} Keyword Crawl`,
+          description: `Keyword-based ${platformLabel[platform]} monitoring for ${project.name}`,
+          source_type: sourceType,
+          source_category: "CRAWL",
+          crawl_mode: "NORMAL",
+          crawl_interval_minutes: interval,
+        });
+      }
+
+      const target = await datasourceApi.createKeywordTarget(source.id, {
+        values,
+        label: label.trim() || values.slice(0, 3).join(", "),
+        platform_meta: { source_kind: "keyword_search" },
+        crawl_interval_minutes: interval,
+        priority: 10,
+      });
+
+      await datasourceApi.activateTarget(source.id, target.id);
+      await ensureDatasourceRuntime(source);
+      return target;
+    },
+    onSuccess: () => {
+      resetForm();
+      invalidateCollection();
+    },
+  });
+
+  const toggleTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      if (target.is_active) return datasourceApi.deactivateTarget(target.data_source_id, target.id);
+      const updated = await datasourceApi.activateTarget(target.data_source_id, target.id);
+      await ensureDatasourceRuntime({
+        id: target.data_source_id,
+        status: target.datasource_status ?? "READY",
+        source_type: target.source_type,
+        source_category: "CRAWL",
+        crawl_mode: "NORMAL",
+        name: target.datasource_name,
+        project_id: target.project_id ?? project.id,
+        created_at: "",
+        updated_at: "",
+      });
+      return updated;
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      invalidateCollection();
+    },
+  });
+
+  const flushTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      await datasourceApi.deleteTarget(target.data_source_id, target.id);
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      invalidateCollection();
+    },
+  });
+
+  const keywordTargets = useMemo(
+    () =>
+      [...(targetsQuery.data?.keywordTargets ?? [])].sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+      }),
+    [targetsQuery.data?.keywordTargets],
+  );
+  const parsedKeywords = parseKeywordValues(keywordsText);
+  const isBusy = createKeywordTarget.isPending || toggleTarget.isPending || flushTarget.isPending;
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-2xl p-4" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+        <div className="mb-4">
+          <h3 className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>Keyword crawl targets</h3>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Keywords are append-only. Add a new group to expand monitoring; pause or flush old groups instead of editing them in place.
+          </p>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[150px_1fr_120px]">
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Platform</label>
+            <select value={platform} onChange={(e) => setPlatform(e.target.value as Platform)} className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="youtube">YouTube</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Group label</label>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ahamove app complaints" className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Interval</label>
+            <input type="number" min={5} value={intervalMinutes} onChange={(e) => setIntervalMinutes(e.target.value)} className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+          <div className="lg:col-span-3">
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Keywords</label>
+            <textarea
+              value={keywordsText}
+              onChange={(e) => setKeywordsText(e.target.value)}
+              rows={3}
+              placeholder="đăng ký tài xế, app lỗi, giao hàng chậm"
+              className="w-full resize-none rounded-xl px-3 py-2 text-[12px] outline-none"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {parsedKeywords.slice(0, 8).map((keyword) => (
+                <span key={keyword} className="rounded-md px-2 py-1 text-[10px]" style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}>{keyword}</span>
+              ))}
+              {parsedKeywords.length > 8 && <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>+{parsedKeywords.length - 8} more</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="text-[11px]" style={{ color: createKeywordTarget.error ? "var(--danger)" : "var(--text-faint)" }}>
+            {createKeywordTarget.error ? getMutationErrorMessage(createKeywordTarget.error) : "Create new targets for new monitoring scope. Existing target values stay locked."}
+          </div>
+          <button
+            type="button"
+            onClick={() => createKeywordTarget.mutate()}
+            disabled={isBusy || parsedKeywords.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+            style={{ background: "var(--accent)" }}
+          >
+            {createKeywordTarget.isPending ? <RotateCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add keyword group
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {targetsQuery.isLoading ? (
+          <ListSkeleton count={3} />
+        ) : keywordTargets.length === 0 ? (
+          <EmptyState
+            icon={<Search />}
+            title="No keyword targets yet"
+            description="Add keyword groups to trigger crawler collection for this project."
+          />
+        ) : (
+          keywordTargets.map((target) => {
+            const platformName = sourceTypeToPlatform(target.source_type);
+            const pending = actionTargetId === target.id && (toggleTarget.isPending || flushTarget.isPending);
+            return (
+              <Card key={target.id} className="!p-0 overflow-hidden">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>
+                    <PlatformIcon platform={platformName} size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{target.label || target.values[0]}</p>
+                      <Badge variant={target.is_active ? "success" : "warning"} dot={target.is_active} size="sm">
+                        {target.is_active ? "active" : "paused"}
+                      </Badge>
+                      <Badge variant="neutral" size="sm">{platformLabel[platformName]}</Badge>
+                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>Every {target.crawl_interval_minutes ?? 30}m</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {target.values.slice(0, 10).map((keyword) => (
+                        <span key={keyword} className="rounded-md px-2 py-0.5 text-[10px]" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>{keyword}</span>
+                      ))}
+                      {target.values.length > 10 && <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>+{target.values.length - 10}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => toggleTarget.mutate(target)}
+                      disabled={pending}
+                      className="rounded-lg p-1.5"
+                      style={{ color: "var(--text-muted)", opacity: pending ? 0.5 : 1 }}
+                      title={target.is_active ? "Pause keyword group" : "Resume keyword group"}
+                    >
+                      {target.is_active ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Flush this keyword group and hide its historical data from Insights?")) {
+                          flushTarget.mutate(target);
+                        }
+                      }}
+                      disabled={pending}
+                      className="rounded-lg p-1.5"
+                      style={{ color: "var(--danger)", opacity: pending ? 0.5 : 1 }}
+                      title="Flush keyword group"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function parseKeywordValues(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of value.split(/[,\n;]+/)) {
+    const keyword = part.trim();
+    const key = keyword.toLocaleLowerCase("vi-VN");
+    if (!keyword || seen.has(key)) continue;
+    seen.add(key);
+    out.push(keyword);
+  }
+  return out;
+}
+
+function collectionPlatformToSourceType(platform: Platform): SourceType {
+  if (platform === "facebook") return "FACEBOOK";
+  if (platform === "tiktok") return "TIKTOK";
+  return "YOUTUBE";
 }
 
 /* ════════════════════════════════════════════
@@ -2163,7 +2636,7 @@ function getMutationErrorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
     return String((error as { message?: unknown }).message);
   }
-  return "Could not save focused source";
+  return "Could not save change";
 }
 
 /* ════════════════════════════════════════════

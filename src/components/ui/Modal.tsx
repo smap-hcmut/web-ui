@@ -9,11 +9,11 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   children: React.ReactNode;
 }
 
-const sizeMap = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' };
+const sizeMap = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' };
 
 export function Modal({ open, onClose, title, size = 'md', children }: ModalProps) {
   const [mounted, setMounted] = useState(false);
@@ -43,7 +43,7 @@ export function Modal({ open, onClose, title, size = 'md', children }: ModalProp
       />
       {/* Dialog */}
       <div
-        className={clsx('relative w-full rounded-2xl p-6 animate-[fadeIn_200ms_ease]', sizeMap[size])}
+        className={clsx('relative max-h-[calc(100vh-112px)] w-full overflow-y-auto rounded-2xl p-6 animate-[fadeIn_200ms_ease]', sizeMap[size])}
         style={{
           background: 'var(--bg-surface-solid)',
           border: '1px solid var(--border)',

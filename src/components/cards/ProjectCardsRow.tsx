@@ -207,8 +207,8 @@ export function ProjectFlipCard({
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}
         onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-subtle)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-        title="Edit crisis config"
-        aria-label="Edit crisis config"
+        title="Edit project settings"
+        aria-label="Edit project settings"
       >
         <Settings className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} />
       </button>
