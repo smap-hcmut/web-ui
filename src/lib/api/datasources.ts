@@ -209,6 +209,10 @@ export const datasourceApi = {
   deactivateTarget: (datasourceId: string, targetId: string): Promise<CrawlTarget> =>
     apiClient.post<CrawlTarget>(API_CONFIG.ENDPOINTS.ingest.datasourceDeactivateTarget(datasourceId, targetId)),
 
+  /** Flush a target: disable it and exclude its historical analytics rows */
+  deleteTarget: (datasourceId: string, targetId: string): Promise<void> =>
+    apiClient.delete<void>(API_CONFIG.ENDPOINTS.ingest.datasourceTarget(datasourceId, targetId)),
+
   /** Trigger a dryrun for a datasource (optionally scoped to a specific target) */
   triggerDryrun: (datasourceId: string, data?: TriggerDryrunInput): Promise<DryrunResult> =>
     apiClient.post<DryrunResult>(API_CONFIG.ENDPOINTS.ingest.datasourceTriggerDryrun(datasourceId), data),

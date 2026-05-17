@@ -85,6 +85,7 @@ export const API_CONFIG = {
       datasourceTargetProfiles: (id: string) => `/ingest/api/v1/datasources/${id}/targets/profiles`,
       datasourceActivateTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}/activate`,
       datasourceDeactivateTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}/deactivate`,
+      datasourceTarget: (id: string, targetId: string) => `/ingest/api/v1/datasources/${id}/targets/${targetId}`,
       datasourceTriggerDryrun: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun`,
       datasourceDryrunLatest: (id: string) => `/ingest/api/v1/datasources/${id}/dryrun/latest`,
     },

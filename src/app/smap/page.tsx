@@ -722,6 +722,7 @@ function ProjectsTab() {
   const [configModalProject, setConfigModalProject] = useState<import('@/lib/types').Project | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [dryrunStartedIds, setDryrunStartedIds] = useState<Set<string>>(new Set());
+  const [projectStatusFilter, setProjectStatusFilter] = useState<"all" | "active" | "paused" | "pending" | "archived">("all");
 
   const { data: apiProjects, isLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
   const createProject = useCreateProject(activeCampaignId ?? '');
@@ -752,13 +753,68 @@ function ProjectsTab() {
       })),
     [apiProjects],
   );
+  const statusRank = { active: 0, pending: 1, paused: 2, archived: 3 } as const;
+  const sortedProjects = useMemo(
+    () =>
+      [...projects].sort((a, b) => {
+        const statusDelta = statusRank[a.status ?? "active"] - statusRank[b.status ?? "active"];
+        if (statusDelta !== 0) return statusDelta;
+        return a.name.localeCompare(b.name);
+      }),
+    [projects],
+  );
+  const visibleProjects = useMemo(
+    () =>
+      projectStatusFilter === "all"
+        ? sortedProjects
+        : sortedProjects.filter((project) => (project.status ?? "active") === projectStatusFilter),
+    [projectStatusFilter, sortedProjects],
+  );
+  const activeProjects = visibleProjects.filter((project) => (project.status ?? "active") === "active");
+  const otherProjects = visibleProjects.filter((project) => (project.status ?? "active") !== "active");
+  const projectCounts = useMemo(() => {
+    const counts = { all: projects.length, active: 0, paused: 0, pending: 0, archived: 0 };
+    for (const project of projects) counts[project.status ?? "active"] += 1;
+    return counts;
+  }, [projects]);
+  const renderProjectCard = (proj: (typeof projects)[number]) => (
+    <ProjectFlipCard
+      key={proj.id}
+      project={proj}
+      stat={statsMap.get(proj.id)}
+      isSelected={projectIds.has(proj.id)}
+      onSelect={() => toggleProject(proj.id)}
+      onOpenConfig={() => setConfigModalProject(proj)}
+      onPause={() => pauseProject.mutate(proj.id)}
+      onResume={() => resumeProject.mutate(proj.id)}
+      onActivate={() => activateProject.mutate(proj.id)}
+      onArchive={() => archiveProject.mutate(proj.id)}
+      onUnarchive={() => unarchiveProject.mutate(proj.id)}
+      onDryrun={() => {
+        dryrunProject.mutate(proj.id, {
+          onSuccess: () => {
+            setDryrunStartedIds((prev) => new Set(prev).add(proj.id));
+          },
+        });
+      }}
+      isDryrunStarted={dryrunStartedIds.has(proj.id)}
+      isToggling={
+        (pauseProject.isPending && pauseProject.variables === proj.id) ||
+        (resumeProject.isPending && resumeProject.variables === proj.id) ||
+        (activateProject.isPending && activateProject.variables === proj.id) ||
+        (archiveProject.isPending && archiveProject.variables === proj.id) ||
+        (unarchiveProject.isPending && unarchiveProject.variables === proj.id) ||
+        (dryrunProject.isPending && dryrunProject.variables === proj.id)
+      }
+    />
+  );
 
   if (!activeCampaignId || isLoading) return <ListSkeleton count={6} />;
 
   return (
     <div className="content-reveal">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
             Projects
@@ -767,16 +823,34 @@ function ProjectsTab() {
             {projects.length} project{projects.length !== 1 ? 's' : ''} in this campaign
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors"
-          style={{ background: 'var(--accent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Project
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+            {(["all", "active", "paused", "pending", "archived"] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setProjectStatusFilter(status)}
+                className="px-2.5 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
+                style={{
+                  background: projectStatusFilter === status ? "var(--bg-surface-solid)" : "transparent",
+                  color: projectStatusFilter === status ? "var(--text-primary)" : "var(--text-muted)",
+                  boxShadow: projectStatusFilter === status ? "var(--shadow-sm)" : "none",
+                }}
+              >
+                {status} {projectCounts[status]}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors"
+            style={{ background: 'var(--accent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Project
+          </button>
+        </div>
       </div>
 
       {/* Grid */}
@@ -785,39 +859,31 @@ function ProjectsTab() {
           title="No projects yet"
           description="Create your first project to start tracking mentions and analytics"
         />
+      ) : visibleProjects.length === 0 ? (
+        <EmptyState
+          title="No projects in this status"
+          description="Switch the status filter to view other project groups."
+        />
       ) : (
-        <div className="flex flex-wrap gap-3">
-          {projects.map((proj) => (
-            <ProjectFlipCard
-              key={proj.id}
-              project={proj}
-              stat={statsMap.get(proj.id)}
-              isSelected={projectIds.has(proj.id)}
-              onSelect={() => toggleProject(proj.id)}
-              onOpenConfig={() => setConfigModalProject(proj)}
-              onPause={() => pauseProject.mutate(proj.id)}
-              onResume={() => resumeProject.mutate(proj.id)}
-              onActivate={() => activateProject.mutate(proj.id)}
-              onArchive={() => archiveProject.mutate(proj.id)}
-              onUnarchive={() => unarchiveProject.mutate(proj.id)}
-              onDryrun={() => {
-                dryrunProject.mutate(proj.id, {
-                  onSuccess: () => {
-                    setDryrunStartedIds((prev) => new Set(prev).add(proj.id));
-                  },
-                });
-              }}
-              isDryrunStarted={dryrunStartedIds.has(proj.id)}
-              isToggling={
-                (pauseProject.isPending && pauseProject.variables === proj.id) ||
-                (resumeProject.isPending && resumeProject.variables === proj.id) ||
-                (activateProject.isPending && activateProject.variables === proj.id) ||
-                (archiveProject.isPending && archiveProject.variables === proj.id) ||
-                (unarchiveProject.isPending && unarchiveProject.variables === proj.id) ||
-                (dryrunProject.isPending && dryrunProject.variables === proj.id)
-              }
-            />
-          ))}
+        <div className="space-y-5">
+          {activeProjects.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Active projects</span>
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{activeProjects.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-3">{activeProjects.map(renderProjectCard)}</div>
+            </section>
+          )}
+          {otherProjects.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Paused, pending, archived</span>
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{otherProjects.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-3">{otherProjects.map(renderProjectCard)}</div>
+            </section>
+          )}
         </div>
       )}
 
@@ -1671,6 +1737,18 @@ function StalkerTab() {
     },
   });
 
+  const flushTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      await datasourceApi.deleteTarget(target.data_source_id, target.id);
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    },
+  });
+
   if (projectsLoading || targetsLoading) return <ListSkeleton count={4} />;
 
   return (
@@ -1726,7 +1804,8 @@ function StalkerTab() {
             const identity = platform === "facebook"
               ? String(meta.page_id ?? "")
               : String(meta.username ?? meta.sec_uid ?? "");
-            const isPending = toggleTarget.isPending && actionTargetId === target.id;
+            const isPending =
+              actionTargetId === target.id && (toggleTarget.isPending || flushTarget.isPending);
 
             return (
               <Card key={target.id} className="!p-0 overflow-hidden">
@@ -1779,6 +1858,19 @@ function StalkerTab() {
                       title={target.is_active ? "Pause focused source" : "Resume focused source"}
                     >
                       {target.is_active ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm("Flush this focused source and hide its historical data from Insights?")) {
+                          flushTarget.mutate(target);
+                        }
+                      }}
+                      disabled={isPending}
+                      className="p-1.5 rounded-lg transition-colors"
+                      style={{ color: "var(--danger)", opacity: isPending ? 0.5 : 1 }}
+                      title="Flush focused source"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     <a
                       href={target.values[0]}
