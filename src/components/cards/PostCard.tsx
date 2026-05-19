@@ -10,6 +10,10 @@ interface PostCardProps {
   platform: string;
   sentiment: 'positive' | 'negative' | 'neutral';
   engagement: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  views?: number;
   time: string;
   originalUrl?: string;
   contentType?: string;
@@ -18,9 +22,10 @@ interface PostCardProps {
 }
 
 function formatNum(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toString();
+  const value = Number.isFinite(n) ? Math.max(0, n) : 0;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toString();
 }
 
 const sentimentVariant = { positive: 'success', negative: 'danger', neutral: 'warning' } as const;
@@ -31,6 +36,9 @@ export function PostCard({
   platform,
   sentiment,
   engagement,
+  likes,
+  comments,
+  shares,
   time,
   originalUrl,
   contentType,
@@ -40,6 +48,9 @@ export function PostCard({
   const contentTypeLabel = contentType && contentType !== 'mention'
     ? contentType.charAt(0).toUpperCase() + contentType.slice(1)
     : null;
+  const likeCount = likes ?? engagement;
+  const commentCount = comments ?? 0;
+  const shareCount = shares ?? 0;
 
   return (
     <div
@@ -90,13 +101,13 @@ export function PostCard({
 
       <div className="flex items-center gap-3 md:gap-4 flex-wrap" style={{ color: 'var(--text-muted)' }}>
         <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
-          <Heart className="w-3 h-3 shrink-0" /> {formatNum(engagement)}
+          <Heart className="w-3 h-3 shrink-0" /> {formatNum(likeCount)}
         </span>
         <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
-          <MessageCircle className="w-3 h-3 shrink-0" /> {formatNum(Math.floor(engagement * 0.12))}
+          <MessageCircle className="w-3 h-3 shrink-0" /> {formatNum(commentCount)}
         </span>
         <span className="inline-flex items-center gap-1 text-[11px] tabular-nums whitespace-nowrap">
-          <Share2 className="w-3 h-3 shrink-0" /> {formatNum(Math.floor(engagement * 0.05))}
+          <Share2 className="w-3 h-3 shrink-0" /> {formatNum(shareCount)}
         </span>
         {originalUrl && (
           <a

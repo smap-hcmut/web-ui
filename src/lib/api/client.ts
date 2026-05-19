@@ -13,7 +13,7 @@ import { buildApiUrl } from './config';
 export interface ApiError {
   code: string;
   message: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, unknown> | string;
   status: number;
 }
 
@@ -27,6 +27,41 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
   params?: Record<string, string | number | boolean | undefined>;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function normalizeDetails(value: unknown, traceId: string | undefined): ApiError['details'] {
+  if (isRecord(value)) {
+    return traceId ? { ...value, trace_id: traceId } : value;
+  }
+  if (typeof value === 'string') {
+    return traceId ? { message: value, trace_id: traceId } : value;
+  }
+  if (value !== undefined && value !== null) {
+    return traceId ? { value, trace_id: traceId } : { value };
+  }
+  return traceId ? { trace_id: traceId } : undefined;
+}
+
+function normalizeApiError(body: unknown, response: Response): ApiError {
+  const root = isRecord(body) ? body : {};
+  const nested = isRecord(root.error) ? root.error : undefined;
+  const source = nested ?? root;
+  const traceId = stringValue(root.trace_id);
+
+  return {
+    code: stringValue(source.code) ?? stringValue(root.error_code) ?? 'UNKNOWN_ERROR',
+    message: stringValue(source.message) ?? response.statusText,
+    details: normalizeDetails(source.details, traceId),
+    status: response.status,
+  };
+}
 
 class ApiClient {
   private buildUrl(endpoint: string, params?: Record<string, string | number | boolean | undefined>): string {
@@ -61,12 +96,7 @@ class ApiClient {
 
       if (isJson) {
         const body = await response.json();
-        error = {
-          code: body.code || 'UNKNOWN_ERROR',
-          message: body.message || response.statusText,
-          details: body.details,
-          status: response.status,
-        };
+        error = normalizeApiError(body, response);
       } else {
         error = {
           code: 'UNKNOWN_ERROR',
@@ -79,6 +109,11 @@ class ApiClient {
       if (response.status === 401) {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
+      }
+      if (response.status === 403 || error.code === 'INSUFFICIENT_PERMISSIONS') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('smap:permission-denied', { detail: error }));
         }
       }
 

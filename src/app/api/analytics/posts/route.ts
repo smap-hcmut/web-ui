@@ -36,12 +36,54 @@ export interface PostItem {
   parentId?: string;
 }
 
+type SentimentLabel = PostItem['sentiment'];
+
 function normalizeFilter(value: string | null): string {
   return (value || 'all').trim().toLowerCase();
 }
 
 function normalizeText(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function numericValue(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeSentiment(value: unknown, scoreValue: unknown): SentimentLabel {
+  const label = normalizeText(value);
+  if (label === 'positive' || label === 'pos') return 'positive';
+  if (label === 'negative' || label === 'neg') return 'negative';
+  if (label === 'neutral' || label === 'mixed') return 'neutral';
+
+  const score = Number(scoreValue);
+  if (!Number.isFinite(score)) return 'neutral';
+  if (score > 0.05) return 'positive';
+  if (score < -0.05) return 'negative';
+  return 'neutral';
+}
+
+function normalizePostItem(post: PostItem): PostItem {
+  const raw = post as PostItem & Record<string, unknown>;
+  const likes = numericValue(raw.likes ?? raw.like_count ?? raw.reactions, 0);
+  const comments = numericValue(raw.comments ?? raw.comment_count, 0);
+  const shares = numericValue(raw.shares ?? raw.share_count, 0);
+  const views = numericValue(raw.views ?? raw.view_count, 0);
+  const engagement = numericValue(raw.engagement, likes + comments + shares);
+  const sentimentScore = numericValue(raw.sentimentScore ?? raw.sentiment_score ?? raw.overall_sentiment_score, 0);
+
+  return {
+    ...post,
+    platform: normalizeText(raw.platform || 'unknown'),
+    sentiment: normalizeSentiment(raw.sentiment ?? raw.overall_sentiment, sentimentScore),
+    sentimentScore,
+    engagement,
+    views,
+    likes,
+    comments,
+    shares,
+  };
 }
 
 function sortPosts(list: PostItem[], sort: string): PostItem[] {
@@ -145,7 +187,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (IS_MOCK) {
-      const list = filterPosts(mockPostsAll as PostItem[], platform, sentiment, requestedContentType, sort);
+      const list = filterPosts((mockPostsAll as PostItem[]).map(normalizePostItem), platform, sentiment, requestedContentType, sort);
       const total = list.length;
       const paged = list.slice(offset, offset + limit);
       return NextResponse.json({ posts: paged, total });
@@ -168,9 +210,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(body, { status: upstream.status });
     }
 
-    const upstreamTotal = getPayloadTotal(body, payload.location) ?? payload.posts.length;
+    const normalizedPosts = payload.posts.map(normalizePostItem);
+    const upstreamTotal = getPayloadTotal(body, payload.location) ?? normalizedPosts.length;
     return NextResponse.json(
-      withFilteredPosts(body, payload.posts, upstreamTotal, payload.location),
+      withFilteredPosts(body, normalizedPosts, upstreamTotal, payload.location),
       { status: upstream.status },
     );
   } catch (err) {

@@ -79,6 +79,26 @@ const inputStyle = {
   color: 'var(--text-primary)',
 };
 
+const issueKeywordGroupOptions = [
+  { value: 'Service failure', label: 'Service failure', description: 'Service outage, delivery failure, broken journey', defaultWeight: 10 },
+  { value: 'Payment and COD', label: 'Payment and COD', description: 'COD, refund, overcharge, payment trust', defaultWeight: 8 },
+  { value: 'Trust and safety', label: 'Trust and safety', description: 'Fraud, unsafe behavior, complaint escalation', defaultWeight: 9 },
+  { value: 'Operations and coverage', label: 'Operations and coverage', description: 'Delay, surcharge, coverage gap, driver supply', defaultWeight: 7 },
+  { value: 'Customer support', label: 'Customer support', description: 'Slow support, unresolved ticket, bad experience', defaultWeight: 6 },
+  { value: 'Pricing and fees', label: 'Pricing and fees', description: 'Price increase, hidden fee, expensive service', defaultWeight: 6 },
+  { value: 'Brand reputation', label: 'Brand reputation', description: 'Boycott, bad press, viral negative claim', defaultWeight: 8 },
+  { value: 'Competitor comparison', label: 'Competitor comparison', description: 'Switching intent, cheaper competitor, feature gap', defaultWeight: 5 },
+] as const;
+
+const issueWeightOptions = [
+  { value: 3, label: 'Low signal' },
+  { value: 5, label: 'Monitor' },
+  { value: 7, label: 'High priority' },
+  { value: 8, label: 'Warning' },
+  { value: 9, label: 'Severe' },
+  { value: 10, label: 'Critical' },
+] as const;
+
 export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, compact = false }: Props) {
   const [state, setState] = useState<EditorState>(() => normalizeConfig(buildDefaultCrisisConfig()));
   const [loading, setLoading] = useState(true);
@@ -333,6 +353,16 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
       keywordGroups: prev.keywordGroups.map((group, groupIdx) => (groupIdx === idx ? { ...group, ...patch } : group)),
     }));
   };
+  const addGroup = () => {
+    setState((prev) => {
+      const used = new Set(prev.keywordGroups.map((group) => group.name));
+      const next = issueKeywordGroupOptions.find((option) => !used.has(option.value)) ?? issueKeywordGroupOptions[0];
+      return {
+        ...prev,
+        keywordGroups: [...prev.keywordGroups, { name: next.value, keywordsText: '', weight: next.defaultWeight }],
+      };
+    });
+  };
 
   return (
     <section className="rounded-2xl p-4" style={cardStyle}>
@@ -359,35 +389,69 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
             </select>
           </div>
           {state.keywordGroups.map((group, idx) => (
-            <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[1fr_90px_2fr_auto]" style={{ background: 'var(--bg-surface)' }}>
-              <input
-                value={group.name}
-                onChange={(e) => updateGroup(idx, { name: e.target.value })}
-                placeholder="Group name"
-                className={inputClass}
-                style={inputStyle}
-              />
-              <input
-                type="number"
-                value={group.weight}
-                onChange={(e) => updateGroup(idx, { weight: numeric(e.target.value, 1) })}
-                placeholder="Weight"
-                className={inputClass}
-                style={inputStyle}
-              />
-              <textarea
-                value={group.keywordsText}
-                onChange={(e) => updateGroup(idx, { keywordsText: e.target.value })}
-                placeholder="Comma or newline separated keywords"
-                rows={2}
-                className={textareaClass}
-                style={inputStyle}
-              />
+            <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[220px_150px_2fr_auto]" style={{ background: 'var(--bg-surface)' }}>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Risk theme
+                </span>
+                <select
+                  value={group.name}
+                  onChange={(e) => {
+                    const option = issueKeywordGroupOptions.find((item) => item.value === e.target.value);
+                    updateGroup(idx, { name: e.target.value, weight: option?.defaultWeight ?? group.weight });
+                  }}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  {!issueKeywordGroupOptions.some((option) => option.value === group.name) && (
+                    <option value={group.name}>{group.name || 'Custom theme'}</option>
+                  )}
+                  {issueKeywordGroupOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Priority
+                </span>
+                <select
+                  value={String(group.weight)}
+                  onChange={(e) => updateGroup(idx, { weight: numeric(e.target.value, 5) })}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  {!issueWeightOptions.some((option) => option.value === group.weight) && (
+                    <option value={group.weight}>{group.weight} - Custom</option>
+                  )}
+                  {issueWeightOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value} - {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Matching keywords
+                </span>
+                <textarea
+                  value={group.keywordsText}
+                  onChange={(e) => updateGroup(idx, { keywordsText: e.target.value })}
+                  placeholder="Comma or newline separated keywords"
+                  rows={2}
+                  className={textareaClass}
+                  style={inputStyle}
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => setState((prev) => ({ ...prev, keywordGroups: prev.keywordGroups.filter((_, itemIdx) => itemIdx !== idx) }))}
-                className="rounded-xl px-3"
+                className="rounded-xl px-3 md:mt-5"
                 style={{ color: 'var(--danger)' }}
+                title="Remove keyword group"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -395,12 +459,7 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
           ))}
           <button
             type="button"
-            onClick={() =>
-              setState((prev) => ({
-                ...prev,
-                keywordGroups: [...prev.keywordGroups, { name: 'New risk group', keywordsText: '', weight: 5 }],
-              }))
-            }
+            onClick={addGroup}
             className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
             style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
           >

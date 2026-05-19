@@ -121,6 +121,7 @@ const platformLabel: Record<string, string> = {
 const POSTS_PER_PAGE = 12;
 type AnalyticsSourceScope = "all" | "stalker" | "keyword";
 type MentionContentType = "all" | "post" | "comment" | "reply";
+type MentionSentiment = "positive" | "negative" | "neutral";
 const analyticsSourceScopes: { value: AnalyticsSourceScope; label: string }[] = [
   { value: "all", label: "All sources" },
   { value: "stalker", label: "Stalker" },
@@ -165,6 +166,19 @@ function contentTypeLabel(value: string | undefined): string {
   if (normalized === "comment") return "Comment";
   if (normalized === "reply") return "Reply";
   return "Mention";
+}
+
+function normalizeMentionSentiment(value: unknown, scoreValue?: unknown): MentionSentiment {
+  const label = String(value ?? "").trim().toLowerCase();
+  if (label === "positive" || label === "pos") return "positive";
+  if (label === "negative" || label === "neg") return "negative";
+  if (label === "neutral" || label === "mixed") return "neutral";
+
+  const score = Number(scoreValue);
+  if (!Number.isFinite(score)) return "neutral";
+  if (score > 0.05) return "positive";
+  if (score < -0.05) return "negative";
+  return "neutral";
 }
 
 function isValidHttpUrl(value: string | undefined | null): value is string {
@@ -1519,6 +1533,9 @@ function InsightsTab() {
   const selectedPost = postDetailId
     ? filteredPosts.find((p) => p.id === postDetailId)
     : null;
+  const selectedPostSentiment = selectedPost
+    ? normalizeMentionSentiment(selectedPost.sentiment, selectedPost.sentimentScore)
+    : "neutral";
   const postDetail: PostDetail | null = selectedPost
     ? {
         id: selectedPost.id,
@@ -1526,16 +1543,16 @@ function InsightsTab() {
         author: selectedPost.author,
         content: selectedPost.content,
         time: selectedPost.time,
-        sentiment: selectedPost.sentiment,
+        sentiment: selectedPostSentiment,
         engagement: selectedPost.engagement,
         likes: selectedPost.likes,
         comments: selectedPost.comments,
         shares: selectedPost.shares,
         views: selectedPost.views,
         sentimentBreakdown: {
-          positive: selectedPost.sentiment === "positive" ? 65 : 25,
+          positive: selectedPostSentiment === "positive" ? 65 : 25,
           neutral: 20,
-          negative: selectedPost.sentiment === "negative" ? 55 : 15,
+          negative: selectedPostSentiment === "negative" ? 55 : 15,
         },
         engagementTrend: Array.from({ length: 7 }, (_, i) =>
           Math.round(selectedPost.engagement * (0.6 + (i / 6) * 0.4 + Math.sin(i) * 0.1))
@@ -1727,8 +1744,12 @@ function InsightsTab() {
                 author={post.author}
                 content={post.content}
                 platform={post.platform as Platform}
-                sentiment={post.sentiment}
+                sentiment={normalizeMentionSentiment(post.sentiment, post.sentimentScore)}
                 engagement={post.engagement}
+                likes={post.likes}
+                comments={post.comments}
+                shares={post.shares}
+                views={post.views}
                 time={post.time}
                 originalUrl={isValidHttpUrl(post.url) ? post.url : undefined}
                 contentType={post.contentType}
