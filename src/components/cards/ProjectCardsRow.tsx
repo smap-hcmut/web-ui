@@ -99,12 +99,16 @@ function TriggerBadge({ label, enabled, detail }: { label: string; enabled: bool
 
 /* ─── Config summary for back face ─── */
 function ConfigSummary({ config }: { config: CrisisConfig }) {
-  const firstSentimentRule = config.sentiment_trigger.rules[0];
+  const firstSentimentRule =
+    config.sentiment_trigger.rules.find((rule) => rule.type === 'NEGATIVE_SPIKE') ??
+    config.sentiment_trigger.rules[0];
   const sentimentThreshold =
     firstSentimentRule?.threshold_percent ?? firstSentimentRule?.negative_threshold_percent;
   const sentimentDetail = config.sentiment_trigger.enabled
     ? firstSentimentRule
-      ? sentimentThreshold !== undefined
+      ? firstSentimentRule.type !== 'NEGATIVE_SPIKE'
+        ? 'reserved'
+        : sentimentThreshold !== undefined
         ? `neg>${sentimentThreshold}%`
         : 'ON'
       : 'ON'
@@ -112,20 +116,23 @@ function ConfigSummary({ config }: { config: CrisisConfig }) {
 
   const volumeDetail = config.volume_trigger.enabled
     ? config.volume_trigger.rules[0]
-      ? `+${config.volume_trigger.rules[0].threshold_percent_growth}%/${config.volume_trigger.rules[0].comparison_window_hours}h`
+      ? `+${config.volume_trigger.rules[0].threshold_percent_growth}% active`
       : 'ON'
     : undefined;
 
   const kwDetail = config.keywords_trigger.enabled
-    ? `${config.keywords_trigger.groups.length} group${config.keywords_trigger.groups.length !== 1 ? 's' : ''}, ${config.keywords_trigger.logic}`
+    ? `${config.keywords_trigger.groups.length} group${config.keywords_trigger.groups.length !== 1 ? 's' : ''} reserved`
     : undefined;
 
+  const viralNegativeRule = config.influencer_trigger.rules.find((rule) => rule.type === 'VIRAL_NEGATIVE');
   const influencerDetail = config.influencer_trigger.enabled
-    ? config.influencer_trigger.rules[0]
-      ? config.influencer_trigger.rules[0].min_followers
-        ? `>${(config.influencer_trigger.rules[0].min_followers / 1000).toFixed(0)}k followers`
-        : 'viral rule'
-      : 'ON'
+    ? viralNegativeRule
+      ? viralNegativeRule.min_comments
+        ? `${viralNegativeRule.min_comments}+ comments`
+        : 'viral active'
+      : config.influencer_trigger.rules.length
+        ? 'reserved'
+        : 'ON'
     : undefined;
 
   return (

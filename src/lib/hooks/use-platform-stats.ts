@@ -25,6 +25,9 @@ export interface PlatformStat {
   name: string;
   mentions: number;
   mentionsChange: number;
+  mentionsChangeReliable?: boolean;
+  mentionsCurrentPeriod?: number;
+  mentionsPreviousPeriod?: number;
   engagement: string;
   engagementRaw: number;
   sentiment: number;

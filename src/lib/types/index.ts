@@ -27,6 +27,9 @@ export interface PlatformData {
   name: string;
   mentions: number;
   mentionsChange: number;
+  mentionsChangeReliable?: boolean;
+  mentionsCurrentPeriod?: number;
+  mentionsPreviousPeriod?: number;
   engagement: string;
   engagementChange: number;
   followers: string;

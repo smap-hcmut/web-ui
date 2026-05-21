@@ -122,6 +122,7 @@ const POSTS_PER_PAGE = 12;
 type AnalyticsSourceScope = "all" | "stalker" | "keyword";
 type MentionContentType = "all" | "post" | "comment" | "reply";
 type MentionSentiment = "positive" | "negative" | "neutral";
+type ExportFormat = "csv" | "svg";
 const analyticsSourceScopes: { value: AnalyticsSourceScope; label: string }[] = [
   { value: "all", label: "All sources" },
   { value: "stalker", label: "Stalker" },
@@ -158,6 +159,19 @@ function formatMonthLabel(value: string): string {
   if (!year || !month) return value;
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function filenameFromContentDisposition(value: string | null, fallback: string): string {
+  if (!value) return fallback;
+  const encoded = value.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded.replace(/^"|"$/g, ""));
+    } catch {
+      return encoded.replace(/^"|"$/g, "") || fallback;
+    }
+  }
+  return value.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
 }
 
 function contentTypeLabel(value: string | undefined): string {
@@ -1407,6 +1421,7 @@ function InsightsTab() {
   const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<MentionContentType>("all");
   const [postPage, setPostPage] = useState(0);
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
   const sortBy: "engagement" = "engagement";
   const scopedProjectIds = useMemo(() => Array.from(projectIds), [projectIds]);
   const scopedKeywords = useMemo(() => Array.from(keywordIds), [keywordIds]);
@@ -1445,6 +1460,9 @@ function InsightsTab() {
       name: platformLabel[p.platform] ?? p.platform,
       mentions: p.mentions,
       mentionsChange: p.mentionsChange,
+      mentionsChangeReliable: p.mentionsChangeReliable,
+      mentionsCurrentPeriod: p.mentionsCurrentPeriod,
+      mentionsPreviousPeriod: p.mentionsPreviousPeriod,
       engagement: p.engagement,
       engagementRaw: p.engagementRaw,
       sentiment: p.sentiment,
@@ -1522,6 +1540,56 @@ function InsightsTab() {
   const pageStart = totalMentions > 0 ? postPage * POSTS_PER_PAGE + 1 : 0;
   const pageEnd = Math.min(postPage * POSTS_PER_PAGE + filteredPosts.length, totalMentions);
   const mentionPages = paginationWindow(postPage, totalMentionPages);
+  const exportTopMentions = useCallback(async (format: ExportFormat) => {
+    if (!activeCampaignId || exportingFormat) return;
+    setExportingFormat(format);
+    try {
+      const params = new URLSearchParams({
+        campaignId: activeCampaignId,
+        format,
+        sort: sortBy,
+        sourceKind: sourceScope,
+      });
+      if (platformFilter !== "all") params.set("platform", platformFilter);
+      if (sentimentFilter !== "all") params.set("sentiment", sentimentFilter);
+      if (contentTypeFilter !== "all") params.set("contentType", contentTypeFilter);
+      if (scopedProjectIds.length > 0) params.set("projectIds", scopedProjectIds.join(","));
+      if (scopedKeywords.length > 0) params.set("keywords", scopedKeywords.join(","));
+
+      const response = await fetch(`/api/analytics/posts/export?${params.toString()}`);
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }));
+        throw new Error(String(body.error || `Export failed (${response.status})`));
+      }
+      const blob = await response.blob();
+      const fallback = `top-mentions-${activeCampaignId.slice(0, 8)}.${format}`;
+      const filename = filenameFromContentDisposition(response.headers.get("content-disposition"), fallback);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      console.error("[top-mentions-export]", message);
+      window.alert(message);
+    } finally {
+      setExportingFormat(null);
+    }
+  }, [
+    activeCampaignId,
+    contentTypeFilter,
+    exportingFormat,
+    platformFilter,
+    scopedKeywords,
+    scopedProjectIds,
+    sentimentFilter,
+    sourceScope,
+    sortBy,
+  ]);
 
   useEffect(() => {
     if (totalMentions > 0 && postPage >= totalMentionPages) {
@@ -1588,6 +1656,9 @@ function InsightsTab() {
               platform={p.platform}
               mentions={p.mentions}
               mentionsChange={p.mentionsChange}
+              mentionsChangeReliable={p.mentionsChangeReliable}
+              mentionsCurrentPeriod={p.mentionsCurrentPeriod}
+              mentionsPreviousPeriod={p.mentionsPreviousPeriod}
               engagement={p.engagement}
               sentiment={p.sentiment}
               status={p.status}
@@ -1733,6 +1804,23 @@ function InsightsTab() {
               <ArrowUpDown className="w-3 h-3 shrink-0" />
               Sorted by Engagement
             </div>
+
+            <div className="flex items-center gap-1">
+              {(["svg", "csv"] as const).map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => exportTopMentions(format)}
+                  disabled={!activeCampaignId || totalMentions === 0 || exportingFormat !== null}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}
+                  title={`Export all filtered mentions as ${format.toUpperCase()}`}
+                >
+                  <Download className="w-3 h-3 shrink-0" />
+                  {exportingFormat === format ? "..." : format}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1828,19 +1916,13 @@ function InsightsTab() {
   );
 }
 
-/* ── Post Detail Modal ── */
-const COMMENTS_PER_PAGE = 5;
-
 function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; open: boolean; onClose: () => void }) {
-  const [commentSort, setCommentSort] = useState<"likes" | "time" | "sentiment">("likes");
-  const [commentPage, setCommentPage] = useState(0);
   const [detailLoading, setDetailLoading] = useState(true);
   const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   // Reset page & simulate loading when post changes
   useEffect(() => {
     if (post) {
-      setCommentPage(0);
       setDetailLoading(true);
       setShowAllKeywords(false);
       const t = setTimeout(() => setDetailLoading(false), 800);
@@ -1850,17 +1932,6 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
 
   if (!post) return null;
 
-  const sortedComments = [...post.topComments].sort((a, b) => {
-    if (commentSort === "likes") return b.likes - a.likes;
-    if (commentSort === "sentiment") {
-      const order = { negative: 0, neutral: 1, positive: 2 };
-      return order[a.sentiment] - order[b.sentiment];
-    }
-    return 0; // time = default order
-  });
-
-  const totalPages = Math.ceil(sortedComments.length / COMMENTS_PER_PAGE);
-  const pagedComments = sortedComments.slice(commentPage * COMMENTS_PER_PAGE, (commentPage + 1) * COMMENTS_PER_PAGE);
   const originalUrl = isValidHttpUrl(post.url) ? post.url : null;
 
   return (
@@ -1889,17 +1960,6 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
             <div className="grid grid-cols-2 gap-3" style={{ animation: "skeletonStagger 0.5s ease-out 240ms both" }}>
               <div className="rounded-xl h-32 skeleton-shimmer" />
               <div className="rounded-xl h-32 skeleton-shimmer" />
-            </div>
-            <div className="space-y-2 pt-4" style={{ borderTop: "1px solid var(--border)", animation: "skeletonStagger 0.5s ease-out 320ms both" }}>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex gap-2.5 p-3 rounded-xl skeleton-shimmer">
-                  <div className="w-7 h-7 rounded-full shrink-0" style={{ background: "var(--bg-inset)" }} />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 rounded w-24" style={{ background: "var(--bg-inset)" }} />
-                    <div className="h-3 rounded w-full" style={{ background: "var(--bg-inset)" }} />
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         ) : (
@@ -2035,96 +2095,6 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
           </div>
         </div>
 
-        {/* Comments section */}
-        <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>
-              Comments ({post.topComments.length})
-            </p>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {(["likes", "time", "sentiment"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setCommentSort(s)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
-                  style={{
-                    background: commentSort === s ? "var(--bg-surface-solid)" : "transparent",
-                    color: commentSort === s ? "var(--text-primary)" : "var(--text-muted)",
-                    boxShadow: commentSort === s ? "var(--shadow-sm)" : "none",
-                  }}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {pagedComments.map((c) => (
-              <div
-                key={c.id}
-                className="flex gap-2.5 p-3 rounded-xl"
-                style={{ background: "var(--bg-hover)" }}
-              >
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
-                  style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
-                >
-                  {c.author.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>{c.author}</span>
-                    <Badge variant={sentimentVariant[c.sentiment]} size="sm">{c.sentiment}</Badge>
-                    <span className="text-[9px] ml-auto" style={{ color: "var(--text-faint)" }}>{c.time}</span>
-                  </div>
-                  <p className="text-[12px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>{c.content}</p>
-                  <div className="flex items-center gap-1 mt-1" style={{ color: "var(--text-faint)" }}>
-                    <Heart className="w-3 h-3" />
-                    <span className="text-[10px] tabular-nums">{c.likes}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-              <button
-                onClick={() => setCommentPage((p) => Math.max(0, p - 1))}
-                disabled={commentPage === 0}
-                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-30"
-                style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
-              >
-                ← Prev
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCommentPage(i)}
-                    className="w-6 h-6 rounded-md text-[10px] font-bold transition-all"
-                    style={{
-                      background: commentPage === i ? "var(--accent)" : "var(--bg-hover)",
-                      color: commentPage === i ? "white" : "var(--text-muted)",
-                    }}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCommentPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={commentPage === totalPages - 1}
-                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-30"
-                style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </div>
         </div>
         )}
       </div>

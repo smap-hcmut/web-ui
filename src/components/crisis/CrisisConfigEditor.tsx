@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   BellRing,
   Flame,
+  Info,
   Plus,
   RefreshCw,
   Save,
@@ -28,6 +29,7 @@ type VolumeRule = NonNullable<CrisisConfigInput['volume_trigger']>['rules'][numb
 type SentimentRule = NonNullable<CrisisConfigInput['sentiment_trigger']>['rules'][number];
 type InfluencerRule = NonNullable<CrisisConfigInput['influencer_trigger']>['rules'][number];
 type Status = NonNullable<CrisisConfigInput['status']>;
+type RuntimeWiring = 'active' | 'partial' | 'reserved';
 
 type KeywordGroupDraft = Omit<CrisisKeywordGroupInput, 'keywords'> & {
   keywordsText: string;
@@ -142,7 +144,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
     setMessage(null);
     try {
       await projectApi.upsertCrisisConfig(projectId, buildPayload(state));
-      setMessage({ type: 'success', text: 'Crisis thresholds saved. Future analysis will use this project-level config.' });
+      setMessage({ type: 'success', text: 'Brand risk config saved. Runtime-active rules will affect future analysis; reserved fields remain stored for classification and future scoring.' });
     } catch (err: unknown) {
       const text =
         err && typeof err === 'object' && 'message' in err
@@ -236,6 +238,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
         </div>
       ) : (
         <>
+          <RuntimeMappingPanel />
           <KeywordSection state={state} setState={setState} />
           <VolumeSection state={state} setState={setState} />
           <SentimentSection state={state} setState={setState} />
@@ -324,25 +327,103 @@ export function CrisisConfigEditorModal({
 function SectionHeader({
   icon,
   title,
+  wiring,
+  description,
   enabled,
   onToggle,
 }: {
   icon: ReactNode;
   title: string;
+  wiring: RuntimeWiring;
+  description: string;
   enabled: boolean;
   onToggle: (value: boolean) => void;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-3">
-      {icon}
-      <span className="flex-1 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-        {title}
-      </span>
-      <label className="inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
-        Enabled
-      </label>
+    <div className="mb-3">
+      <div className="flex items-center gap-3">
+        {icon}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {title}
+          </span>
+          <RuntimeBadge wiring={wiring} />
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
+          Enabled
+        </label>
+      </div>
+      <p className="mt-1 pl-7 text-[11px] leading-5" style={{ color: 'var(--text-muted)' }}>
+        {description}
+      </p>
     </div>
+  );
+}
+
+function RuntimeBadge({ wiring }: { wiring: RuntimeWiring }) {
+  const copy = {
+    active: { label: 'Runtime active', bg: 'var(--success-bg)', color: 'var(--success)' },
+    partial: { label: 'Partly active', bg: 'var(--warning-bg)', color: 'var(--warning)' },
+    reserved: { label: 'Reserved', bg: 'var(--bg-surface)', color: 'var(--text-muted)' },
+  }[wiring];
+
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+      style={{ background: copy.bg, color: copy.color, border: '1px solid var(--border)' }}
+    >
+      {copy.label}
+    </span>
+  );
+}
+
+function RuntimeNote({ wiring, children }: { wiring: RuntimeWiring; children: ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: wiring === 'reserved' ? 'var(--text-muted)' : wiring === 'partial' ? 'var(--warning)' : 'var(--success)' }} />
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function RuntimeMappingPanel() {
+  const rows = [
+    ['Issue pressure', 'Conversation Spike: growth %', 'top_issues_report issue_pressure_proxy'],
+    ['Controversy spike', 'Influencer: viral negative comments', 'thread_controversy_report controversy_score_proxy'],
+    ['Sentiment collapse', 'Sentiment: negative spike %', 'SOV entity delta proxy'],
+    ['Actions', 'Response Policy', 'adaptive crawl + user/ops notification'],
+  ];
+
+  return (
+    <section className="rounded-2xl p-4" style={{ ...cardStyle, background: 'var(--bg-surface)' }}>
+      <div className="mb-3 flex items-start gap-2">
+        <Info className="mt-0.5 h-4 w-4" style={{ color: 'var(--accent)' }} />
+        <div>
+          <h3 className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Runtime mapping
+          </h3>
+          <p className="mt-1 text-[11px] leading-5" style={{ color: 'var(--text-muted)' }}>
+            Current crisis detection uses three BI-backed signals. Other fields are saved for issue classification, presets, and future scorer expansion.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {rows.map(([signal, config, source]) => (
+          <div key={signal} className="rounded-xl p-3" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+            <div className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {signal}
+            </div>
+            <div className="mt-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+              Config: {config}
+            </div>
+            <div className="mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Source: {source}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -369,11 +450,16 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
       <SectionHeader
         icon={<BellRing className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
         title="Issue Keywords"
+        wiring="reserved"
+        description="Saved as marketing issue taxonomy. Current CRISIS_ALERT scoring does not directly match these keywords yet."
         enabled={state.keywordEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, keywordEnabled: value }))}
       />
       {state.keywordEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="reserved">
+            Use these groups to keep crisis presets and issue language business-readable. They are not the direct reason a crisis alert fires in the current runtime.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Matching logic
@@ -485,11 +571,16 @@ function VolumeSection({ state, setState }: { state: EditorState; setState: Disp
       <SectionHeader
         icon={<Flame className="h-4 w-4" style={{ color: 'var(--warning)' }} />}
         title="Conversation Spike"
+        wiring="partial"
+        description="Growth % is mapped to the issue_pressure signal. Metric, window, and baseline are stored but not used by the current scorer."
         enabled={state.volumeEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, volumeEnabled: value }))}
       />
       {state.volumeEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active field: Growth %. It tunes thresholds for top issue pressure in the BI report, not raw mention count directly.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Metric
@@ -543,11 +634,16 @@ function SentimentSection({ state, setState }: { state: EditorState; setState: D
       <SectionHeader
         icon={<SlidersHorizontal className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
         title="Negative Sentiment Share"
+        wiring="partial"
+        description="NEGATIVE_SPIKE threshold is active. Aspect-negative rules and sample-size guard are reserved for the next sentiment scorer."
         enabled={state.sentimentEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, sentimentEnabled: value }))}
       />
       {state.sentimentEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active rule: Negative spike %. It tunes the sentiment_collapse proxy from SOV entity deltas.
+          </RuntimeNote>
           <NumberField
             label="Minimum sample size"
             value={state.sentimentMinSampleSize}
@@ -594,11 +690,16 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
       <SectionHeader
         icon={<Users className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
         title="Influencer Amplification"
+        wiring="partial"
+        description="VIRAL_NEGATIVE comment count tunes controversy_spike. HIGH_REACH, followers, shares, sentiment, and AND/OR logic are reserved."
         enabled={state.influencerEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, influencerEnabled: value }))}
       />
       {state.influencerEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active field: Viral negative comments. It changes thresholds for thread controversy score, which is why alerts can show controversy_spike.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Matching logic
@@ -611,8 +712,8 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
           {state.influencerRules.map((rule, idx) => (
             <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[150px_1fr_140px_1fr_1fr_auto]" style={{ background: 'var(--bg-surface)' }}>
               <select value={rule.type} onChange={(e) => updateRule(idx, { type: e.target.value as InfluencerRule['type'] })} className={inputClass} style={inputStyle}>
-                <option value="HIGH_REACH">High reach</option>
                 <option value="VIRAL_NEGATIVE">Viral negative</option>
+                <option value="HIGH_REACH">High reach (reserved)</option>
               </select>
               <NumberField label="Followers" value={rule.min_followers ?? 0} onChange={(value) => updateRule(idx, { min_followers: value })} />
               <select value={rule.required_sentiment ?? 'NEGATIVE'} onChange={(e) => updateRule(idx, { required_sentiment: e.target.value as InfluencerRule['required_sentiment'] })} className={inputClass} style={inputStyle}>
@@ -638,11 +739,17 @@ function ResponsePolicySection({ state, setState }: { state: EditorState; setSta
     <section className="rounded-2xl p-4" style={cardStyle}>
       <div className="mb-3 flex items-center gap-3">
         <RefreshCw className="h-4 w-4" style={{ color: 'var(--accent)' }} />
-        <span className="flex-1 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Response Policy
-        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Response Policy
+          </span>
+          <RuntimeBadge wiring="active" />
+        </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <RuntimeNote wiring="active">
+        Fully wired. Adaptive crawling reacts from the selected level; user alerts and ops escalation use the notification threshold and repeat cooldown.
+      </RuntimeNote>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)' }}>
           <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
             <input
@@ -864,10 +971,10 @@ function defaultSentimentRule(): SentimentRuleDraft {
 
 function defaultInfluencerRule(): InfluencerRule {
   return {
-    type: 'HIGH_REACH',
-    min_followers: 50000,
+    type: 'VIRAL_NEGATIVE',
+    min_followers: 0,
     required_sentiment: 'NEGATIVE',
     min_shares: 0,
-    min_comments: 0,
+    min_comments: 150,
   };
 }
