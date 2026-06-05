@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,13 +44,16 @@ interface SentimentResponse {
 
 const sentimentKeys = {
   all: ['analytics', 'sentiment'] as const,
-  campaign: (campaignId: string) => [...sentimentKeys.all, campaignId] as const,
+  campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
+    [...sentimentKeys.all, campaignId, analyticsScopeKey(scope)] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchSentiment(campaignId: string): Promise<SentimentResponse> {
-  const res = await fetch(`/api/analytics/sentiment?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchSentiment(campaignId: string, scope?: AnalyticsScopeParams | string): Promise<SentimentResponse> {
+  const params = new URLSearchParams({ campaignId });
+  appendAnalyticsScope(params, scope);
+  const res = await fetch(`/api/analytics/sentiment?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch sentiment data (${res.status})`);
@@ -65,12 +73,15 @@ async function fetchSentiment(campaignId: string): Promise<SentimentResponse> {
  * - pulse: overall sentiment score (0-100)
  * - total: total posts analyzed
  */
-export function useSentimentData(campaignId: string | undefined) {
-  const queryKey = campaignId ? sentimentKeys.campaign(campaignId) : [...sentimentKeys.all, '__pending__'] as const;
+export function useSentimentData(campaignId: string | undefined, scope?: AnalyticsScopeParams | string) {
+  const scopeKey = analyticsScopeKey(scope);
+  const queryKey = campaignId
+    ? sentimentKeys.campaign(campaignId, scope)
+    : [...sentimentKeys.all, '__pending__', scopeKey] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchSentiment(campaignId!),
+    queryFn: () => fetchSentiment(campaignId!, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<SentimentResponse>(queryKey) : undefined,

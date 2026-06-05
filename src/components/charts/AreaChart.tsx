@@ -31,7 +31,8 @@ export function AreaChart({ series, xLabels, height = 220, className }: AreaChar
   const padL = 40, padR = 12, padT = 12, padB = xLabels ? 32 : 12;
   const chartW = vw - padL - padR;
   const chartH = height - padT - padB;
-  const stepX = chartW / (pLen - 1);
+  const stepX = pLen > 1 ? chartW / (pLen - 1) : 0;
+  const xLabelStep = xLabels ? Math.max(1, Math.ceil(xLabels.length / 6)) : 1;
 
   const toY = (v: number) => padT + chartH - ((v - min) / range) * chartH;
 
@@ -40,6 +41,10 @@ export function AreaChart({ series, xLabels, height = 220, className }: AreaChar
     const rect = svg.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const svgX = (mx / rect.width) * vw;
+    if (stepX === 0) {
+      setHoverIdx(0);
+      return;
+    }
     const idx = Math.round((svgX - padL) / stepX);
     if (idx >= 0 && idx < pLen) {
       setHoverIdx(idx);
@@ -70,11 +75,15 @@ export function AreaChart({ series, xLabels, height = 220, className }: AreaChar
         })}
 
         {/* X labels */}
-        {xLabels?.map((label, i) => (
-          <text key={i} x={padL + (i / (xLabels.length - 1)) * chartW} y={height - 6} textAnchor="middle" fill="var(--text-muted)" fontSize={11} fontFamily="system-ui">
-            {label}
-          </text>
-        ))}
+        {xLabels?.map((label, i) => {
+          if (i !== 0 && i !== xLabels.length - 1 && i % xLabelStep !== 0) return null;
+          const denom = Math.max(xLabels.length - 1, 1);
+          return (
+            <text key={i} x={padL + (i / denom) * chartW} y={height - 6} textAnchor="middle" fill="var(--text-muted)" fontSize={11} fontFamily="system-ui">
+              {label}
+            </text>
+          );
+        })}
 
         {/* Areas + Lines */}
         {series.map((s, si) => {

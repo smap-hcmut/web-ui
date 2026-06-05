@@ -8,5 +8,6 @@ export {
   useNotificationStore,
   AUTO_DISMISS_MS,
   type Notification,
+  type NotificationCategory,
   type NotificationSeverity,
 } from './notifications';

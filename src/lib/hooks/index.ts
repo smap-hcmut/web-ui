@@ -12,14 +12,28 @@ export {
   useCampaigns,
   useCampaign,
 } from './use-campaigns';
-export { useProjectsByCampaign, useCreateProject } from './use-projects';
-export { useProjectStats } from './use-project-stats';
-export type { ProjectStat } from './use-project-stats';
+export {
+  useProjectsByCampaign,
+  useProjectDomains,
+  useCreateProject,
+  usePauseProject,
+  useResumeProject,
+  useActivateProject,
+  useArchiveProject,
+  useUnarchiveProject,
+  useDryrunProject,
+  projectKeys,
+} from './use-projects';
+export { useProjectStats, projectStatsKeys } from './use-project-stats';
+export type { ProjectStat, ProjectStatsResponse } from './use-project-stats';
 
 // ─── Datasources & Targets (ingest-srv) ───────────────────────────────────────
 
 // ─── Analytics (Direct PG via Next.js API routes) ─────────────────────────────
-export { useCampaignKPIs } from './use-campaign-kpis';
+export type { AnalyticsScopeParams } from './analytics-scope';
+
+export { useCampaignKPIs, kpiKeys } from './use-campaign-kpis';
+export type { KPIMetric, EngagementBreakdown, KPIsResponse } from './use-campaign-kpis';
 
 export { usePlatformStats } from './use-platform-stats';
 
@@ -35,6 +49,7 @@ export { useHeapData } from './use-heap-data';
 export {
   useReports,
   useReport,
+  useReportContent,
   useReportProcess,
   useReportPosts,
   usePostComments,

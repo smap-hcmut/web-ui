@@ -9,15 +9,30 @@ import {
   Target,
   Users,
   Plus,
-  Trash2,
+  Archive,
+  Pause,
+  Play,
+  RotateCcw,
+  Loader2,
   Edit3,
   Save,
+  Trash2,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrisisConfigEditor } from '@/components/crisis/CrisisConfigEditor';
-import { useCampaign, useProjectsByCampaign } from '@/lib/hooks';
+import { OntologyRulesEditor } from '@/components/ontology/OntologyRulesEditor';
+import {
+  useCampaign,
+  useProjectsByCampaign,
+  usePauseProject,
+  useResumeProject,
+  useActivateProject,
+  useArchiveProject,
+  useUnarchiveProject,
+} from '@/lib/hooks';
 import { useCampaignTargets } from '@/lib/hooks/use-datasources';
 import type { SourceType } from '@/lib/api/datasources';
 import type { Project } from '@/lib/api/projects';
@@ -26,6 +41,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: Settings },
   { id: 'projects', label: 'Projects', icon: FolderOpen },
   { id: 'crisis', label: 'Crisis', icon: AlertTriangle },
+  { id: 'ontology', label: 'Signals', icon: BookOpen },
   { id: 'targets', label: 'Targets', icon: Target },
   { id: 'team', label: 'Team', icon: Users },
 ] as const;
@@ -52,6 +68,67 @@ const sourceTypeLabel: Record<SourceType, string> = {
   FACEBOOK: 'Facebook',
   YOUTUBE: 'YouTube',
 };
+
+function projectStatusBadge(status: Project['status']) {
+  switch (status) {
+    case 'ACTIVE':
+      return { label: 'Active', variant: 'success' as const };
+    case 'PAUSED':
+      return { label: 'Paused', variant: 'warning' as const };
+    case 'ARCHIVED':
+      return { label: 'Archived', variant: 'neutral' as const };
+    default:
+      return { label: 'Pending', variant: 'info' as const };
+  }
+}
+
+function LifecycleIconButton({
+  title,
+  icon,
+  tone,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tone: 'success' | 'warning' | 'danger' | 'accent';
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const toneColor = {
+    success: 'var(--success)',
+    warning: 'var(--warning)',
+    danger: 'var(--danger)',
+    accent: 'var(--accent)',
+  }[tone];
+  const hoverBg = tone === 'danger'
+    ? 'var(--danger-bg)'
+    : tone === 'success'
+      ? 'var(--success-subtle, #d1fae5)'
+      : tone === 'warning'
+        ? 'var(--warning-subtle, #fef3c7)'
+        : 'var(--accent-subtle)';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="p-2 rounded-lg transition-colors disabled:cursor-not-allowed"
+      style={{ color: toneColor, opacity: disabled ? 0.45 : 1 }}
+      title={title}
+      aria-label={title}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = hoverBg;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
 
 function CrisisSettingsPanel({ projects }: { projects: Project[] }) {
   const [selectedProjectId, setSelectedProjectId] = useState('');
@@ -118,6 +195,70 @@ function CrisisSettingsPanel({ projects }: { projects: Project[] }) {
   );
 }
 
+function OntologySettingsPanel({ projects }: { projects: Project[] }) {
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
+    }
+    if (selectedProjectId && !projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]?.id ?? '');
+    }
+  }, [projects, selectedProjectId]);
+
+  const selectedProject = projects.find((project) => project.id === selectedProjectId);
+
+  if (projects.length === 0) {
+    return (
+      <EmptyState
+        title="No projects yet"
+        description="Create a project first, then tune the signal dictionary for marketing topics and issues."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Signal Dictionary
+          </h2>
+          <p className="mt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+            Expose safe ontology rules so marketing teams can classify posts into the right topic, issue, or aspect.
+          </p>
+        </div>
+        <div className="w-full sm:w-80">
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            Project
+          </label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className={inputClass}
+            style={inputStyle}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} · {project.entity_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {selectedProject ? (
+        <OntologyRulesEditor
+          key={selectedProject.id}
+          projectId={selectedProject.id}
+          projectName={selectedProject.name}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export default function CampaignSettingsPage() {
   return (
     <Suspense>
@@ -135,6 +276,17 @@ function CampaignSettingsContent() {
   // Fetch campaign + projects from API
   const { data: camp } = useCampaign(campId);
   const { data: projects } = useProjectsByCampaign(campId);
+  const pauseProject = usePauseProject(campId);
+  const resumeProject = useResumeProject(campId);
+  const activateProject = useActivateProject(campId);
+  const archiveProject = useArchiveProject(campId);
+  const unarchiveProject = useUnarchiveProject(campId);
+  const isProjectLifecyclePending = (projectId: string) =>
+    (pauseProject.isPending && pauseProject.variables === projectId) ||
+    (resumeProject.isPending && resumeProject.variables === projectId) ||
+    (activateProject.isPending && activateProject.variables === projectId) ||
+    (archiveProject.isPending && archiveProject.variables === projectId) ||
+    (unarchiveProject.isPending && unarchiveProject.variables === projectId);
 
   // Fetch all targets across all projects in this campaign
   const projectIds = projects?.map((p) => p.id);
@@ -285,44 +437,98 @@ function CampaignSettingsContent() {
               </div>
               {(projects ?? []).length > 0 ? (
                 <div className="space-y-2">
-                {(projects ?? []).map((proj) => (
-                  <div
-                    key={proj.id}
-                    className="flex items-center justify-between p-4 rounded-xl transition-colors"
-                    style={{ background: 'var(--bg-hover)' }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: 'var(--accent-subtle)' }}
-                      >
-                        <FolderOpen className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                {(projects ?? []).map((proj) => {
+                  const status = projectStatusBadge(proj.status);
+                  const pending = isProjectLifecyclePending(proj.id);
+
+                  return (
+                    <div
+                      key={proj.id}
+                      className="flex items-center justify-between gap-4 p-4 rounded-xl transition-colors"
+                      style={{ background: 'var(--bg-hover)' }}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-lg flex shrink-0 items-center justify-center"
+                          style={{ background: 'var(--accent-subtle)' }}
+                        >
+                          <FolderOpen className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                              {proj.name}
+                            </p>
+                            <Badge variant={status.variant} dot size="sm">
+                              {status.label}
+                            </Badge>
+                          </div>
+                          <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                            {proj.entity_type} · {proj.entity_name}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {proj.name}
-                        </p>
-                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                          {proj.entity_type} · {proj.entity_name}
-                        </p>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {pending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" style={{ color: 'var(--accent)' }} />}
+                        {proj.status === 'PENDING' && (
+                          <LifecycleIconButton
+                            title="Activate project"
+                            tone="success"
+                            disabled={pending}
+                            onClick={() => activateProject.mutate(proj.id)}
+                            icon={<Play className="w-3.5 h-3.5" />}
+                          />
+                        )}
+                        {proj.status === 'ACTIVE' && (
+                          <LifecycleIconButton
+                            title="Pause project"
+                            tone="warning"
+                            disabled={pending}
+                            onClick={() => pauseProject.mutate(proj.id)}
+                            icon={<Pause className="w-3.5 h-3.5" />}
+                          />
+                        )}
+                        {proj.status === 'PAUSED' && (
+                          <LifecycleIconButton
+                            title="Resume project"
+                            tone="success"
+                            disabled={pending}
+                            onClick={() => resumeProject.mutate(proj.id)}
+                            icon={<Play className="w-3.5 h-3.5" />}
+                          />
+                        )}
+                        {proj.status !== 'ARCHIVED' ? (
+                          <LifecycleIconButton
+                            title="Archive project"
+                            tone="danger"
+                            disabled={pending}
+                            onClick={() => archiveProject.mutate(proj.id)}
+                            icon={<Archive className="w-3.5 h-3.5" />}
+                          />
+                        ) : (
+                          <LifecycleIconButton
+                            title="Restore archived project"
+                            tone="accent"
+                            disabled={pending}
+                            onClick={() => unarchiveProject.mutate(proj.id)}
+                            icon={<RotateCcw className="w-3.5 h-3.5" />}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="p-2 rounded-lg transition-colors"
+                          style={{ color: 'var(--text-muted)' }}
+                          title="Edit project"
+                          aria-label="Edit project"
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button className="p-2 rounded-lg transition-colors" style={{ color: 'var(--text-muted)' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button className="p-2 rounded-lg transition-colors" style={{ color: 'var(--danger)' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--danger-bg)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 </div>
               ) : (
                 <EmptyState title="No projects yet" description="Create a project to start monitoring keywords and social mentions." />
@@ -333,6 +539,10 @@ function CampaignSettingsContent() {
           {/* ── Crisis ── */}
           {tab === 'crisis' && (
             <CrisisSettingsPanel projects={projects ?? []} />
+          )}
+
+          {tab === 'ontology' && (
+            <OntologySettingsPanel projects={projects ?? []} />
           )}
 
           {/* ── Targets ── */}

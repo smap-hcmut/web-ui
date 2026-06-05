@@ -26,7 +26,10 @@ export function NotificationToasts({ rightOffset }: { rightOffset?: string }) {
   const dismissToast = useNotificationStore((s) => s.dismissToast);
 
   const visible = useMemo(
-    () => notifications.filter((n) => !n.toastDismissed).slice(0, MAX_VISIBLE),
+    () =>
+      notifications
+        .filter((n) => n.showToast && !n.toastDismissed)
+        .slice(0, MAX_VISIBLE),
     [notifications],
   );
 

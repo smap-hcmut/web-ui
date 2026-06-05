@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNav } from "@/components/NavProvider";
 import { ScopeFilter } from "@/components/ScopeFilter";
 import { useScope } from "@/components/ScopeProvider";
 import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard";
 import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
-import { ProjectFlipCard, CreateProjectModal } from "@/components/cards/ProjectCardsRow";
-import { CrisisConfigEditorModal } from "@/components/crisis/CrisisConfigEditor";
+import { ProjectFlipCard, CreateProjectModal, toProjectCardStatus } from "@/components/cards/ProjectCardsRow";
+import { CrisisConfigEditor } from "@/components/crisis/CrisisConfigEditor";
 import HeapSpace from "@/components/heap/HeapSpace";
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
@@ -17,10 +18,6 @@ import { SentimentPulse } from "@/components/animated/SentimentPulse";
 import { LineChart } from "@/components/charts/LineChart";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { DonutChart } from "@/components/charts/DonutChart";
-import { BarChart } from "@/components/charts/BarChart";
-import { WordCloud } from "@/components/charts/WordCloud";
-import { RadarChart } from "@/components/charts/RadarChart";
-import { RankList } from "@/components/ui/RankList";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,7 +25,16 @@ import { Modal } from "@/components/ui/Modal";
 import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
-import type { Platform, StalkerTarget, PostDetail, ReportItem, Project, Keyword } from "@/lib/types";
+import type { Platform, PostDetail, ReportItem } from "@/lib/types";
+import {
+  datasourceApi,
+  type DataSource,
+  type SourceType,
+  type TargetWithSource,
+} from "@/lib/api/datasources";
+import { projectApi, type EntityType, type Project as ApiProject, type UpdateProjectInput } from "@/lib/api/projects";
+import { reportsApi } from "@/lib/api/reports";
+import { datasourceKeys, useCampaignTargets } from "@/lib/hooks/use-datasources";
 import {
   useCampaignKPIs,
   usePlatformStats,
@@ -37,10 +43,22 @@ import {
   useRecentActivity,
   useProjectsByCampaign,
   useCreateProject,
+  usePauseProject,
+  useResumeProject,
+  useActivateProject,
+  useArchiveProject,
+  useUnarchiveProject,
+  useDryrunProject,
   useProjectStats,
+  projectKeys,
   useReports,
   useGenerateCompetitor,
+  reportKeys,
+  type PostItem,
   type ProjectStat,
+  type PlatformStat,
+  type KeywordItem,
+  type SentimentDonutItem,
 } from "@/lib/hooks";
 import { detectPlatform, PLATFORM_LABEL } from "@/lib/utils/platform";
 import {
@@ -85,31 +103,144 @@ const platformColors: Record<string, string> = {
   youtube: "#ff0000",
 };
 
-const chartColors: Record<string, string> = {
-  tiktok: "var(--chart-1)",
-  facebook: "var(--chart-2)",
-  youtube: "var(--chart-3)",
-};
-
 const platformLabel: Record<string, string> = {
   tiktok: "TikTok",
   facebook: "Facebook",
   youtube: "YouTube",
 };
 
-const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const POSTS_PER_PAGE = 12;
+type AnalyticsSourceScope = "all" | "stalker" | "keyword";
+type MentionContentType = "all" | "post" | "comment" | "reply";
+type MentionSentiment = "positive" | "negative" | "neutral";
+type ExportFormat = "csv" | "svg";
+const analyticsSourceScopes: { value: AnalyticsSourceScope; label: string }[] = [
+  { value: "all", label: "All sources" },
+  { value: "stalker", label: "Stalker" },
+  { value: "keyword", label: "Keyword crawl" },
+];
+const mentionContentTypeFilters: { value: MentionContentType; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "post", label: "Posts" },
+  { value: "comment", label: "Comments" },
+  { value: "reply", label: "Replies" },
+];
 
-function parseMetricValue(v: string): number {
-  const cleaned = v.replace(/[,%]/g, "");
-  if (cleaned.endsWith("M")) return parseFloat(cleaned) * 1_000_000;
-  if (cleaned.endsWith("K")) return parseFloat(cleaned) * 1_000;
-  return parseFloat(cleaned);
-}
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toString();
+}
+
+function formatSigned(value: number, suffix = ""): string {
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${rounded}${suffix}`;
+}
+
+function formatChange(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return formatSigned(value / 1000, "K%");
+  return formatSigned(value, "%");
+}
+
+function formatMonthLabel(value: string): string {
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function filenameFromContentDisposition(value: string | null, fallback: string): string {
+  if (!value) return fallback;
+  const encoded = value.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded.replace(/^"|"$/g, ""));
+    } catch {
+      return encoded.replace(/^"|"$/g, "") || fallback;
+    }
+  }
+  return value.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
+}
+
+function contentTypeLabel(value: string | undefined): string {
+  const normalized = (value || "mention").toLowerCase();
+  if (normalized === "post") return "Post";
+  if (normalized === "comment") return "Comment";
+  if (normalized === "reply") return "Reply";
+  return "Mention";
+}
+
+function normalizeMentionSentiment(value: unknown, scoreValue?: unknown): MentionSentiment {
+  const label = String(value ?? "").trim().toLowerCase();
+  if (label === "positive" || label === "pos") return "positive";
+  if (label === "negative" || label === "neg") return "negative";
+  if (label === "neutral" || label === "mixed") return "neutral";
+
+  const score = Number(scoreValue);
+  if (!Number.isFinite(score)) return "neutral";
+  if (score > 0.05) return "positive";
+  if (score < -0.05) return "negative";
+  return "neutral";
+}
+
+function isValidHttpUrl(value: string | undefined | null): value is string {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function paginationWindow(current: number, total: number): Array<number | "gap"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index);
+  }
+
+  const pages = new Set<number>([0, total - 1, current, current - 1, current + 1]);
+  if (current <= 2) {
+    [1, 2, 3].forEach((page) => pages.add(page));
+  }
+  if (current >= total - 3) {
+    [total - 4, total - 3, total - 2].forEach((page) => pages.add(page));
+  }
+
+  const sorted = Array.from(pages)
+    .filter((page) => page >= 0 && page < total)
+    .sort((a, b) => a - b);
+
+  return sorted.reduce<Array<number | "gap">>((acc, page) => {
+    const previous = acc[acc.length - 1];
+    if (typeof previous === "number" && page - previous > 1) {
+      acc.push("gap");
+    }
+    acc.push(page);
+    return acc;
+  }, []);
+}
+
+function netSentimentColor(value: number): string {
+  if (value >= 10) return "var(--success)";
+  if (value <= -10) return "var(--danger)";
+  return "var(--warning)";
+}
+
+function netSentimentLabel(value: number): string {
+  if (value >= 10) return "Positive";
+  if (value <= -10) return "Negative";
+  return "Mixed";
+}
+
+function sentimentShare(donut: SentimentDonutItem[] | undefined, label: string): number {
+  const rows = donut ?? [];
+  const total = rows.reduce((sum, item) => sum + item.value, 0);
+  if (!total) return 0;
+  const value = rows.find((item) => item.label === label)?.value ?? 0;
+  return Math.round((value / total) * 100);
 }
 
 /* ── Shared components ── */
@@ -139,8 +270,250 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
   );
 }
 
+function SourceScopeControl({
+  value,
+  onChange,
+}: {
+  value: AnalyticsSourceScope;
+  onChange: (value: AnalyticsSourceScope) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+        style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+      >
+        <SlidersHorizontal className="w-3 h-3" />
+        Source
+      </div>
+      <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+        {analyticsSourceScopes.map((scope) => (
+          <button
+            key={scope.value}
+            type="button"
+            onClick={() => onChange(scope.value)}
+            className="px-2.5 py-1 rounded-md text-[10px] font-medium transition-all whitespace-nowrap"
+            style={{
+              background: value === scope.value ? "var(--bg-surface-solid)" : "transparent",
+              color: value === scope.value ? "var(--text-primary)" : "var(--text-muted)",
+              boxShadow: value === scope.value ? "var(--shadow-sm)" : "none",
+            }}
+          >
+            {scope.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const sentimentVariant = { positive: "success", negative: "danger", neutral: "warning" } as const;
 const alertSeverityVariant = { info: "info", warning: "warning", critical: "danger" } as const;
+
+function TopicHealthList({ keywords, maxItems = 8 }: { keywords: KeywordItem[]; maxItems?: number }) {
+  const items = keywords.slice(0, maxItems);
+  const maxVolume = Math.max(...items.map((item) => item.volume), 1);
+
+  if (!items.length) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No topic data available</p>;
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {items.map((item, idx) => {
+        const color = netSentimentColor(item.sentiment);
+        const volumePct = Math.max(4, (item.volume / maxVolume) * 100);
+        return (
+          <div key={`${item.text}-${idx}`} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>
+                  {idx + 1}
+                </span>
+                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.text}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] tabular-nums" style={{ color }}>
+                  {formatSigned(item.sentiment)}
+                </span>
+                <span className="text-[10px] tabular-nums" style={{ color: item.change >= 0 ? "var(--success)" : "var(--danger)" }}>
+                  {formatChange(item.change)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 rounded-full overflow-hidden flex-1" style={{ background: "var(--bg-hover)" }}>
+                <div className="h-full rounded-full" style={{ width: `${volumePct}%`, background: color, opacity: 0.85 }} />
+              </div>
+              <span className="w-10 text-right text-[10px] font-semibold tabular-nums" style={{ color: "var(--text-muted)" }}>
+                {fmt(item.volume)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SentimentMixPanel({ donut, pulse }: { donut: SentimentDonutItem[] | undefined; pulse: number }) {
+  const total = (donut ?? []).reduce((sum, item) => sum + item.value, 0);
+  const shares = [
+    { label: "Positive", key: "positive", color: "var(--success)" },
+    { label: "Neutral", key: "neutral", color: "var(--warning)" },
+    { label: "Negative", key: "negative", color: "var(--danger)" },
+  ];
+
+  return (
+    <div className="flex items-center gap-5 min-w-0">
+      <SentimentPulse value={pulse} mode="net" size={84} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
+          Net Sentiment {formatSigned(pulse)}
+        </p>
+        <p className="text-[11px] mb-3" style={{ color: "var(--text-muted)" }}>
+          {fmt(total)} analyzed mentions · {netSentimentLabel(pulse)} conversation mood
+        </p>
+        <div className="space-y-1.5">
+          {shares.map((share) => (
+            <div key={share.key} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: share.color }} />
+              <span className="text-[10px] flex-1" style={{ color: "var(--text-secondary)" }}>{share.label}</span>
+              <span className="text-[10px] font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {sentimentShare(donut, share.key)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShareOfVoicePanel({ stats }: { stats: PlatformStat[] }) {
+  const total = stats.reduce((sum, item) => sum + item.mentions, 0);
+  const segments = stats.map((item) => ({
+    label: item.name,
+    value: item.mentions,
+    color: item.color,
+  }));
+
+  if (!stats.length || !total) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No channel data available</p>;
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 min-w-0">
+      <DonutChart segments={segments} size={150} showLegend={false} />
+      <div className="grid grid-cols-1 gap-2 w-full">
+        {stats.map((item) => {
+          const share = Math.round((item.mentions / total) * 100);
+          return (
+            <div key={item.platform} className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color }} />
+              <span className="text-[11px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="ml-auto text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+                {share}% · {fmt(item.mentions)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ChannelSentimentPanel({ stats }: { stats: PlatformStat[] }) {
+  if (!stats.length) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No sentiment data available</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {stats.map((item) => {
+        const normalized = Math.max(0, Math.min(100, (item.sentiment + 100) / 2));
+        const color = netSentimentColor(item.sentiment);
+        return (
+          <div key={item.platform} className="min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color }}>
+                {formatSigned(item.sentiment)}
+              </span>
+            </div>
+            <div className="relative h-3 rounded-full" style={{ background: "var(--bg-hover)" }}>
+              <div className="absolute top-[-3px] bottom-[-3px] left-1/2 w-px" style={{ background: "var(--border)" }} />
+              <div
+                className="absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full"
+                style={{
+                  left: `calc(${normalized}% - 7px)`,
+                  background: color,
+                  boxShadow: "0 0 0 3px var(--bg-surface-solid)",
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex justify-between text-[9px] uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>
+        <span>Negative</span>
+        <span>Neutral</span>
+        <span>Positive</span>
+      </div>
+    </div>
+  );
+}
+
+function EngagementEfficiencyPanel({ stats }: { stats: PlatformStat[] }) {
+  const rows = stats.map((item) => ({
+    ...item,
+    efficiency: item.mentions > 0 ? item.engagementRaw / item.mentions : 0,
+  }));
+  const totalEfficiency = rows.reduce((sum, item) => sum + item.efficiency, 0);
+
+  if (!rows.length || totalEfficiency <= 0) {
+    return <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No engagement data available</p>;
+  }
+
+  const weightedAverage = rows.reduce((sum, item) => sum + item.engagementRaw, 0) / Math.max(rows.reduce((sum, item) => sum + item.mentions, 0), 1);
+  const segments = rows.map((item) => ({
+    label: item.name,
+    value: item.efficiency,
+    color: item.color,
+  }));
+
+  return (
+    <div className="flex flex-col items-center gap-3 min-w-0">
+      <DonutChart
+        segments={segments}
+        size={150}
+        showLegend={false}
+        centerLabel="Avg / mention"
+        centerValue={weightedAverage.toFixed(1)}
+        formatValue={(value) => value.toFixed(1)}
+        valueLabel="/ mention"
+      />
+      <div className="grid grid-cols-1 gap-2 w-full min-w-0">
+        {rows.map((item) => (
+          <div key={item.platform} className="flex items-start gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ background: item.color }} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+                <span className="text-[10px] font-bold tabular-nums shrink-0" style={{ color: "var(--text-primary)" }}>
+                  {item.efficiency.toFixed(1)} / mention
+                </span>
+              </div>
+              <p className="text-[9px]" style={{ color: "var(--text-faint)" }}>
+                {item.engagement} engagements from {fmt(item.mentions)} mentions
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ── Skeleton loader with shimmer ── */
 function SkeletonBlock({ className = "", delay = 0 }: { className?: string; delay?: number }) {
@@ -167,6 +540,24 @@ function LoadingDots() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+function FetchBadge({ show, label = "Updating", className = "" }: { show: boolean; label?: string; className?: string }) {
+  if (!show) return null;
+  return (
+    <div
+      className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${className}`}
+      style={{
+        background: "var(--bg-surface-solid)",
+        border: "1px solid var(--border)",
+        color: "var(--text-muted)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
+      <RotateCw className="h-3 w-3 animate-spin" />
+      {label}
     </div>
   );
 }
@@ -218,22 +609,29 @@ function ListSkeleton({ count = 4 }: { count?: number }) {
    TAB: MAP
    ════════════════════════════════════════════ */
 function MapTab() {
-  const { activeCampaignId } = useScope();
+  const { activeCampaignId, projectIds, keywordIds } = useScope();
+  const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
+  const scopedProjectIds = useMemo(() => Array.from(projectIds), [projectIds]);
+  const scopedKeywords = useMemo(() => Array.from(keywordIds), [keywordIds]);
+  const analyticsScope = useMemo(
+    () => ({ sourceKind: sourceScope, projectIds: scopedProjectIds, keywords: scopedKeywords }),
+    [sourceScope, scopedProjectIds, scopedKeywords],
+  );
 
   // Real data hooks
-  const { data: kpisData, isLoading: kpisLoading } = useCampaignKPIs(activeCampaignId ?? undefined);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
+  const { data: kpisData, isFetching: kpisFetching } = useCampaignKPIs(activeCampaignId ?? undefined, analyticsScope);
+  const { data: keywordsData, isFetching: keywordsFetching } = useTrendingKeywords(activeCampaignId ?? undefined, 50, analyticsScope);
+  const { data: sentimentData, isFetching: sentimentFetching } = useSentimentData(activeCampaignId ?? undefined, analyticsScope);
 
-  const isLoading = kpisLoading || keywordsLoading || sentimentLoading;
+  const isFetching = kpisFetching || keywordsFetching || sentimentFetching;
   const waitingForCampaign = !activeCampaignId;
 
   // KPI metrics from API (or empty)
   const kpiMetrics = kpisData?.metrics ?? [];
 
   // Trending topics for sidebar
-  const scopedTrending = useMemo(
-    () => (keywordsData?.keywords ?? []).slice(0, 7).map((k) => ({ label: k.text, value: k.volume })),
+  const topConversationDrivers = useMemo(
+    () => (keywordsData?.keywords ?? []).slice(0, 7),
     [keywordsData],
   );
 
@@ -241,10 +639,15 @@ function MapTab() {
   const scopedSentiment = sentimentData?.pulse ?? 0;
   const keywordCount = keywordsData?.keywords?.length ?? 0;
 
-  if (waitingForCampaign || isLoading) return <TabSkeleton rows={2} />;
+  if (waitingForCampaign) return <TabSkeleton rows={2} />;
 
   return (
     <>
+      <div className="relative flex justify-end mb-4">
+        <FetchBadge show={isFetching} className="left-0 right-auto top-1" />
+        <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
+      </div>
+
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpiMetrics.length > 0 ? kpiMetrics.map((m) => (
@@ -312,31 +715,19 @@ function MapTab() {
               boxShadow: "var(--shadow-sm)",
             }}
           >
-            <HeapSpace />
+            <HeapSpace sourceKind={sourceScope} projectIds={scopedProjectIds} keywords={scopedKeywords} />
           </div>
         </div>
 
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <Card className="flex-1">
-            <SectionTitle sub="Top hashtags by volume">Trending Topics</SectionTitle>
-            {scopedTrending.length > 0 ? (
-              <RankList items={scopedTrending} maxItems={7} />
-            ) : (
-              <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No trending topics yet</p>
-            )}
+            <SectionTitle sub="Volume · net sentiment · momentum">Conversation Drivers</SectionTitle>
+            <TopicHealthList keywords={topConversationDrivers} maxItems={7} />
           </Card>
 
-          <Card className="flex items-center justify-center gap-6">
-            <SentimentPulse value={scopedSentiment} size={80} />
-            <div>
-              <p className="text-[13px] font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
-                Overall Sentiment
-              </p>
-              <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                {keywordCount} keywords tracked<br />
-                {sentimentData?.donut?.length ?? 0} sentiment segments
-              </p>
-            </div>
+          <Card>
+            <SectionTitle sub={`${keywordCount} topics tracked`}>Market Mood</SectionTitle>
+            <SentimentMixPanel donut={sentimentData?.donut} pulse={scopedSentiment} />
           </Card>
         </div>
       </div>
@@ -349,11 +740,19 @@ function MapTab() {
    ════════════════════════════════════════════ */
 function ProjectsTab() {
   const { activeCampaignId, projectIds, toggleProject } = useScope();
-  const [configModalProject, setConfigModalProject] = useState<Project | null>(null);
+  const [configModalProject, setConfigModalProject] = useState<ApiProject | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [dryrunStartedIds, setDryrunStartedIds] = useState<Set<string>>(new Set());
+  const [projectStatusFilter, setProjectStatusFilter] = useState<"all" | "active" | "paused" | "pending" | "archived">("all");
 
   const { data: apiProjects, isLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
   const createProject = useCreateProject(activeCampaignId ?? '');
+  const pauseProject = usePauseProject(activeCampaignId ?? '');
+  const resumeProject = useResumeProject(activeCampaignId ?? '');
+  const activateProject = useActivateProject(activeCampaignId ?? '');
+  const archiveProject = useArchiveProject(activeCampaignId ?? '');
+  const unarchiveProject = useUnarchiveProject(activeCampaignId ?? '');
+  const dryrunProject = useDryrunProject();
   const { data: statsData } = useProjectStats(activeCampaignId ?? undefined);
 
   const statsMap = useMemo(() => {
@@ -361,6 +760,11 @@ function ProjectsTab() {
     for (const s of statsData?.stats ?? []) map.set(s.project_id, s);
     return map;
   }, [statsData]);
+  const apiProjectById = useMemo(() => {
+    const map = new Map<string, ApiProject>();
+    for (const project of apiProjects ?? []) map.set(project.id, project);
+    return map;
+  }, [apiProjects]);
 
   const projects = useMemo(
     () =>
@@ -370,10 +774,65 @@ function ProjectsTab() {
         domain_type_code: p.domain_type_code,
         keywords: [] as Keyword[],
         platforms: undefined,
-        status: p.status === 'ACTIVE' ? ('active' as const) : ('paused' as const),
-        crisis_config: undefined,
+        status: toProjectCardStatus(p.status),
+        crisis_config: p.crisis_config,
       })),
     [apiProjects],
+  );
+  const statusRank = { active: 0, pending: 1, paused: 2, archived: 3 } as const;
+  const sortedProjects = useMemo(
+    () =>
+      [...projects].sort((a, b) => {
+        const statusDelta = statusRank[a.status ?? "active"] - statusRank[b.status ?? "active"];
+        if (statusDelta !== 0) return statusDelta;
+        return a.name.localeCompare(b.name);
+      }),
+    [projects],
+  );
+  const visibleProjects = useMemo(
+    () =>
+      projectStatusFilter === "all"
+        ? sortedProjects
+        : sortedProjects.filter((project) => (project.status ?? "active") === projectStatusFilter),
+    [projectStatusFilter, sortedProjects],
+  );
+  const activeProjects = visibleProjects.filter((project) => (project.status ?? "active") === "active");
+  const otherProjects = visibleProjects.filter((project) => (project.status ?? "active") !== "active");
+  const projectCounts = useMemo(() => {
+    const counts = { all: projects.length, active: 0, paused: 0, pending: 0, archived: 0 };
+    for (const project of projects) counts[project.status ?? "active"] += 1;
+    return counts;
+  }, [projects]);
+  const renderProjectCard = (proj: (typeof projects)[number]) => (
+    <ProjectFlipCard
+      key={proj.id}
+      project={proj}
+      stat={statsMap.get(proj.id)}
+      isSelected={projectIds.has(proj.id)}
+      onSelect={() => toggleProject(proj.id)}
+      onOpenConfig={() => setConfigModalProject(apiProjectById.get(proj.id) ?? null)}
+      onPause={() => pauseProject.mutate(proj.id)}
+      onResume={() => resumeProject.mutate(proj.id)}
+      onActivate={() => activateProject.mutate(proj.id)}
+      onArchive={() => archiveProject.mutate(proj.id)}
+      onUnarchive={() => unarchiveProject.mutate(proj.id)}
+      onDryrun={() => {
+        dryrunProject.mutate(proj.id, {
+          onSuccess: () => {
+            setDryrunStartedIds((prev) => new Set(prev).add(proj.id));
+          },
+        });
+      }}
+      isDryrunStarted={dryrunStartedIds.has(proj.id)}
+      isToggling={
+        (pauseProject.isPending && pauseProject.variables === proj.id) ||
+        (resumeProject.isPending && resumeProject.variables === proj.id) ||
+        (activateProject.isPending && activateProject.variables === proj.id) ||
+        (archiveProject.isPending && archiveProject.variables === proj.id) ||
+        (unarchiveProject.isPending && unarchiveProject.variables === proj.id) ||
+        (dryrunProject.isPending && dryrunProject.variables === proj.id)
+      }
+    />
   );
 
   if (!activeCampaignId || isLoading) return <ListSkeleton count={6} />;
@@ -381,7 +840,7 @@ function ProjectsTab() {
   return (
     <div className="content-reveal">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
             Projects
@@ -390,16 +849,34 @@ function ProjectsTab() {
             {projects.length} project{projects.length !== 1 ? 's' : ''} in this campaign
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors"
-          style={{ background: 'var(--accent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Project
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+            {(["all", "active", "paused", "pending", "archived"] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setProjectStatusFilter(status)}
+                className="px-2.5 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
+                style={{
+                  background: projectStatusFilter === status ? "var(--bg-surface-solid)" : "transparent",
+                  color: projectStatusFilter === status ? "var(--text-primary)" : "var(--text-muted)",
+                  boxShadow: projectStatusFilter === status ? "var(--shadow-sm)" : "none",
+                }}
+              >
+                {status} {projectCounts[status]}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white transition-colors"
+            style={{ background: 'var(--accent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Project
+          </button>
+        </div>
       </div>
 
       {/* Grid */}
@@ -408,27 +885,39 @@ function ProjectsTab() {
           title="No projects yet"
           description="Create your first project to start tracking mentions and analytics"
         />
+      ) : visibleProjects.length === 0 ? (
+        <EmptyState
+          title="No projects in this status"
+          description="Switch the status filter to view other project groups."
+        />
       ) : (
-        <div className="flex flex-wrap gap-3">
-          {projects.map((proj) => (
-            <ProjectFlipCard
-              key={proj.id}
-              project={proj}
-              stat={statsMap.get(proj.id)}
-              isSelected={projectIds.has(proj.id)}
-              onSelect={() => toggleProject(proj.id)}
-              onOpenConfig={() => setConfigModalProject(proj)}
-            />
-          ))}
+        <div className="space-y-5">
+          {activeProjects.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Active projects</span>
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{activeProjects.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-3">{activeProjects.map(renderProjectCard)}</div>
+            </section>
+          )}
+          {otherProjects.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>Paused, pending, archived</span>
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{otherProjects.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-3">{otherProjects.map(renderProjectCard)}</div>
+            </section>
+          )}
         </div>
       )}
 
       {/* Modals */}
       {configModalProject && (
-        <CrisisConfigEditorModal
-          projectId={configModalProject.id}
-          projectName={configModalProject.name}
-          domainTypeCode={configModalProject.domain_type_code}
+        <ProjectSettingsModal
+          campaignId={activeCampaignId}
+          project={configModalProject}
           onClose={() => setConfigModalProject(null)}
         />
       )}
@@ -445,29 +934,514 @@ function ProjectsTab() {
   );
 }
 
+type ProjectSettingsTab = "profile" | "collection" | "risk";
+
+function ProjectSettingsModal({
+  campaignId,
+  project,
+  onClose,
+}: {
+  campaignId: string;
+  project: ApiProject;
+  onClose: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<ProjectSettingsTab>("profile");
+  const tabs: Array<{ id: ProjectSettingsTab; label: string; icon: ReactNode }> = [
+    { id: "profile", label: "Project info", icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "collection", label: "Data collection", icon: <Search className="h-3.5 w-3.5" /> },
+    { id: "risk", label: "Brand risk", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
+  ];
+
+  return (
+    <Modal open onClose={onClose} title="Project settings" size="xl">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-1">
+          <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{project.name}</p>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Manage project metadata, append-only crawl keywords, and brand risk thresholds.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1 rounded-xl p-1" style={{ background: "var(--bg-hover)" }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all"
+              style={{
+                background: activeTab === tab.id ? "var(--bg-surface-solid)" : "transparent",
+                color: activeTab === tab.id ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: activeTab === tab.id ? "var(--shadow-sm)" : "none",
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "profile" && <ProjectProfileSettings campaignId={campaignId} project={project} />}
+        {activeTab === "collection" && <ProjectKeywordTargetsPanel project={project} />}
+        {activeTab === "risk" && (
+          <CrisisConfigEditor
+            projectId={project.id}
+            projectName={project.name}
+            domainTypeCode={project.domain_type_code}
+            compact
+          />
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ProjectProfileSettings({ campaignId, project }: { campaignId: string; project: ApiProject }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState({
+    name: project.name,
+    description: project.description ?? "",
+    brand: project.brand ?? "",
+    entity_type: project.entity_type,
+    entity_name: project.entity_name ?? "",
+    domain_type_code: project.domain_type_code ?? "",
+  });
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft({
+      name: project.name,
+      description: project.description ?? "",
+      brand: project.brand ?? "",
+      entity_type: project.entity_type,
+      entity_name: project.entity_name ?? "",
+      domain_type_code: project.domain_type_code ?? "",
+    });
+    setMessage(null);
+  }, [project]);
+
+  const saveProfile = useMutation({
+    mutationFn: () => {
+      const payload: UpdateProjectInput = {
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+        brand: draft.brand.trim(),
+        entity_type: draft.entity_type,
+        entity_name: draft.entity_name.trim(),
+        domain_type_code: draft.domain_type_code.trim(),
+      };
+      return projectApi.update(project.id, payload);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ApiProject[]>(projectKeys.byCampaign(campaignId), (old) =>
+        old ? old.map((item) => (item.id === updated.id ? updated : item)) : old,
+      );
+      queryClient.setQueryData<ApiProject>(projectKeys.detail(updated.id), updated);
+      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+      setMessage("Project info saved.");
+    },
+  });
+
+  const inputClass = "w-full rounded-xl px-3 py-2 text-[12px] outline-none";
+  const inputStyle = { background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
+  const labelClass = "mb-1 block text-[10px] font-medium";
+
+  return (
+    <section className="rounded-2xl p-4" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>Project profile</h3>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Business identity used by dashboards, report generation, and analysis prompts.
+          </p>
+        </div>
+        <Badge variant={project.status === "ACTIVE" ? "success" : project.status === "ARCHIVED" ? "neutral" : "warning"} size="sm">
+          {project.status}
+        </Badge>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Project name</label>
+          <input value={draft.name} onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Brand</label>
+          <input value={draft.brand} onChange={(e) => setDraft((prev) => ({ ...prev, brand: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Entity type</label>
+          <select
+            value={draft.entity_type}
+            onChange={(e) => setDraft((prev) => ({ ...prev, entity_type: e.target.value as EntityType }))}
+            className={inputClass}
+            style={inputStyle}
+          >
+            <option value="product">Product</option>
+            <option value="campaign">Campaign</option>
+            <option value="service">Service</option>
+            <option value="competitor">Competitor</option>
+            <option value="topic">Topic</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Entity name</label>
+          <input value={draft.entity_name} onChange={(e) => setDraft((prev) => ({ ...prev, entity_name: e.target.value }))} className={inputClass} style={inputStyle} />
+        </div>
+        <div>
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Domain type code</label>
+          <input value={draft.domain_type_code} onChange={(e) => setDraft((prev) => ({ ...prev, domain_type_code: e.target.value }))} className={inputClass} style={inputStyle} placeholder="LOGISTICS, HRM, CRM..." />
+        </div>
+        <div className="md:col-span-2">
+          <label className={labelClass} style={{ color: "var(--text-muted)" }}>Description</label>
+          <textarea value={draft.description} onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))} rows={3} className={`${inputClass} resize-none`} style={inputStyle} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-[11px]" style={{ color: saveProfile.error ? "var(--danger)" : "var(--success)" }}>
+          {saveProfile.error ? getMutationErrorMessage(saveProfile.error) : message}
+        </div>
+        <button
+          type="button"
+          onClick={() => saveProfile.mutate()}
+          disabled={saveProfile.isPending || !draft.name.trim() || !draft.entity_name.trim()}
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+          style={{ background: "var(--accent)" }}
+        >
+          {saveProfile.isPending ? <RotateCw className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+          Save project info
+        </button>
+      </div>
+    </section>
+  );
+}
+
+const projectKeywordTargetsKey = (projectId: string) => [...datasourceKeys.byProject(projectId), "keyword-targets"] as const;
+
+function ProjectKeywordTargetsPanel({ project }: { project: ApiProject }) {
+  const queryClient = useQueryClient();
+  const [platform, setPlatform] = useState<Platform>("facebook");
+  const [label, setLabel] = useState("");
+  const [keywordsText, setKeywordsText] = useState("");
+  const [intervalMinutes, setIntervalMinutes] = useState("30");
+  const [actionTargetId, setActionTargetId] = useState<string | null>(null);
+
+  const targetsQuery = useQuery({
+    queryKey: projectKeywordTargetsKey(project.id),
+    queryFn: async () => {
+      const sources = await datasourceApi.listByProject(project.id);
+      const targetArrays = await Promise.all(sources.map((source) => datasourceApi.listTargets(source.id)));
+      const keywordTargets: TargetWithSource[] = [];
+      sources.forEach((source, index) => {
+        for (const target of targetArrays[index]) {
+          if (target.target_type !== "KEYWORD") continue;
+          keywordTargets.push({
+            ...target,
+            source_type: source.source_type,
+            project_id: source.project_id,
+            datasource_name: source.name,
+            datasource_status: source.status,
+          });
+        }
+      });
+      return { sources, keywordTargets };
+    },
+    staleTime: 30_000,
+  });
+
+  const resetForm = () => {
+    setLabel("");
+    setKeywordsText("");
+    setIntervalMinutes("30");
+  };
+
+  const invalidateCollection = () => {
+    queryClient.invalidateQueries({ queryKey: datasourceKeys.all });
+    queryClient.invalidateQueries({ queryKey: projectKeywordTargetsKey(project.id) });
+    queryClient.invalidateQueries({ queryKey: ["analytics"] });
+  };
+
+  const createKeywordTarget = useMutation({
+    mutationFn: async () => {
+      const values = parseKeywordValues(keywordsText);
+      if (values.length === 0) throw new Error("Add at least one keyword.");
+      const sourceType = collectionPlatformToSourceType(platform);
+      const reusableStatuses = new Set<DataSource["status"]>(["PENDING", "READY", "ACTIVE", "PAUSED"]);
+      const currentSources = await datasourceApi.listByProject(project.id);
+      let source = currentSources.find((item) => item.source_type === sourceType && reusableStatuses.has(item.status));
+      const interval = Math.max(5, Number(intervalMinutes) || 30);
+
+      if (!source) {
+        source = await datasourceApi.create({
+          project_id: project.id,
+          name: `${platformLabel[platform]} Keyword Crawl`,
+          description: `Keyword-based ${platformLabel[platform]} monitoring for ${project.name}`,
+          source_type: sourceType,
+          source_category: "CRAWL",
+          crawl_mode: "NORMAL",
+          crawl_interval_minutes: interval,
+        });
+      }
+
+      const target = await datasourceApi.createKeywordTarget(source.id, {
+        values,
+        label: label.trim() || values.slice(0, 3).join(", "),
+        platform_meta: { source_kind: "keyword_search" },
+        crawl_interval_minutes: interval,
+        priority: 10,
+      });
+
+      await datasourceApi.activateTarget(source.id, target.id);
+      await ensureDatasourceRuntime(source);
+      return target;
+    },
+    onSuccess: () => {
+      resetForm();
+      invalidateCollection();
+    },
+  });
+
+  const toggleTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      if (target.is_active) return datasourceApi.deactivateTarget(target.data_source_id, target.id);
+      const updated = await datasourceApi.activateTarget(target.data_source_id, target.id);
+      await ensureDatasourceRuntime({
+        id: target.data_source_id,
+        status: target.datasource_status ?? "READY",
+        source_type: target.source_type,
+        source_category: "CRAWL",
+        crawl_mode: "NORMAL",
+        name: target.datasource_name,
+        project_id: target.project_id ?? project.id,
+        created_at: "",
+        updated_at: "",
+      });
+      return updated;
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      invalidateCollection();
+    },
+  });
+
+  const flushTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      await datasourceApi.deleteTarget(target.data_source_id, target.id);
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      invalidateCollection();
+    },
+  });
+
+  const keywordTargets = useMemo(
+    () =>
+      [...(targetsQuery.data?.keywordTargets ?? [])].sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+      }),
+    [targetsQuery.data?.keywordTargets],
+  );
+  const parsedKeywords = parseKeywordValues(keywordsText);
+  const isBusy = createKeywordTarget.isPending || toggleTarget.isPending || flushTarget.isPending;
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-2xl p-4" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+        <div className="mb-4">
+          <h3 className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>Keyword crawl targets</h3>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            Keywords are append-only. Add a new group to expand monitoring; pause or flush old groups instead of editing them in place.
+          </p>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[150px_1fr_120px]">
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Platform</label>
+            <select value={platform} onChange={(e) => setPlatform(e.target.value as Platform)} className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="youtube">YouTube</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Group label</label>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ahamove app complaints" className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Interval</label>
+            <input type="number" min={5} value={intervalMinutes} onChange={(e) => setIntervalMinutes(e.target.value)} className="w-full rounded-xl px-3 py-2 text-[12px] outline-none" style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }} />
+          </div>
+          <div className="lg:col-span-3">
+            <label className="mb-1 block text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Keywords</label>
+            <textarea
+              value={keywordsText}
+              onChange={(e) => setKeywordsText(e.target.value)}
+              rows={3}
+              placeholder="đăng ký tài xế, app lỗi, giao hàng chậm"
+              className="w-full resize-none rounded-xl px-3 py-2 text-[12px] outline-none"
+              style={{ background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" }}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {parsedKeywords.slice(0, 8).map((keyword) => (
+                <span key={keyword} className="rounded-md px-2 py-1 text-[10px]" style={{ background: "var(--bg-surface)", color: "var(--text-muted)" }}>{keyword}</span>
+              ))}
+              {parsedKeywords.length > 8 && <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>+{parsedKeywords.length - 8} more</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="text-[11px]" style={{ color: createKeywordTarget.error ? "var(--danger)" : "var(--text-faint)" }}>
+            {createKeywordTarget.error ? getMutationErrorMessage(createKeywordTarget.error) : "Create new targets for new monitoring scope. Existing target values stay locked."}
+          </div>
+          <button
+            type="button"
+            onClick={() => createKeywordTarget.mutate()}
+            disabled={isBusy || parsedKeywords.length === 0}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+            style={{ background: "var(--accent)" }}
+          >
+            {createKeywordTarget.isPending ? <RotateCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add keyword group
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {targetsQuery.isLoading ? (
+          <ListSkeleton count={3} />
+        ) : keywordTargets.length === 0 ? (
+          <EmptyState
+            icon={<Search />}
+            title="No keyword targets yet"
+            description="Add keyword groups to trigger crawler collection for this project."
+          />
+        ) : (
+          keywordTargets.map((target) => {
+            const platformName = sourceTypeToPlatform(target.source_type);
+            const pending = actionTargetId === target.id && (toggleTarget.isPending || flushTarget.isPending);
+            return (
+              <Card key={target.id} className="!p-0 overflow-hidden">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>
+                    <PlatformIcon platform={platformName} size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{target.label || target.values[0]}</p>
+                      <Badge variant={target.is_active ? "success" : "warning"} dot={target.is_active} size="sm">
+                        {target.is_active ? "active" : "paused"}
+                      </Badge>
+                      <Badge variant="neutral" size="sm">{platformLabel[platformName]}</Badge>
+                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>Every {target.crawl_interval_minutes ?? 30}m</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {target.values.slice(0, 10).map((keyword) => (
+                        <span key={keyword} className="rounded-md px-2 py-0.5 text-[10px]" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>{keyword}</span>
+                      ))}
+                      {target.values.length > 10 && <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>+{target.values.length - 10}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => toggleTarget.mutate(target)}
+                      disabled={pending}
+                      className="rounded-lg p-1.5"
+                      style={{ color: "var(--text-muted)", opacity: pending ? 0.5 : 1 }}
+                      title={target.is_active ? "Pause keyword group" : "Resume keyword group"}
+                    >
+                      {target.is_active ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Flush this keyword group and hide its historical data from Insights?")) {
+                          flushTarget.mutate(target);
+                        }
+                      }}
+                      disabled={pending}
+                      className="rounded-lg p-1.5"
+                      style={{ color: "var(--danger)", opacity: pending ? 0.5 : 1 }}
+                      title="Flush keyword group"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function parseKeywordValues(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of value.split(/[,\n;]+/)) {
+    const keyword = part.trim();
+    const key = keyword.toLocaleLowerCase("vi-VN");
+    if (!keyword || seen.has(key)) continue;
+    seen.add(key);
+    out.push(keyword);
+  }
+  return out;
+}
+
+function collectionPlatformToSourceType(platform: Platform): SourceType {
+  if (platform === "facebook") return "FACEBOOK";
+  if (platform === "tiktok") return "TIKTOK";
+  return "YOUTUBE";
+}
+
 /* ════════════════════════════════════════════
    TAB: Insights (merged Platforms + Insights)
    ════════════════════════════════════════════ */
 function InsightsTab() {
-  const { activeCampaignId } = useScope();
+  const { activeCampaignId, projectIds, keywordIds } = useScope();
   const [postDetailId, setPostDetailId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"engagement" | "time">("engagement");
+  const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<MentionContentType>("all");
+  const [postPage, setPostPage] = useState(0);
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
+  const sortBy: "engagement" = "engagement";
+  const scopedProjectIds = useMemo(() => Array.from(projectIds), [projectIds]);
+  const scopedKeywords = useMemo(() => Array.from(keywordIds), [keywordIds]);
+  const analyticsScope = useMemo(
+    () => ({ sourceKind: sourceScope, projectIds: scopedProjectIds, keywords: scopedKeywords }),
+    [sourceScope, scopedProjectIds, scopedKeywords],
+  );
 
   // Real data hooks
-  const { data: platformData, isLoading: platformLoading } = usePlatformStats(activeCampaignId ?? undefined);
-  const { data: sentimentData, isLoading: sentimentLoading } = useSentimentData(activeCampaignId ?? undefined);
-  const { data: keywordsData, isLoading: keywordsLoading } = useTrendingKeywords(activeCampaignId ?? undefined);
-  const { data: postsData, isLoading: postsLoading } = useRecentActivity({
+  const { data: platformData, isLoading: platformLoading, isFetching: platformFetching } = usePlatformStats(activeCampaignId ?? undefined, analyticsScope);
+  const { data: sentimentData, isLoading: sentimentLoading, isFetching: sentimentFetching } = useSentimentData(activeCampaignId ?? undefined, analyticsScope);
+  const { data: keywordsData, isLoading: keywordsLoading, isFetching: keywordsFetching } = useTrendingKeywords(activeCampaignId ?? undefined, 50, analyticsScope);
+  const { data: postsData, isLoading: postsLoading, isFetching: postsFetching } = useRecentActivity({
     campaignId: activeCampaignId ?? undefined,
     platform: platformFilter !== "all" ? platformFilter : undefined,
     sentiment: sentimentFilter !== "all" ? sentimentFilter : undefined,
+    sourceKind: sourceScope,
+    projectIds: scopedProjectIds,
+    keywords: scopedKeywords,
+    contentType: contentTypeFilter,
     sort: sortBy,
-    limit: 30,
+    limit: POSTS_PER_PAGE,
+    offset: postPage * POSTS_PER_PAGE,
   });
 
-  const isLoading = platformLoading || sentimentLoading || keywordsLoading;
+  const isLoading =
+    (platformLoading && !platformData) ||
+    (sentimentLoading && !sentimentData) ||
+    (keywordsLoading && !keywordsData);
   const waitingForCampaign = !activeCampaignId;
 
   // Platform overview cards
@@ -477,8 +1451,13 @@ function InsightsTab() {
       name: platformLabel[p.platform] ?? p.platform,
       mentions: p.mentions,
       mentionsChange: p.mentionsChange,
+      mentionsChangeReliable: p.mentionsChangeReliable,
+      mentionsCurrentPeriod: p.mentionsCurrentPeriod,
+      mentionsPreviousPeriod: p.mentionsPreviousPeriod,
       engagement: p.engagement,
+      engagementRaw: p.engagementRaw,
       sentiment: p.sentiment,
+      reach: p.reach,
       status: p.mentions > 0 ? ("active" as const) : ("inactive" as const),
       color: platformColors[p.platform] ?? "var(--text-muted)",
     }));
@@ -495,7 +1474,7 @@ function InsightsTab() {
     [platformData],
   );
   const mentionsLabels = useMemo(
-    () => platformData?.months ?? [],
+    () => (platformData?.months ?? []).map(formatMonthLabel),
     [platformData],
   );
 
@@ -505,54 +1484,10 @@ function InsightsTab() {
     const colorMap: Record<string, string> = { positive: "var(--success)", neutral: "var(--warning)", negative: "var(--danger)" };
     return donut.map((d) => ({
       label: d.label.charAt(0).toUpperCase() + d.label.slice(1),
-      value: d.value || 1,
+      value: d.value,
       color: colorMap[d.label] ?? "var(--text-faint)",
     }));
   }, [sentimentData]);
-
-  // Word cloud from keywords
-  const wordCloudItems = useMemo(
-    () =>
-      (keywordsData?.wordCloud ?? []).map((w) => ({
-        text: w.text,
-        value: w.value,
-        color: w.color,
-        opacity: w.opacity,
-      })),
-    [keywordsData],
-  );
-
-  // Bar chart (per-platform performance)
-  const barCategories = scopedPlatformStats.map((p) => ({
-    label: p.name,
-    values: [
-      { key: "Engagement", value: parseMetricValue(p.engagement) / 1000, color: "var(--chart-1)", formatted: p.engagement },
-      { key: "Sentiment", value: p.sentiment, color: "var(--chart-2)", formatted: `${p.sentiment}%` },
-      { key: "Growth", value: Math.abs(p.mentionsChange) * 3, color: "var(--chart-3)", formatted: `${p.mentionsChange >= 0 ? "+" : ""}${p.mentionsChange}%` },
-    ],
-  }));
-
-  // Radar chart
-  const radarAxes = [
-    { key: "mentions", label: "Mentions" },
-    { key: "engagement", label: "Engagement" },
-    { key: "sentiment", label: "Sentiment" },
-    { key: "growth", label: "Growth" },
-    { key: "reach", label: "Reach" },
-  ];
-
-  const maxMentions = Math.max(...scopedPlatformStats.map((p) => p.mentions), 1);
-  const radarSeries = scopedPlatformStats.map((p) => ({
-    label: p.name,
-    color: chartColors[p.platform] ?? "var(--chart-1)",
-    values: {
-      mentions: Math.min((p.mentions / maxMentions) * 100, 100),
-      engagement: Math.min(parseMetricValue(p.engagement) / (maxMentions * 2) * 100, 100),
-      sentiment: p.sentiment,
-      growth: Math.min(Math.abs(p.mentionsChange) * 3, 100),
-      reach: Math.min((p.mentions / maxMentions) * 80, 100),
-    },
-  }));
 
   // Sentiment timeline per platform
   const sentimentTimeline = useMemo(
@@ -565,34 +1500,101 @@ function InsightsTab() {
     [sentimentData],
   );
   const sentimentTimelineLabels = useMemo(
-    () => sentimentData?.months ?? [],
+    () => (sentimentData?.months ?? []).map(formatMonthLabel),
     [sentimentData],
   );
 
-  // Engagement funnel from KPIs engagement breakdown (approximate from posts data)
-  const totalMentions = scopedPlatformStats.reduce((s, p) => s + p.mentions, 0);
-  const engagementFunnel = [
-    { label: "Views", value: Math.round(totalMentions * 3.35), pct: 100 },
-    { label: "Likes", value: Math.round(totalMentions * 1.9), pct: totalMentions > 0 ? 57 : 0 },
-    { label: "Comments", value: Math.round(totalMentions * 0.23), pct: totalMentions > 0 ? 7 : 0 },
-    { label: "Shares", value: Math.round(totalMentions * 0.095), pct: totalMentions > 0 ? 3 : 0 },
-  ];
-
-  // Trending topics ranked
-  const rankedKeywords = useMemo(() => {
-    const kws = keywordsData?.keywords ?? [];
-    return kws.map((k) => ({ label: k.text, value: k.volume }));
+  const topTopics = useMemo(() => (keywordsData?.keywords ?? []).slice(0, 8), [keywordsData]);
+  const momentumTopics = useMemo(() => {
+    return (keywordsData?.keywords ?? [])
+      .slice()
+      .sort((a, b) => {
+        const aRisk = a.sentiment <= -10 ? 1 : 0;
+        const bRisk = b.sentiment <= -10 ? 1 : 0;
+        if (aRisk !== bRisk) return bRisk - aRisk;
+        return b.change - a.change;
+      })
+      .slice(0, 10);
   }, [keywordsData]);
-  const firstHalf = rankedKeywords.slice(0, Math.ceil(rankedKeywords.length / 2));
-  const secondHalf = rankedKeywords.slice(Math.ceil(rankedKeywords.length / 2));
 
   // Posts
-  const filteredPosts = postsData?.posts ?? [];
+  const filteredPosts = useMemo<PostItem[]>(() => {
+    return [...(postsData?.posts ?? [])];
+  }, [postsData?.posts]);
+
+  useEffect(() => {
+    setPostPage(0);
+  }, [activeCampaignId, platformFilter, sentimentFilter, sourceScope, contentTypeFilter, scopedProjectIds, scopedKeywords]);
+
+  const totalMentions = postsData?.total ?? filteredPosts.length;
+  const totalMentionPages = Math.max(1, Math.ceil(totalMentions / POSTS_PER_PAGE));
+  const pageStart = totalMentions > 0 ? postPage * POSTS_PER_PAGE + 1 : 0;
+  const pageEnd = Math.min(postPage * POSTS_PER_PAGE + filteredPosts.length, totalMentions);
+  const mentionPages = paginationWindow(postPage, totalMentionPages);
+  const exportTopMentions = useCallback(async (format: ExportFormat) => {
+    if (!activeCampaignId || exportingFormat) return;
+    setExportingFormat(format);
+    try {
+      const params = new URLSearchParams({
+        campaignId: activeCampaignId,
+        format,
+        sort: sortBy,
+        sourceKind: sourceScope,
+      });
+      if (platformFilter !== "all") params.set("platform", platformFilter);
+      if (sentimentFilter !== "all") params.set("sentiment", sentimentFilter);
+      if (contentTypeFilter !== "all") params.set("contentType", contentTypeFilter);
+      if (scopedProjectIds.length > 0) params.set("projectIds", scopedProjectIds.join(","));
+      if (scopedKeywords.length > 0) params.set("keywords", scopedKeywords.join(","));
+
+      const response = await fetch(`/api/analytics/posts/export?${params.toString()}`);
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }));
+        throw new Error(String(body.error || `Export failed (${response.status})`));
+      }
+      const blob = await response.blob();
+      const fallback = `top-mentions-${activeCampaignId.slice(0, 8)}.${format}`;
+      const filename = filenameFromContentDisposition(response.headers.get("content-disposition"), fallback);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      console.error("[top-mentions-export]", message);
+      window.alert(message);
+    } finally {
+      setExportingFormat(null);
+    }
+  }, [
+    activeCampaignId,
+    contentTypeFilter,
+    exportingFormat,
+    platformFilter,
+    scopedKeywords,
+    scopedProjectIds,
+    sentimentFilter,
+    sourceScope,
+    sortBy,
+  ]);
+
+  useEffect(() => {
+    if (totalMentions > 0 && postPage >= totalMentionPages) {
+      setPostPage(totalMentionPages - 1);
+    }
+  }, [postPage, totalMentionPages, totalMentions]);
 
   // Post detail — build from PostItem instead of generatePostDetail
   const selectedPost = postDetailId
     ? filteredPosts.find((p) => p.id === postDetailId)
     : null;
+  const selectedPostSentiment = selectedPost
+    ? normalizeMentionSentiment(selectedPost.sentiment, selectedPost.sentimentScore)
+    : "neutral";
   const postDetail: PostDetail | null = selectedPost
     ? {
         id: selectedPost.id,
@@ -600,16 +1602,16 @@ function InsightsTab() {
         author: selectedPost.author,
         content: selectedPost.content,
         time: selectedPost.time,
-        sentiment: selectedPost.sentiment,
+        sentiment: selectedPostSentiment,
         engagement: selectedPost.engagement,
         likes: selectedPost.likes,
         comments: selectedPost.comments,
         shares: selectedPost.shares,
         views: selectedPost.views,
         sentimentBreakdown: {
-          positive: selectedPost.sentiment === "positive" ? 65 : 25,
+          positive: selectedPostSentiment === "positive" ? 65 : 25,
           neutral: 20,
-          negative: selectedPost.sentiment === "negative" ? 55 : 15,
+          negative: selectedPostSentiment === "negative" ? 55 : 15,
         },
         engagementTrend: Array.from({ length: 7 }, (_, i) =>
           Math.round(selectedPost.engagement * (0.6 + (i / 6) * 0.4 + Math.sin(i) * 0.1))
@@ -617,122 +1619,123 @@ function InsightsTab() {
         topComments: [],
         keywords: selectedPost.keywords ?? [],
         url: selectedPost.url ?? "#",
+        contentType: selectedPost.contentType,
+        rootId: selectedPost.rootId,
+        parentId: selectedPost.parentId,
       }
     : null;
 
-  if (waitingForCampaign || isLoading) {
+  if (waitingForCampaign) {
     return <TabSkeleton rows={3} />;
   }
 
   return (
     <div className="content-reveal">
-      {/* Row 1: Platform overview cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        {scopedPlatformStats.map((p) => (
-          <PlatformOverviewCard
-            key={p.platform}
-            name={p.name}
-            platform={p.platform}
-            mentions={p.mentions}
-            mentionsChange={p.mentionsChange}
-            engagement={p.engagement}
-            sentiment={p.sentiment}
-            status={p.status}
-            color={p.color}
-          />
-        ))}
+      <div className="relative flex justify-end mb-4">
+        <FetchBadge show={platformFetching || sentimentFetching || keywordsFetching || postsFetching || isLoading} className="left-0 right-auto top-1" />
+        <SourceScopeControl value={sourceScope} onChange={setSourceScope} />
       </div>
 
-      {/* Row 2: Mentions trend (compact) + Sentiment donut + Radar */}
+      {/* Row 1: Platform overview cards */}
+      <div className="relative mb-4">
+        <FetchBadge show={platformFetching} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {scopedPlatformStats.map((p) => (
+            <PlatformOverviewCard
+              key={p.platform}
+              name={p.name}
+              platform={p.platform}
+              mentions={p.mentions}
+              mentionsChange={p.mentionsChange}
+              mentionsChangeReliable={p.mentionsChangeReliable}
+              mentionsCurrentPeriod={p.mentionsCurrentPeriod}
+              mentionsPreviousPeriod={p.mentionsPreviousPeriod}
+              engagement={p.engagement}
+              sentiment={p.sentiment}
+              status={p.status}
+              color={p.color}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Row 2: Mentions trend + sentiment split + channel sentiment */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-5">
-          <SectionTitle sub="12-month trend">Mentions Over Time</SectionTitle>
+        <Card className="relative col-span-12 lg:col-span-5">
+          <FetchBadge show={platformFetching} />
+          <SectionTitle sub="Monthly volume by channel">Mentions Over Time</SectionTitle>
           <AreaChart series={mentionsSeries} xLabels={mentionsLabels.length > 0 ? mentionsLabels : months} height={180} />
         </Card>
 
-        <Card className="col-span-6 lg:col-span-3 flex flex-col">
-          <SectionTitle sub="Keyword distribution">Sentiment</SectionTitle>
+        <Card className="relative col-span-6 lg:col-span-3 flex flex-col">
+          <FetchBadge show={sentimentFetching} />
+          <SectionTitle sub="Share of analyzed mentions">Mood Split</SectionTitle>
           <div className="flex-1 flex items-center justify-center">
             <DonutChart segments={sentimentSegments} size={130} />
           </div>
         </Card>
 
-        <Card className="col-span-6 lg:col-span-4 flex flex-col items-center">
-          <SectionTitle sub="Multi-dimensional">Platform Radar</SectionTitle>
-          <RadarChart axes={radarAxes} series={radarSeries} size={180} showLegend={false} />
+        <Card className="relative col-span-6 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
+          <SectionTitle sub="Net sentiment per channel">Channel Sentiment</SectionTitle>
+          <ChannelSentimentPanel stats={scopedPlatformStats} />
         </Card>
       </div>
 
-      {/* Row 3: Bar chart + Word cloud + Heatmap */}
+      {/* Row 3: channel mix + topic health + sentiment trend */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Engagement · Sentiment · Growth">Performance</SectionTitle>
-          <BarChart categories={barCategories} height={170} showLegend={false} />
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
+          <SectionTitle sub="Mention share by platform">Share of Voice</SectionTitle>
+          <ShareOfVoicePanel stats={scopedPlatformStats} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Size = volume, opacity = sentiment">Keyword Cloud</SectionTitle>
-          {wordCloudItems.length > 0 ? (
-            <WordCloud words={wordCloudItems} maxWords={15} height={170} />
-          ) : (
-            <div className="flex items-center justify-center" style={{ height: 170 }}>
-              <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
-            </div>
-          )}
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={keywordsFetching} />
+          <SectionTitle sub="Volume · net sentiment · momentum">Topic Health</SectionTitle>
+          <TopicHealthList keywords={topTopics} maxItems={8} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Per-platform trend">Sentiment Timeline</SectionTitle>
-          <AreaChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={sentimentFetching} />
+          <SectionTitle sub="Net sentiment by month">Sentiment Trend</SectionTitle>
+          <LineChart series={sentimentTimeline} xLabels={sentimentTimelineLabels.length > 0 ? sentimentTimelineLabels : months} height={170} />
         </Card>
       </div>
 
-      {/* Row 4: Engagement funnel + Trending topics compact */}
+      {/* Row 4: engagement quality + rising issues */}
       <div className="grid grid-cols-12 gap-3 mb-4">
-        <Card className="col-span-12 lg:col-span-4">
-          <SectionTitle sub="Content conversion">Engagement Funnel</SectionTitle>
-          <div className="space-y-2.5">
-            {engagementFunnel.map((stage) => (
-              <div key={stage.label} className="min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] font-medium truncate" style={{ color: "var(--text-secondary)" }}>{stage.label}</span>
-                  <span className="text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0" style={{ color: "var(--text-primary)" }}>
-                    {fmt(stage.value)} <span className="font-normal" style={{ color: "var(--text-faint)" }}>({stage.pct}%)</span>
-                  </span>
-                </div>
-                <ProgressBar value={stage.pct} size="sm" />
-              </div>
-            ))}
-          </div>
+        <Card className="relative col-span-12 lg:col-span-4">
+          <FetchBadge show={platformFetching} />
+          <SectionTitle sub="Engagement normalized by mention volume">Engagement Efficiency</SectionTitle>
+          <EngagementEfficiencyPanel stats={scopedPlatformStats} />
         </Card>
 
-        <Card className="col-span-12 lg:col-span-8">
-          <SectionTitle sub="All keywords ranked by volume">Trending Topics</SectionTitle>
-          {rankedKeywords.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-              <RankList items={firstHalf} maxItems={10} />
-              <RankList items={secondHalf} maxItems={10} startRank={firstHalf.length + 1} />
-            </div>
-          ) : (
-            <p className="text-[11px] py-6 text-center" style={{ color: "var(--text-faint)" }}>No keyword data available</p>
-          )}
+        <Card className="relative col-span-12 lg:col-span-8">
+          <FetchBadge show={keywordsFetching} />
+          <SectionTitle sub="Fast-growing or negative themes to review first">Momentum Watchlist</SectionTitle>
+          <TopicHealthList keywords={momentumTopics} maxItems={10} />
         </Card>
       </div>
 
-      {/* Row 5: Top Posts with filters */}
-      <Card>
+      {/* Row 5: Top mentions with filters */}
+      <Card className="relative">
+        <FetchBadge show={postsFetching || postsLoading} />
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-          <SectionTitle sub="Click any post to view details & comments">Top Posts by Platform</SectionTitle>
+          <SectionTitle sub="Posts, comments, and replies ranked by engagement">Top Mentions by Platform</SectionTitle>
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Platform filter */}
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {(["all", "tiktok", "facebook", "youtube"] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPlatformFilter(p)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
-                  style={{
+	              {(["all", "tiktok", "facebook", "youtube"] as const).map((p) => (
+	                <button
+	                  key={p}
+	                  onClick={() => {
+	                    setPlatformFilter(p);
+	                    setPostPage(0);
+	                  }}
+	                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
+	                  style={{
                     background: platformFilter === p ? "var(--bg-surface-solid)" : "transparent",
                     color: platformFilter === p ? "var(--text-primary)" : "var(--text-muted)",
                     boxShadow: platformFilter === p ? "var(--shadow-sm)" : "none",
@@ -745,12 +1748,15 @@ function InsightsTab() {
 
             {/* Sentiment filter */}
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {["all", "positive", "neutral", "negative"].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSentimentFilter(s)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
-                  style={{
+	              {["all", "positive", "neutral", "negative"].map((s) => (
+	                <button
+	                  key={s}
+	                  onClick={() => {
+	                    setSentimentFilter(s);
+	                    setPostPage(0);
+	                  }}
+	                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all whitespace-nowrap"
+	                  style={{
                     background: sentimentFilter === s ? "var(--bg-surface-solid)" : "transparent",
                     color: sentimentFilter === s ? "var(--text-primary)" : "var(--text-muted)",
                     boxShadow: sentimentFilter === s ? "var(--shadow-sm)" : "none",
@@ -761,47 +1767,133 @@ function InsightsTab() {
               ))}
             </div>
 
-            {/* Sort */}
-            <button
-              onClick={() => setSortBy(sortBy === "engagement" ? "time" : "engagement")}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-colors whitespace-nowrap"
+            {/* Content type filter */}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
+              {mentionContentTypeFilters.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => {
+                    setContentTypeFilter(item.value);
+                    setPostPage(0);
+                  }}
+                  className="px-2 py-1 rounded-md text-[10px] font-medium transition-all whitespace-nowrap"
+                  style={{
+                    background: contentTypeFilter === item.value ? "var(--bg-surface-solid)" : "transparent",
+                    color: contentTypeFilter === item.value ? "var(--text-primary)" : "var(--text-muted)",
+                    boxShadow: contentTypeFilter === item.value ? "var(--shadow-sm)" : "none",
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap"
               style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
             >
               <ArrowUpDown className="w-3 h-3 shrink-0" />
-              {sortBy === "engagement" ? "By Engagement" : "By Time"}
-            </button>
+              Sorted by Engagement
+            </div>
+
+            <div className="flex items-center gap-1">
+              {(["svg", "csv"] as const).map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => exportTopMentions(format)}
+                  disabled={!activeCampaignId || totalMentions === 0 || exportingFormat !== null}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-secondary)" }}
+                  title={`Export all filtered mentions as ${format.toUpperCase()}`}
+                >
+                  <Download className="w-3 h-3 shrink-0" />
+                  {exportingFormat === format ? "..." : format}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {filteredPosts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {filteredPosts.slice(0, 12).map((post) => (
-              <button
+            {filteredPosts.map((post) => (
+              <PostCard
                 key={post.id}
-                onClick={() => setPostDetailId(post.id)}
-                className="text-left w-full"
-              >
-                <PostCard
-                  author={post.author}
-                  content={post.content}
-                  platform={post.platform as Platform}
-                  sentiment={post.sentiment}
-                  engagement={post.engagement}
-                  time={post.time}
-                />
-              </button>
+                author={post.author}
+                content={post.content}
+                platform={post.platform as Platform}
+                sentiment={normalizeMentionSentiment(post.sentiment, post.sentimentScore)}
+                engagement={post.engagement}
+                likes={post.likes}
+                comments={post.comments}
+                shares={post.shares}
+                views={post.views}
+                time={post.time}
+                originalUrl={isValidHttpUrl(post.url) ? post.url : undefined}
+                contentType={post.contentType}
+                onOpen={() => setPostDetailId(post.id)}
+              />
             ))}
           </div>
         ) : postsLoading ? (
           <LoadingDots />
         ) : (
-          <EmptyState title="No posts found" description="Try adjusting your filters" />
+          <EmptyState title="No mentions found" description="Try adjusting your filters" />
         )}
 
-        {filteredPosts.length > 12 && (
-          <p className="text-center text-[11px] mt-4" style={{ color: "var(--text-faint)" }}>
-            Showing 12 of {filteredPosts.length} posts
-          </p>
+        {totalMentions > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+            <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+              Showing {pageStart}-{pageEnd} of {totalMentions} mentions
+            </p>
+            {totalMentionPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPostPage((page) => Math.max(0, page - 1))}
+                  disabled={postPage === 0 || postsLoading}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+                >
+                  Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {mentionPages.map((page, index) =>
+                    page === "gap" ? (
+                      <span key={`gap-${index}`} className="px-1 text-[10px]" style={{ color: "var(--text-faint)" }}>
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setPostPage(page)}
+                        disabled={postsLoading}
+                        className="w-7 h-7 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40"
+                        style={{
+                          background: postPage === page ? "var(--accent)" : "var(--bg-hover)",
+                          color: postPage === page ? "white" : "var(--text-muted)",
+                          boxShadow: postPage === page ? "var(--shadow-sm)" : "none",
+                        }}
+                      >
+                        {page + 1}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPostPage((page) => Math.min(totalMentionPages - 1, page + 1))}
+                  disabled={postPage >= totalMentionPages - 1 || postsLoading}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all disabled:opacity-40"
+                  style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </Card>
 
@@ -815,19 +1907,13 @@ function InsightsTab() {
   );
 }
 
-/* ── Post Detail Modal ── */
-const COMMENTS_PER_PAGE = 5;
-
 function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; open: boolean; onClose: () => void }) {
-  const [commentSort, setCommentSort] = useState<"likes" | "time" | "sentiment">("likes");
-  const [commentPage, setCommentPage] = useState(0);
   const [detailLoading, setDetailLoading] = useState(true);
   const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   // Reset page & simulate loading when post changes
   useEffect(() => {
     if (post) {
-      setCommentPage(0);
       setDetailLoading(true);
       setShowAllKeywords(false);
       const t = setTimeout(() => setDetailLoading(false), 800);
@@ -837,20 +1923,10 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
 
   if (!post) return null;
 
-  const sortedComments = [...post.topComments].sort((a, b) => {
-    if (commentSort === "likes") return b.likes - a.likes;
-    if (commentSort === "sentiment") {
-      const order = { negative: 0, neutral: 1, positive: 2 };
-      return order[a.sentiment] - order[b.sentiment];
-    }
-    return 0; // time = default order
-  });
-
-  const totalPages = Math.ceil(sortedComments.length / COMMENTS_PER_PAGE);
-  const pagedComments = sortedComments.slice(commentPage * COMMENTS_PER_PAGE, (commentPage + 1) * COMMENTS_PER_PAGE);
+  const originalUrl = isValidHttpUrl(post.url) ? post.url : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Post Details" size="lg">
+    <Modal open={open} onClose={onClose} title="Mention Details" size="lg">
       <div className="max-h-[70vh] overflow-y-auto -mx-6 px-6">
         {/* Loading skeleton with shimmer */}
         {detailLoading ? (
@@ -876,17 +1952,6 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
               <div className="rounded-xl h-32 skeleton-shimmer" />
               <div className="rounded-xl h-32 skeleton-shimmer" />
             </div>
-            <div className="space-y-2 pt-4" style={{ borderTop: "1px solid var(--border)", animation: "skeletonStagger 0.5s ease-out 320ms both" }}>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex gap-2.5 p-3 rounded-xl skeleton-shimmer">
-                  <div className="w-7 h-7 rounded-full shrink-0" style={{ background: "var(--bg-inset)" }} />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 rounded w-24" style={{ background: "var(--bg-inset)" }} />
-                    <div className="h-3 rounded w-full" style={{ background: "var(--bg-inset)" }} />
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         ) : (
         <div className="content-reveal">
@@ -901,21 +1966,29 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{post.author}</p>
+              <Badge variant="neutral" size="sm">{contentTypeLabel(post.contentType)}</Badge>
               <Badge variant={sentimentVariant[post.sentiment]} size="sm">{post.sentiment}</Badge>
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
               <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
                 {platformLabel[post.platform]} · {post.time}
               </span>
-              <a
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] flex items-center gap-0.5"
-                style={{ color: "var(--accent)" }}
-              >
-                <ExternalLink className="w-3 h-3" /> View original
-              </a>
+              {originalUrl ? (
+                <a
+                  href={originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={originalUrl}
+                  className="text-[10px] flex items-center gap-0.5"
+                  style={{ color: "var(--accent)" }}
+                >
+                  <ExternalLink className="w-3 h-3" /> Open original post
+                </a>
+              ) : (
+                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                  Original link unavailable
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1013,96 +2086,6 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
           </div>
         </div>
 
-        {/* Comments section */}
-        <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>
-              Comments ({post.topComments.length})
-            </p>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg" style={{ background: "var(--bg-hover)" }}>
-              {(["likes", "time", "sentiment"] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setCommentSort(s)}
-                  className="px-2 py-1 rounded-md text-[10px] font-medium capitalize transition-all"
-                  style={{
-                    background: commentSort === s ? "var(--bg-surface-solid)" : "transparent",
-                    color: commentSort === s ? "var(--text-primary)" : "var(--text-muted)",
-                    boxShadow: commentSort === s ? "var(--shadow-sm)" : "none",
-                  }}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {pagedComments.map((c) => (
-              <div
-                key={c.id}
-                className="flex gap-2.5 p-3 rounded-xl"
-                style={{ background: "var(--bg-hover)" }}
-              >
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
-                  style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
-                >
-                  {c.author.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[11px] font-semibold" style={{ color: "var(--text-primary)" }}>{c.author}</span>
-                    <Badge variant={sentimentVariant[c.sentiment]} size="sm">{c.sentiment}</Badge>
-                    <span className="text-[9px] ml-auto" style={{ color: "var(--text-faint)" }}>{c.time}</span>
-                  </div>
-                  <p className="text-[12px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>{c.content}</p>
-                  <div className="flex items-center gap-1 mt-1" style={{ color: "var(--text-faint)" }}>
-                    <Heart className="w-3 h-3" />
-                    <span className="text-[10px] tabular-nums">{c.likes}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-              <button
-                onClick={() => setCommentPage((p) => Math.max(0, p - 1))}
-                disabled={commentPage === 0}
-                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-30"
-                style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
-              >
-                ← Prev
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCommentPage(i)}
-                    className="w-6 h-6 rounded-md text-[10px] font-bold transition-all"
-                    style={{
-                      background: commentPage === i ? "var(--accent)" : "var(--bg-hover)",
-                      color: commentPage === i ? "white" : "var(--text-muted)",
-                    }}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setCommentPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={commentPage === totalPages - 1}
-                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all disabled:opacity-30"
-                style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </div>
         </div>
         )}
       </div>
@@ -1114,21 +2097,114 @@ function PostDetailModal({ post, open, onClose }: { post: PostDetail | null; ope
    TAB: Stalker
    ════════════════════════════════════════════ */
 function StalkerTab() {
-  const [stalkers] = useState<StalkerTarget[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { activeCampaignId } = useScope();
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "paused">("all");
-  const [loading, setLoading] = useState(true);
+  const [actionTargetId, setActionTargetId] = useState<string | null>(null);
+  const { data: apiProjects, isLoading: projectsLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
+  const projectIds = useMemo(() => (apiProjects ?? []).map((project) => project.id), [apiProjects]);
+  const { data: targets, isLoading: targetsLoading } = useCampaignTargets(projectIds);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 900);
-    return () => clearTimeout(t);
-  }, []);
+  const projectNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const project of apiProjects ?? []) names.set(project.id, project.name);
+    return names;
+  }, [apiProjects]);
 
-  const filtered = stalkers.filter((s) => filterStatus === "all" || s.status === filterStatus);
-  const unreadTotal = stalkers.reduce((sum, s) => sum + s.alerts.filter((a) => !a.read).length, 0);
+  const stalkers = useMemo(() => {
+    return (targets ?? [])
+      .filter((target) => target.target_type === "PROFILE" && (target.source_type === "FACEBOOK" || target.source_type === "TIKTOK"))
+      .map((target) => ({
+        ...target,
+        project_name: target.project_id ? projectNameById.get(target.project_id) : undefined,
+      }));
+  }, [projectNameById, targets]);
 
-  if (loading) return <ListSkeleton count={4} />;
+  const filtered = stalkers.filter((target) => {
+    if (filterStatus === "all") return true;
+    return filterStatus === "active" ? target.is_active : !target.is_active;
+  });
+
+  const createStalker = useMutation({
+    mutationFn: async (input: CreateFocusedSourceInput) => {
+      const sourceType = toSourceType(input.platform);
+      const existingSources = await datasourceApi.listByProject(input.projectId);
+      const reusableStatuses = new Set<DataSource["status"]>(["PENDING", "READY", "ACTIVE", "PAUSED"]);
+      let source = existingSources.find((item) => item.source_type === sourceType && reusableStatuses.has(item.status));
+
+      if (!source) {
+        source = await datasourceApi.create({
+          project_id: input.projectId,
+          name: `${platformLabel[input.platform]} Focused Sources`,
+          description: `Focused ${platformLabel[input.platform]} profile/page monitoring`,
+          source_type: sourceType,
+          source_category: "CRAWL",
+          crawl_mode: "NORMAL",
+          crawl_interval_minutes: input.intervalMinutes,
+        });
+      }
+
+      const target = await datasourceApi.createProfileTarget(source.id, {
+        values: [input.url],
+        label: input.label,
+        platform_meta: input.platformMeta,
+        crawl_interval_minutes: input.intervalMinutes,
+        priority: 20,
+      });
+
+      await datasourceApi.activateTarget(source.id, target.id);
+      await ensureDatasourceRuntime(source);
+      return target;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+      for (const projectId of projectIds) {
+        queryClient.invalidateQueries({ queryKey: datasourceKeys.byProject(projectId) });
+      }
+      setShowCreate(false);
+    },
+  });
+
+  const toggleTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      if (target.is_active) {
+        return datasourceApi.deactivateTarget(target.data_source_id, target.id);
+      }
+      const updated = await datasourceApi.activateTarget(target.data_source_id, target.id);
+      await ensureDatasourceRuntime({
+        id: target.data_source_id,
+        status: target.datasource_status ?? "READY",
+        source_type: target.source_type,
+        source_category: "CRAWL",
+        crawl_mode: "NORMAL",
+        name: target.datasource_name,
+        project_id: target.project_id ?? "",
+        created_at: "",
+        updated_at: "",
+      });
+      return updated;
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+    },
+  });
+
+  const flushTarget = useMutation({
+    mutationFn: async (target: TargetWithSource) => {
+      setActionTargetId(target.id);
+      await datasourceApi.deleteTarget(target.data_source_id, target.id);
+    },
+    onSettled: () => {
+      setActionTargetId(null);
+      queryClient.invalidateQueries({ queryKey: datasourceKeys.campaignTargets(projectIds) });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+    },
+  });
+
+  if (projectsLoading || targetsLoading) return <ListSkeleton count={4} />;
 
   return (
     <div className="content-reveal">
@@ -1137,17 +2213,9 @@ function StalkerTab() {
         <div>
           <h2 className="text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
             Stalker
-            {unreadTotal > 0 && (
-              <span
-                className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white"
-                style={{ background: "var(--danger)" }}
-              >
-                {unreadTotal}
-              </span>
-            )}
           </h2>
           <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-            Monitor profiles and posts for real-time changes
+            Focused profile/page sources for campaign-owned crawling
           </p>
         </div>
 
@@ -1170,8 +2238,9 @@ function StalkerTab() {
           </div>
           <button
             onClick={() => setShowCreate(true)}
+            disabled={(apiProjects ?? []).length === 0}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
-            style={{ background: "var(--accent)" }}
+            style={{ background: "var(--accent)", opacity: (apiProjects ?? []).length === 0 ? 0.5 : 1 }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--accent-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
           >
@@ -1184,134 +2253,92 @@ function StalkerTab() {
       {/* Stalker cards */}
       {filtered.length > 0 ? (
         <div className="space-y-3">
-          {filtered.map((stalker) => {
-            const expanded = expandedId === stalker.id;
-            const unread = stalker.alerts.filter((a) => !a.read).length;
+          {filtered.map((target) => {
+            const platform = sourceTypeToPlatform(target.source_type);
+            const meta = target.platform_meta ?? {};
+            const identity = platform === "facebook"
+              ? String(meta.page_id ?? "")
+              : String(meta.username ?? meta.sec_uid ?? "");
+            const isPending =
+              actionTargetId === target.id && (toggleTarget.isPending || flushTarget.isPending);
 
             return (
-              <Card key={stalker.id} className="!p-0 overflow-hidden">
-                {/* Card header */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setExpandedId(expanded ? null : stalker.id)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedId(expanded ? null : stalker.id); } }}
-                  className="w-full flex items-center gap-3 p-4 text-left cursor-pointer"
-                >
+              <Card key={target.id} className="!p-0 overflow-hidden">
+                <div className="w-full flex items-center gap-3 p-4 text-left">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: "var(--accent-subtle)" }}
                   >
-                    {stalker.type === "profile" ? (
-                      <Target className="w-5 h-5" style={{ color: "var(--accent)" }} />
-                    ) : (
-                      <FileText className="w-5 h-5" style={{ color: "var(--accent)" }} />
-                    )}
+                    <Target className="w-5 h-5" style={{ color: "var(--accent)" }} />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-[13px] font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                        {stalker.name}
+                        {target.label || target.values[0]}
                       </p>
                       <span className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: "var(--bg-hover)", color: "var(--text-faint)" }}>
-                        {platformLabel[stalker.platform]}
+                        {platformLabel[platform]}
                       </span>
-                      <Badge variant={stalker.status === "active" ? "success" : "warning"} dot={stalker.status === "active"} size="sm">
-                        {stalker.status}
+                      <Badge variant={target.is_active ? "success" : "warning"} dot={target.is_active} size="sm">
+                        {target.is_active ? "active" : "paused"}
                       </Badge>
-                      {unread > 0 && (
-                        <span
-                          className="flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-white"
-                          style={{ background: "var(--danger)" }}
-                        >
-                          {unread}
+                      <Badge variant={target.datasource_status === "ACTIVE" ? "success" : "neutral"} size="sm">
+                        {target.datasource_status ?? "source"}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-0.5">
+                      <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--text-faint)" }}>
+                        <Clock className="w-3 h-3" /> Every {target.crawl_interval_minutes ?? 30}m
+                      </span>
+                      {target.project_name && (
+                        <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+                          {target.project_name}
                         </span>
                       )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--text-faint)" }}>
-                        <Clock className="w-3 h-3" /> Last checked: {stalker.lastChecked}
-                      </span>
-                      <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>
-                        {stalker.totalAlerts} total alerts
-                      </span>
+                      {identity && (
+                        <span className="text-[10px] font-mono" style={{ color: "var(--text-faint)" }}>
+                          {identity}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={(e) => { e.stopPropagation(); }}
+                      onClick={() => toggleTarget.mutate(target)}
+                      disabled={isPending}
                       className="p-1.5 rounded-lg transition-colors"
-                      style={{ color: "var(--text-muted)" }}
-                      title={stalker.status === "active" ? "Pause" : "Resume"}
+                      style={{ color: "var(--text-muted)", opacity: isPending ? 0.5 : 1 }}
+                      title={target.is_active ? "Pause focused source" : "Resume focused source"}
                     >
-                      {stalker.status === "active" ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {target.is_active ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); }}
+                      onClick={() => {
+                        if (window.confirm("Flush this focused source and hide its historical data from Insights?")) {
+                          flushTarget.mutate(target);
+                        }
+                      }}
+                      disabled={isPending}
                       className="p-1.5 rounded-lg transition-colors"
-                      style={{ color: "var(--danger)" }}
-                      title="Delete"
+                      style={{ color: "var(--danger)", opacity: isPending ? 0.5 : 1 }}
+                      title="Flush focused source"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                    {expanded ? <ChevronDown className="w-4 h-4" style={{ color: "var(--text-faint)" }} /> : <ChevronRight className="w-4 h-4" style={{ color: "var(--text-faint)" }} />}
+                    <a
+                      href={target.values[0]}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded-lg transition-colors"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Open source"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
-
-                {/* Expanded alert feed */}
-                {expanded && (
-                  <div className="px-4 pb-4 pt-0">
-                    {/* Thresholds summary */}
-                    <div className="flex flex-wrap gap-2 mb-3 pb-3" style={{ borderBottom: "1px solid var(--border)" }}>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: stalker.thresholds.newPost ? "var(--success-bg)" : "var(--bg-hover)", color: stalker.thresholds.newPost ? "var(--success)" : "var(--text-faint)" }}>
-                        {stalker.thresholds.newPost ? <Bell className="w-3 h-3 inline mr-1" /> : <BellOff className="w-3 h-3 inline mr-1" />}
-                        New posts
-                      </span>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: "var(--warning-bg)", color: "var(--warning)" }}>
-                        <AlertTriangle className="w-3 h-3 inline mr-1" />
-                        Neg. sentiment &gt; {stalker.thresholds.commentSentiment}%
-                      </span>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-lg" style={{ background: "var(--info-bg)", color: "var(--info)" }}>
-                        <Heart className="w-3 h-3 inline mr-1" />
-                        Engagement &gt; {fmt(stalker.thresholds.engagementThreshold)}
-                      </span>
-                    </div>
-
-                    {/* Alert timeline */}
-                    <div className="space-y-1.5">
-                      {stalker.alerts.map((alert) => (
-                        <div
-                          key={alert.id}
-                          className="flex items-start gap-2.5 p-2.5 rounded-xl transition-colors"
-                          style={{
-                            background: alert.read ? "transparent" : "var(--bg-hover)",
-                            opacity: alert.read ? 0.7 : 1,
-                          }}
-                        >
-                          <div
-                            className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                            style={{ background: `var(--${alertSeverityVariant[alert.severity]}-bg)` }}
-                          >
-                            {alert.type === "new_post" && <FileText className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "comment_spike" && <MessageCircle className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "engagement_threshold" && <Heart className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                            {alert.type === "sentiment_shift" && <AlertTriangle className="w-3 h-3" style={{ color: `var(--${alertSeverityVariant[alert.severity]})` }} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[12px] font-semibold" style={{ color: "var(--text-primary)" }}>{alert.title}</p>
-                              {!alert.read && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "var(--accent)" }} />}
-                            </div>
-                            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{alert.description}</p>
-                          </div>
-                          <span className="text-[9px] shrink-0" style={{ color: "var(--text-faint)" }}>{alert.time}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </Card>
             );
           })}
@@ -1320,12 +2347,13 @@ function StalkerTab() {
         <EmptyState
           icon={<Target />}
           title="No stalkers yet"
-          description="Create a stalker to start monitoring profiles and posts in real-time"
+          description="Add a Facebook page or TikTok profile to collect posts and comments from that source only."
           action={
             <button
               onClick={() => setShowCreate(true)}
+              disabled={(apiProjects ?? []).length === 0}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white"
-              style={{ background: "var(--accent)" }}
+              style={{ background: "var(--accent)", opacity: (apiProjects ?? []).length === 0 ? 0.5 : 1 }}
             >
               <Plus className="w-3.5 h-3.5" /> New Stalker
             </button>
@@ -1334,193 +2362,263 @@ function StalkerTab() {
       )}
 
       {/* Create Stalker Modal */}
-      <CreateStalkerModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <CreateStalkerModal
+        open={showCreate}
+        projects={apiProjects ?? []}
+        isPending={createStalker.isPending}
+        errorMessage={createStalker.error ? getMutationErrorMessage(createStalker.error) : ""}
+        onClose={() => setShowCreate(false)}
+        onSubmit={(input) => createStalker.mutate(input)}
+      />
     </div>
   );
 }
 
 /* ── Create Stalker Modal ── */
-function CreateStalkerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const [type, setType] = useState<"profile" | "post">("profile");
+type StalkerPlatform = Extract<Platform, "facebook" | "tiktok">;
+
+type CreateFocusedSourceInput = {
+  projectId: string;
+  platform: StalkerPlatform;
+  url: string;
+  label: string;
+  intervalMinutes: number;
+  platformMeta: Record<string, unknown>;
+};
+
+function CreateStalkerModal({
+  open,
+  projects,
+  isPending,
+  errorMessage,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  projects: Array<{ id: string; name: string }>;
+  isPending: boolean;
+  errorMessage?: string;
+  onClose: () => void;
+  onSubmit: (input: CreateFocusedSourceInput) => void;
+}) {
+  const [projectId, setProjectId] = useState("");
   const [url, setUrl] = useState("");
-  const [platform, setPlatform] = useState<Platform>("tiktok");
-  const [newPost, setNewPost] = useState(true);
-  const [sentimentThreshold, setSentimentThreshold] = useState("50");
-  const [engagementThreshold, setEngagementThreshold] = useState("1000");
-  const [creating, setCreating] = useState(false);
+  const [platform, setPlatform] = useState<StalkerPlatform>("facebook");
+  const [label, setLabel] = useState("");
+  const [pageId, setPageId] = useState("");
+  const [username, setUsername] = useState("");
+  const [intervalMinutes, setIntervalMinutes] = useState("30");
+
+  useEffect(() => {
+    if (open && !projectId && projects.length > 0) {
+      setProjectId(projects[0].id);
+    }
+  }, [open, projectId, projects]);
 
   const inputClass = "w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-all duration-200";
   const inputStyle = { background: "var(--input-bg)", border: "1px solid var(--input-border)", color: "var(--text-primary)" };
 
-  const reset = () => { setStep(0); setType("profile"); setUrl(""); setPlatform("tiktok"); setNewPost(true); setSentimentThreshold("50"); setEngagementThreshold("1000"); };
+  const reset = () => {
+    setProjectId(projects[0]?.id ?? "");
+    setUrl("");
+    setPlatform("facebook");
+    setLabel("");
+    setPageId("");
+    setUsername("");
+    setIntervalMinutes("30");
+  };
+
+  const resolvedPageId = pageId.trim() || extractFacebookPageId(url);
+  const resolvedUsername = username.trim().replace(/^@/, "") || extractTikTokUsername(url);
+  const parsedInterval = Math.max(5, Number(intervalMinutes) || 30);
+  const canSubmit = Boolean(
+    projectId &&
+    url.trim() &&
+    label.trim() &&
+    (platform === "facebook" ? /^\d{5,}$/.test(resolvedPageId) : resolvedUsername),
+  );
+
+  const submit = () => {
+    if (!canSubmit || isPending) return;
+    onSubmit({
+      projectId,
+      platform,
+      url: url.trim(),
+      label: label.trim(),
+      intervalMinutes: parsedInterval,
+      platformMeta: platform === "facebook"
+        ? { page_id: resolvedPageId, source_kind: "focused_page" }
+        : { username: resolvedUsername, source_kind: "focused_profile" },
+    });
+  };
 
   return (
     <Modal open={open} onClose={() => { onClose(); reset(); }} title="Create Stalker" size="md">
-      {step === 0 && (
+      <div className="space-y-4">
         <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>What do you want to monitor?</p>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            {([
-              { id: "profile" as const, label: "Profile / Page", desc: "Track a social media profile", icon: <Target className="w-5 h-5" /> },
-              { id: "post" as const, label: "Specific Post", desc: "Monitor a single post", icon: <FileText className="w-5 h-5" /> },
-            ]).map((opt) => (
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Project</label>
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)} className={inputClass} style={inputStyle}>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{project.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Platform</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["facebook", "tiktok"] as StalkerPlatform[]).map((p) => (
               <button
-                key={opt.id}
-                onClick={() => setType(opt.id)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl text-center transition-all"
+                key={p}
+                onClick={() => setPlatform(p)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all"
                 style={{
-                  background: type === opt.id ? "var(--accent-subtle)" : "var(--bg-hover)",
-                  border: `1.5px solid ${type === opt.id ? "var(--accent)" : "var(--border)"}`,
-                  color: type === opt.id ? "var(--accent)" : "var(--text-muted)",
+                  background: platform === p ? "var(--accent-subtle)" : "var(--bg-hover)",
+                  border: `1.5px solid ${platform === p ? "var(--accent)" : "var(--border)"}`,
+                  color: platform === p ? "var(--accent)" : "var(--text-muted)",
                 }}
               >
-                {opt.icon}
-                <span className="text-[12px] font-semibold">{opt.label}</span>
-                <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{opt.desc}</span>
+                {platformLabel[p]}
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Display name</label>
+          <input
+            type="text"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            placeholder={platform === "facebook" ? "Ahamove Facebook Page" : "Ahamove TikTok Profile"}
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Source URL</label>
+          <div className="relative">
+            <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-faint)" }} />
+            <input
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder={platform === "facebook" ? "https://www.facebook.com/profile.php?id=100066224874581" : "https://www.tiktok.com/@username"}
+              className={`${inputClass} pl-10`}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {platform === "facebook" ? (
+          <div>
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Facebook numeric page ID</label>
+            <input
+              type="text"
+              value={pageId}
+              onChange={(event) => setPageId(event.target.value.replace(/\D/g, ""))}
+              placeholder="100066224874581"
+              className={inputClass}
+              style={inputStyle}
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>TikTok username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value.replace(/^@/, ""))}
+              placeholder="username"
+              className={inputClass}
+              style={inputStyle}
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Crawl interval minutes</label>
+          <input
+            type="number"
+            value={intervalMinutes}
+            onChange={(event) => setIntervalMinutes(event.target.value)}
+            className={inputClass}
+            style={inputStyle}
+            min={5}
+          />
+        </div>
+
+        {errorMessage && (
+          <p className="text-[11px]" style={{ color: "var(--danger)" }}>{errorMessage}</p>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          <button onClick={() => { onClose(); reset(); }} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Cancel</button>
           <button
-            onClick={() => setStep(1)}
-            className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white"
+            onClick={submit}
+            disabled={!canSubmit || isPending}
+            className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-40"
             style={{ background: "var(--accent)" }}
           >
-            Continue
+            {isPending ? "Creating..." : "Create Stalker"}
           </button>
         </div>
-      )}
-
-      {step === 1 && (
-        <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>Enter the URL and select platform</p>
-          <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>URL</label>
-              <div className="relative">
-                <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--text-faint)" }} />
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder={type === "profile" ? "https://tiktok.com/@username" : "https://tiktok.com/@user/video/123"}
-                  className={`${inputClass} pl-10`}
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Platform</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(["tiktok", "facebook", "youtube"] as Platform[]).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPlatform(p)}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-medium transition-all"
-                    style={{
-                      background: platform === p ? "var(--accent-subtle)" : "var(--bg-hover)",
-                      border: `1.5px solid ${platform === p ? "var(--accent)" : "var(--border)"}`,
-                      color: platform === p ? "var(--accent)" : "var(--text-muted)",
-                    }}
-                  >
-                    {platformLabel[p]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setStep(0)} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Back</button>
-            <button
-              onClick={() => setStep(2)}
-              disabled={!url}
-              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-40"
-              style={{ background: "var(--accent)" }}
-            >
-              Continue
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div>
-          <p className="text-[12px] mb-4" style={{ color: "var(--text-muted)" }}>Configure alert thresholds</p>
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--bg-hover)" }}>
-              <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                <span className="text-[12px] font-medium" style={{ color: "var(--text-primary)" }}>Alert on new posts</span>
-              </div>
-              <button
-                onClick={() => setNewPost(!newPost)}
-                className="w-9 h-5 rounded-full transition-colors relative"
-                style={{ background: newPost ? "var(--accent)" : "var(--bg-inset)" }}
-              >
-                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: newPost ? 18 : 2 }} />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Negative sentiment threshold (%)
-              </label>
-              <input
-                type="number"
-                value={sentimentThreshold}
-                onChange={(e) => setSentimentThreshold(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-                min={0}
-                max={100}
-              />
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Alert when negative comments exceed this percentage
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Engagement threshold
-              </label>
-              <input
-                type="number"
-                value={engagementThreshold}
-                onChange={(e) => setEngagementThreshold(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-                min={0}
-              />
-              <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Alert when likes/reactions exceed this number
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="flex-1 py-2.5 rounded-xl text-[13px] font-medium" style={{ background: "var(--bg-hover)", color: "var(--text-muted)" }}>Back</button>
-            <button
-              onClick={() => {
-                setCreating(true);
-                setTimeout(() => { setCreating(false); onClose(); reset(); }, 1500);
-              }}
-              disabled={creating}
-              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-70 flex items-center justify-center gap-2"
-              style={{ background: "var(--accent)" }}
-            >
-              {creating ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create Stalker"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
     </Modal>
   );
+}
+
+function toSourceType(platform: StalkerPlatform): SourceType {
+  return platform === "facebook" ? "FACEBOOK" : "TIKTOK";
+}
+
+function sourceTypeToPlatform(sourceType: SourceType): Platform {
+  if (sourceType === "FACEBOOK") return "facebook";
+  if (sourceType === "TIKTOK") return "tiktok";
+  return "youtube";
+}
+
+async function ensureDatasourceRuntime(source: DataSource) {
+  if (source.status === "ACTIVE") return;
+  if (source.status === "PAUSED") {
+    await datasourceApi.resume(source.id);
+    return;
+  }
+  if (source.status === "READY" || source.status === "PENDING") {
+    await datasourceApi.activate(source.id);
+    return;
+  }
+  throw new Error(`Datasource is ${source.status.toLowerCase()}`);
+}
+
+function extractFacebookPageId(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const queryId = url.searchParams.get("id")?.trim();
+    if (queryId && /^\d{5,}$/.test(queryId)) return queryId;
+    const pathId = url.pathname.split("/").find((part) => /^\d{5,}$/.test(part));
+    return pathId ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function extractTikTokUsername(raw: string): string {
+  try {
+    const url = new URL(raw);
+    const handle = url.pathname.split("/").find((part) => part.startsWith("@"));
+    return handle?.replace(/^@/, "") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function getMutationErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return "Could not save change";
 }
 
 /* ════════════════════════════════════════════
@@ -1550,6 +2648,11 @@ function ReportsTab() {
   const reports = data?.items ?? [];
   const openDetail = (id: string) => {
     router.push(`/smap/reports/${id}?camp_id=${activeCampaignId}`);
+  };
+  const downloadReport = async (report: ReportItem) => {
+    if (report.status !== "ready") return;
+    const file = await reportsApi.download(report.id);
+    window.open(file.downloadUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -1653,6 +2756,8 @@ function ReportsTab() {
                       <ExternalLink className="w-3.5 h-3.5" /> Open
                     </button>
                     <button
+                      onClick={() => downloadReport(report)}
+                      disabled={report.status !== "ready"}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
                       style={{ color: "var(--text-muted)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -1710,10 +2815,13 @@ interface GenerateReportModalProps {
 }
 
 function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalProps) {
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<"existing" | "competitor">("existing");
   const [competitorUrls, setCompetitorUrls] = useState("");
   const [platforms, setPlatforms] = useState<Set<Platform>>(new Set(["tiktok", "facebook", "youtube"]));
   const [maxPosts, setMaxPosts] = useState<number>(50);
+  const [campaignPending, setCampaignPending] = useState(false);
+  const [campaignGenerateError, setCampaignGenerateError] = useState(false);
   const [selectedSections, setSelectedSections] = useState<Set<string>>(
     new Set(["Overview", "Sentiment Analysis", "Trends", "Top Posts", "Platform Breakdown"])
   );
@@ -1767,9 +2875,24 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
 
   const handleGenerate = async () => {
     if (mode !== "competitor") {
-      // The existing-data branch isn't wired yet — just close.
-      onClose();
-      return;
+      try {
+        setCampaignPending(true);
+        setCampaignGenerateError(false);
+        await reportsApi.generateCampaign({
+          campaignId,
+          title: `Campaign intelligence report · ${new Date().toLocaleDateString("vi-VN")}`,
+          sections: Array.from(selectedSections),
+          source: "manual",
+        });
+        queryClient.invalidateQueries({ queryKey: reportKeys.list(campaignId) });
+        onClose();
+        return;
+      } catch {
+        setCampaignGenerateError(true);
+        return;
+      } finally {
+        setCampaignPending(false);
+      }
     }
     try {
       await generate.mutateAsync({
@@ -1796,7 +2919,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
         <div className="grid grid-cols-2 gap-3 mb-5">
           {([
             { id: "existing" as const, label: "From Campaign Data", desc: "Use existing tracked data", icon: <BarChart3 className="w-5 h-5" /> },
-            { id: "competitor" as const, label: "Competitor Analysis", desc: "Crawl & analyze new URLs", icon: <Globe className="w-5 h-5" /> },
+            { id: "competitor" as const, label: "Benchmark Brief", desc: "Use tracked knowledge plus source context", icon: <Globe className="w-5 h-5" /> },
           ]).map((opt) => (
             <button
               key={opt.id}
@@ -1911,7 +3034,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
             {/* Max posts */}
             <div>
               <label className="block text-[11px] font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-                Maximum posts per competitor
+                Evidence posts to review
               </label>
               <input
                 type="number"
@@ -1923,7 +3046,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
                 style={inputStyle}
               />
               <p className="text-[10px] mt-1" style={{ color: "var(--text-faint)" }}>
-                Between 1 and 500. Default 50.
+                Knowledge-srv will use the strongest indexed evidence available. Default 50.
               </p>
             </div>
           </div>
@@ -1961,7 +3084,7 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
           </div>
         </div>
 
-        {generate.isError && (
+        {(generate.isError || campaignGenerateError) && (
           <div className="mt-4 p-3 rounded-xl text-[12px]" style={{ background: "var(--danger-bg)", color: "var(--danger)" }}>
             Failed to start report. Please try again.
           </div>
@@ -1970,13 +3093,13 @@ function GenerateReportModal({ open, onClose, campaignId }: GenerateReportModalP
         {/* Generate button */}
         <button
           onClick={handleGenerate}
-          disabled={generate.isPending || !canGenerate}
+          disabled={generate.isPending || campaignPending || !canGenerate}
           className="w-full mt-6 py-2.5 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "var(--accent)" }}
           onMouseEnter={(e) => { if (!generate.isPending && canGenerate) e.currentTarget.style.background = "var(--accent-hover)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent)"; }}
         >
-          {generate.isPending ? (
+          {generate.isPending || campaignPending ? (
             <>
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Starting...

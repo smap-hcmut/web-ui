@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-import { useNotificationStore } from "@/lib/stores/notifications";
+import { useAuthStore } from "@/lib/stores/auth";
+import { useNotificationStore, type NotificationCategory } from "@/lib/stores/notifications";
 
 type NotificationEnvelope = {
   type?: string;
@@ -11,12 +12,13 @@ type NotificationEnvelope = {
   message?: string;
 };
 
-type NotificationKind = "info" | "success" | "warning" | "error";
+type NotificationKind = "info" | "success" | "warning" | "critical";
 
 const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 15_000;
+const RECONNECT_MAX_MS = 120_000;
 
 export function NotificationSocket() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const push = useNotificationStore((state) => state.push);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -25,17 +27,22 @@ export function NotificationSocket() {
 
   useEffect(() => {
     stoppedRef.current = false;
+    if (!isAuthenticated) {
+      return;
+    }
 
     const connect = () => {
       if (stoppedRef.current) {
         return;
       }
 
+      let opened = false;
       const url = buildNotificationWsUrl();
       const socket = new WebSocket(url);
       socketRef.current = socket;
 
       socket.onopen = () => {
+        opened = true;
         reconnectAttemptRef.current = 0;
       };
 
@@ -49,6 +56,10 @@ export function NotificationSocket() {
 
       socket.onclose = () => {
         socketRef.current = null;
+        if (!opened) {
+          reconnectAttemptRef.current = 0;
+          return;
+        }
         scheduleReconnect(connect);
       };
 
@@ -68,11 +79,23 @@ export function NotificationSocket() {
 
       reconnectTimerRef.current = window.setTimeout(() => {
         reconnectTimerRef.current = null;
-        callback();
+        hasBackendSession().then((hasSession) => {
+          if (!stoppedRef.current && hasSession) {
+            callback();
+          }
+        });
       }, delay);
     };
 
-    connect();
+    const start = async () => {
+      const hasSession = await hasBackendSession();
+      if (stoppedRef.current || !hasSession) {
+        return;
+      }
+      connect();
+    };
+
+    start();
 
     return () => {
       stoppedRef.current = true;
@@ -83,9 +106,21 @@ export function NotificationSocket() {
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [push]);
+  }, [isAuthenticated, push]);
 
   return null;
+}
+
+async function hasBackendSession() {
+  try {
+    const res = await fetch("/api/proxy/identity/api/v1/authentication/me", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 function buildNotificationWsUrl() {
@@ -94,15 +129,8 @@ function buildNotificationWsUrl() {
     return configured;
   }
 
-  const endpoint = "/notification/ws";
-  const currentHost = window.location.host;
-  const apiBase =
-    currentHost === "smap.tantai.dev" || currentHost.endsWith(".tantai.dev")
-      ? "https://smap-api.tantai.dev"
-      : `${window.location.protocol}//${currentHost}`;
-
-  const url = new URL(endpoint, apiBase);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const url = new URL("/notification/ws", window.location.origin);
+  url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
 
@@ -118,6 +146,8 @@ function parseNotification(rawData: string) {
   const timestamp = envelope.timestamp ?? new Date().toISOString();
   const mapped = mapEnvelope(envelope.type ?? "SYSTEM", payload);
 
+  const isCrisis = mapped.category === "crisis";
+
   return {
     id: crypto.randomUUID(),
     title: mapped.title,
@@ -126,16 +156,21 @@ function parseNotification(rawData: string) {
     content: mapped.message,
     type: mapped.kind,
     severity: mapped.kind,
-    category: envelope.type ?? "SYSTEM",
+    category: mapped.category,
     source: "websocket",
     timestamp,
     createdAt: timestamp,
     read: false,
+    showToast: isCrisis,
+    showBanner: isCrisis && mapped.kind === "critical",
     payload,
   };
 }
 
-function mapEnvelope(type: string, payload: Record<string, unknown>): { title: string; message: string; kind: NotificationKind } {
+function mapEnvelope(
+  type: string,
+  payload: Record<string, unknown>,
+): { title: string; message: string; kind: NotificationKind; category: NotificationCategory } {
   if (type === "ANALYTICS_PIPELINE") {
     const projectId = stringValue(payload.project_id);
     const sourceId = stringValue(payload.source_id);
@@ -148,6 +183,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: "Analysis updated",
       message: `Digest ${phase}${sourceText}: ${recordText} processed for project ${projectId || "current project"}.`,
       kind: "success",
+      category: "analysis",
     };
   }
 
@@ -155,8 +191,11 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
     const severity = stringValue(payload.severity).toLowerCase();
     return {
       title: stringValue(payload.title) || "Crisis alert",
-      message: stringValue(payload.message) || "A crisis rule has been triggered.",
-      kind: severity === "critical" || severity === "high" ? "error" : "warning",
+      message:
+        stringValue(payload.message) ||
+        `${stringValue(payload.project_name) || "A project"} reached a crisis response threshold.`,
+      kind: severity === "critical" || severity === "high" ? "critical" : "warning",
+      category: "crisis",
     };
   }
 
@@ -165,6 +204,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: stringValue(payload.title) || "Campaign update",
       message: stringValue(payload.message) || "Campaign state changed.",
       kind: "info",
+      category: "campaign",
     };
   }
 
@@ -173,6 +213,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
       title: stringValue(payload.title) || "Data onboarding update",
       message: stringValue(payload.message) || "A datasource onboarding event was received.",
       kind: "info",
+      category: "data",
     };
   }
 
@@ -180,6 +221,7 @@ function mapEnvelope(type: string, payload: Record<string, unknown>): { title: s
     title: stringValue(payload.title) || "System notification",
     message: stringValue(payload.message) || "A new system event was received.",
     kind: "info",
+    category: "system",
   };
 }
 

@@ -11,6 +11,9 @@ interface PlatformOverviewCardProps {
   platform: Platform;
   mentions: number;
   mentionsChange: number;
+  mentionsChangeReliable?: boolean;
+  mentionsCurrentPeriod?: number;
+  mentionsPreviousPeriod?: number;
   engagement: string;
   sentiment: number;
   status: 'active' | 'inactive';
@@ -19,9 +22,31 @@ interface PlatformOverviewCardProps {
 }
 
 export function PlatformOverviewCard({
-  name, platform, mentions, mentionsChange, engagement, sentiment, status, color, className,
+  name,
+  platform,
+  mentions,
+  mentionsChange,
+  mentionsChangeReliable,
+  mentionsCurrentPeriod,
+  mentionsPreviousPeriod,
+  engagement,
+  sentiment,
+  status,
+  color,
+  className,
 }: PlatformOverviewCardProps) {
-  const isUp = mentionsChange >= 0;
+  const safeChange = Number.isFinite(mentionsChange) ? mentionsChange : 0;
+  const isReliableChange = mentionsChangeReliable ?? Math.abs(safeChange) < 10000;
+  const isUp = isReliableChange
+    ? safeChange >= 0
+    : (mentionsCurrentPeriod ?? mentions) >= (mentionsPreviousPeriod ?? 0);
+  const formattedChange = safeChange.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  const changeLabel = isReliableChange ? `${isUp ? '+' : ''}${formattedChange}%` : 'New';
+  const changeTitle = isReliableChange
+    ? undefined
+    : `Previous 30-day baseline: ${mentionsPreviousPeriod ?? 0} mentions`;
+  const sentimentColor = sentiment >= 10 ? 'var(--success)' : sentiment <= -10 ? 'var(--danger)' : 'var(--warning)';
+  const sentimentText = `${sentiment > 0 ? '+' : ''}${sentiment}`;
 
   return (
     <div
@@ -53,9 +78,13 @@ export function PlatformOverviewCard({
           <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: 'var(--text-primary)' }}>
             {mentions.toLocaleString()}
           </p>
-          <span className={clsx('inline-flex items-center gap-0.5 text-[10px] font-semibold')} style={{ color: isUp ? 'var(--success)' : 'var(--danger)' }}>
+          <span
+            className={clsx('inline-flex items-center gap-0.5 text-[10px] font-semibold')}
+            style={{ color: isUp ? 'var(--success)' : 'var(--danger)' }}
+            title={changeTitle}
+          >
             {isUp ? <TrendingUp className="w-3 h-3 shrink-0" /> : <TrendingDown className="w-3 h-3 shrink-0" />}
-            {isUp ? '+' : ''}{mentionsChange}%
+            {changeLabel}
           </span>
         </div>
         <div className="min-w-0">
@@ -63,9 +92,9 @@ export function PlatformOverviewCard({
           <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: 'var(--text-primary)' }}>{engagement}</p>
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider mb-1 truncate" style={{ color: 'var(--text-muted)' }}>Sentiment</p>
-          <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: sentiment >= 70 ? 'var(--success)' : sentiment >= 40 ? 'var(--warning)' : 'var(--danger)' }}>
-            {sentiment}%
+          <p className="text-[10px] uppercase tracking-wider mb-1 truncate" style={{ color: 'var(--text-muted)' }}>Net Sent.</p>
+          <p className="text-base md:text-lg font-bold tabular-nums truncate" style={{ color: sentimentColor }}>
+            {sentimentText}
           </p>
         </div>
       </div>

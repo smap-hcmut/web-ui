@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -41,13 +46,16 @@ interface KPIsResponse {
 
 const kpiKeys = {
   all: ['analytics', 'kpis'] as const,
-  campaign: (campaignId: string) => [...kpiKeys.all, campaignId] as const,
+  campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
+    [...kpiKeys.all, campaignId, analyticsScopeKey(scope)] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchKPIs(campaignId: string): Promise<KPIsResponse> {
-  const res = await fetch(`/api/analytics/kpis?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchKPIs(campaignId: string, scope?: AnalyticsScopeParams | string): Promise<KPIsResponse> {
+  const params = new URLSearchParams({ campaignId });
+  appendAnalyticsScope(params, scope);
+  const res = await fetch(`/api/analytics/kpis?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch KPIs (${res.status})`);
@@ -64,12 +72,15 @@ async function fetchKPIs(campaignId: string): Promise<KPIsResponse> {
  * each with value, formatted string, change%, and 12-point sparkline.
  * Also returns engagement breakdown (views, likes, comments, shares).
  */
-export function useCampaignKPIs(campaignId: string | undefined) {
-  const queryKey = campaignId ? kpiKeys.campaign(campaignId) : [...kpiKeys.all, '__pending__'] as const;
+export function useCampaignKPIs(campaignId: string | undefined, scope?: AnalyticsScopeParams | string) {
+  const scopeKey = analyticsScopeKey(scope);
+  const queryKey = campaignId
+    ? kpiKeys.campaign(campaignId, scope)
+    : [...kpiKeys.all, '__pending__', scopeKey] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchKPIs(campaignId!),
+    queryFn: () => fetchKPIs(campaignId!, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KPIsResponse>(queryKey) : undefined,

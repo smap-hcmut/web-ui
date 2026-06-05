@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   BellRing,
   Flame,
+  Info,
   Plus,
   RefreshCw,
   Save,
@@ -21,12 +23,13 @@ import {
   type CrisisConfigInput,
   type CrisisKeywordGroupInput,
 } from '@/lib/api/projects';
-import { buildCrisisConfigPreset, buildDefaultCrisisConfig } from '@/lib/crisis/presets';
+import { buildCrisisConfigPreset, buildDefaultCrisisConfig, buildDefaultResponsePolicy } from '@/lib/crisis/presets';
 
 type VolumeRule = NonNullable<CrisisConfigInput['volume_trigger']>['rules'][number];
 type SentimentRule = NonNullable<CrisisConfigInput['sentiment_trigger']>['rules'][number];
 type InfluencerRule = NonNullable<CrisisConfigInput['influencer_trigger']>['rules'][number];
 type Status = NonNullable<CrisisConfigInput['status']>;
+type RuntimeWiring = 'active' | 'partial' | 'reserved';
 
 type KeywordGroupDraft = Omit<CrisisKeywordGroupInput, 'keywords'> & {
   keywordsText: string;
@@ -50,6 +53,13 @@ type EditorState = {
   influencerEnabled: boolean;
   influencerLogic: 'AND' | 'OR';
   influencerRules: InfluencerRule[];
+  adaptiveCrawlEnabled: boolean;
+  adaptiveTriggerLevel: 'WATCH' | 'WARNING' | 'CRITICAL';
+  adaptiveCooldownMinutes: number;
+  notificationEnabled: boolean;
+  notificationTriggerLevel: 'WARNING' | 'CRITICAL';
+  notificationCooldownMinutes: number;
+  opsAlertOnCritical: boolean;
 };
 
 type Props = {
@@ -70,6 +80,26 @@ const inputStyle = {
   border: '1px solid var(--input-border)',
   color: 'var(--text-primary)',
 };
+
+const issueKeywordGroupOptions = [
+  { value: 'Service failure', label: 'Service failure', description: 'Service outage, delivery failure, broken journey', defaultWeight: 10 },
+  { value: 'Payment and COD', label: 'Payment and COD', description: 'COD, refund, overcharge, payment trust', defaultWeight: 8 },
+  { value: 'Trust and safety', label: 'Trust and safety', description: 'Fraud, unsafe behavior, complaint escalation', defaultWeight: 9 },
+  { value: 'Operations and coverage', label: 'Operations and coverage', description: 'Delay, surcharge, coverage gap, driver supply', defaultWeight: 7 },
+  { value: 'Customer support', label: 'Customer support', description: 'Slow support, unresolved ticket, bad experience', defaultWeight: 6 },
+  { value: 'Pricing and fees', label: 'Pricing and fees', description: 'Price increase, hidden fee, expensive service', defaultWeight: 6 },
+  { value: 'Brand reputation', label: 'Brand reputation', description: 'Boycott, bad press, viral negative claim', defaultWeight: 8 },
+  { value: 'Competitor comparison', label: 'Competitor comparison', description: 'Switching intent, cheaper competitor, feature gap', defaultWeight: 5 },
+] as const;
+
+const issueWeightOptions = [
+  { value: 3, label: 'Low signal' },
+  { value: 5, label: 'Monitor' },
+  { value: 7, label: 'High priority' },
+  { value: 8, label: 'Warning' },
+  { value: 9, label: 'Severe' },
+  { value: 10, label: 'Critical' },
+] as const;
 
 export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, compact = false }: Props) {
   const [state, setState] = useState<EditorState>(() => normalizeConfig(buildDefaultCrisisConfig()));
@@ -114,7 +144,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
     setMessage(null);
     try {
       await projectApi.upsertCrisisConfig(projectId, buildPayload(state));
-      setMessage({ type: 'success', text: 'Crisis thresholds saved. Future analysis will use this project-level config.' });
+      setMessage({ type: 'success', text: 'Brand risk config saved. Runtime-active rules will affect future analysis; reserved fields remain stored for classification and future scoring.' });
     } catch (err: unknown) {
       const text =
         err && typeof err === 'object' && 'message' in err
@@ -138,11 +168,11 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" style={{ color: 'var(--warning)' }} />
             <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Crisis thresholds
+              Brand Risk Monitoring
             </h2>
           </div>
           <p className="mt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            Tune how SMAP flags risk for {projectName || 'this project'}.
+            Configure brand risk monitoring for {projectName || 'this project'}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -153,6 +183,7 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
             style={inputStyle}
           >
             <option value="NORMAL">NORMAL</option>
+            <option value="WATCH">WATCH</option>
             <option value="WARNING">WARNING</option>
             <option value="CRITICAL">CRITICAL</option>
           </select>
@@ -207,10 +238,12 @@ export function CrisisConfigEditor({ projectId, projectName, domainTypeCode, com
         </div>
       ) : (
         <>
+          <RuntimeMappingPanel />
           <KeywordSection state={state} setState={setState} />
           <VolumeSection state={state} setState={setState} />
           <SentimentSection state={state} setState={setState} />
           <InfluencerSection state={state} setState={setState} />
+          <ResponsePolicySection state={state} setState={setState} />
 
           <div className="sticky bottom-0 flex justify-end pt-2">
             <button
@@ -236,14 +269,24 @@ export function CrisisConfigEditorModal({
   domainTypeCode,
   onClose,
 }: Props & { onClose: () => void }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[220] flex items-center justify-center p-4"
+      className="fixed inset-x-0 bottom-0 top-[88px] z-[120] flex items-start justify-center overflow-y-auto px-4 pb-6 pt-4 sm:pt-5"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(5px)' }}
       onClick={onClose}
     >
       <div
-        className="max-h-[86vh] w-full max-w-4xl overflow-y-auto rounded-3xl p-6"
+        className="max-h-[calc(100vh-124px)] w-full max-w-5xl overflow-y-auto rounded-2xl p-5 sm:p-6"
         style={{
           background: 'var(--bg-surface-solid)',
           border: '1px solid var(--border)',
@@ -276,32 +319,111 @@ export function CrisisConfigEditorModal({
           compact
         />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
 function SectionHeader({
   icon,
   title,
+  wiring,
+  description,
   enabled,
   onToggle,
 }: {
   icon: ReactNode;
   title: string;
+  wiring: RuntimeWiring;
+  description: string;
   enabled: boolean;
   onToggle: (value: boolean) => void;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-3">
-      {icon}
-      <span className="flex-1 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-        {title}
-      </span>
-      <label className="inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
-        Enabled
-      </label>
+    <div className="mb-3">
+      <div className="flex items-center gap-3">
+        {icon}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {title}
+          </span>
+          <RuntimeBadge wiring={wiring} />
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
+          Enabled
+        </label>
+      </div>
+      <p className="mt-1 pl-7 text-[11px] leading-5" style={{ color: 'var(--text-muted)' }}>
+        {description}
+      </p>
     </div>
+  );
+}
+
+function RuntimeBadge({ wiring }: { wiring: RuntimeWiring }) {
+  const copy = {
+    active: { label: 'Runtime active', bg: 'var(--success-bg)', color: 'var(--success)' },
+    partial: { label: 'Partly active', bg: 'var(--warning-bg)', color: 'var(--warning)' },
+    reserved: { label: 'Reserved', bg: 'var(--bg-surface)', color: 'var(--text-muted)' },
+  }[wiring];
+
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+      style={{ background: copy.bg, color: copy.color, border: '1px solid var(--border)' }}
+    >
+      {copy.label}
+    </span>
+  );
+}
+
+function RuntimeNote({ wiring, children }: { wiring: RuntimeWiring; children: ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: wiring === 'reserved' ? 'var(--text-muted)' : wiring === 'partial' ? 'var(--warning)' : 'var(--success)' }} />
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function RuntimeMappingPanel() {
+  const rows = [
+    ['Issue pressure', 'Conversation Spike: growth %', 'top_issues_report issue_pressure_proxy'],
+    ['Controversy spike', 'Influencer: viral negative comments', 'thread_controversy_report controversy_score_proxy'],
+    ['Sentiment collapse', 'Sentiment: negative spike %', 'SOV entity delta proxy'],
+    ['Actions', 'Response Policy', 'adaptive crawl + user/ops notification'],
+  ];
+
+  return (
+    <section className="rounded-2xl p-4" style={{ ...cardStyle, background: 'var(--bg-surface)' }}>
+      <div className="mb-3 flex items-start gap-2">
+        <Info className="mt-0.5 h-4 w-4" style={{ color: 'var(--accent)' }} />
+        <div>
+          <h3 className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Runtime mapping
+          </h3>
+          <p className="mt-1 text-[11px] leading-5" style={{ color: 'var(--text-muted)' }}>
+            Current crisis detection uses three BI-backed signals. Other fields are saved for issue classification, presets, and future scorer expansion.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {rows.map(([signal, config, source]) => (
+          <div key={signal} className="rounded-xl p-3" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>
+            <div className="text-[11px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {signal}
+            </div>
+            <div className="mt-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+              Config: {config}
+            </div>
+            <div className="mt-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Source: {source}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -312,17 +434,32 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
       keywordGroups: prev.keywordGroups.map((group, groupIdx) => (groupIdx === idx ? { ...group, ...patch } : group)),
     }));
   };
+  const addGroup = () => {
+    setState((prev) => {
+      const used = new Set(prev.keywordGroups.map((group) => group.name));
+      const next = issueKeywordGroupOptions.find((option) => !used.has(option.value)) ?? issueKeywordGroupOptions[0];
+      return {
+        ...prev,
+        keywordGroups: [...prev.keywordGroups, { name: next.value, keywordsText: '', weight: next.defaultWeight }],
+      };
+    });
+  };
 
   return (
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<BellRing className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Keyword risk groups"
+        title="Issue Keywords"
+        wiring="reserved"
+        description="Saved as marketing issue taxonomy. Current CRISIS_ALERT scoring does not directly match these keywords yet."
         enabled={state.keywordEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, keywordEnabled: value }))}
       />
       {state.keywordEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="reserved">
+            Use these groups to keep crisis presets and issue language business-readable. They are not the direct reason a crisis alert fires in the current runtime.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Matching logic
@@ -338,35 +475,69 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
             </select>
           </div>
           {state.keywordGroups.map((group, idx) => (
-            <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[1fr_90px_2fr_auto]" style={{ background: 'var(--bg-surface)' }}>
-              <input
-                value={group.name}
-                onChange={(e) => updateGroup(idx, { name: e.target.value })}
-                placeholder="Group name"
-                className={inputClass}
-                style={inputStyle}
-              />
-              <input
-                type="number"
-                value={group.weight}
-                onChange={(e) => updateGroup(idx, { weight: numeric(e.target.value, 1) })}
-                placeholder="Weight"
-                className={inputClass}
-                style={inputStyle}
-              />
-              <textarea
-                value={group.keywordsText}
-                onChange={(e) => updateGroup(idx, { keywordsText: e.target.value })}
-                placeholder="Comma or newline separated keywords"
-                rows={2}
-                className={textareaClass}
-                style={inputStyle}
-              />
+            <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[220px_150px_2fr_auto]" style={{ background: 'var(--bg-surface)' }}>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Risk theme
+                </span>
+                <select
+                  value={group.name}
+                  onChange={(e) => {
+                    const option = issueKeywordGroupOptions.find((item) => item.value === e.target.value);
+                    updateGroup(idx, { name: e.target.value, weight: option?.defaultWeight ?? group.weight });
+                  }}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  {!issueKeywordGroupOptions.some((option) => option.value === group.name) && (
+                    <option value={group.name}>{group.name || 'Custom theme'}</option>
+                  )}
+                  {issueKeywordGroupOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Priority
+                </span>
+                <select
+                  value={String(group.weight)}
+                  onChange={(e) => updateGroup(idx, { weight: numeric(e.target.value, 5) })}
+                  className={inputClass}
+                  style={inputStyle}
+                >
+                  {!issueWeightOptions.some((option) => option.value === group.weight) && (
+                    <option value={group.weight}>{group.weight} - Custom</option>
+                  )}
+                  {issueWeightOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value} - {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Matching keywords
+                </span>
+                <textarea
+                  value={group.keywordsText}
+                  onChange={(e) => updateGroup(idx, { keywordsText: e.target.value })}
+                  placeholder="Comma or newline separated keywords"
+                  rows={2}
+                  className={textareaClass}
+                  style={inputStyle}
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => setState((prev) => ({ ...prev, keywordGroups: prev.keywordGroups.filter((_, itemIdx) => itemIdx !== idx) }))}
-                className="rounded-xl px-3"
+                className="rounded-xl px-3 md:mt-5"
                 style={{ color: 'var(--danger)' }}
+                title="Remove keyword group"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -374,12 +545,7 @@ function KeywordSection({ state, setState }: { state: EditorState; setState: Dis
           ))}
           <button
             type="button"
-            onClick={() =>
-              setState((prev) => ({
-                ...prev,
-                keywordGroups: [...prev.keywordGroups, { name: 'New risk group', keywordsText: '', weight: 5 }],
-              }))
-            }
+            onClick={addGroup}
             className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
             style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
           >
@@ -404,12 +570,17 @@ function VolumeSection({ state, setState }: { state: EditorState; setState: Disp
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<Flame className="h-4 w-4" style={{ color: 'var(--warning)' }} />}
-        title="Volume spike rules"
+        title="Conversation Spike"
+        wiring="partial"
+        description="Growth % is mapped to the issue_pressure signal. Metric, window, and baseline are stored but not used by the current scorer."
         enabled={state.volumeEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, volumeEnabled: value }))}
       />
       {state.volumeEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active field: Growth %. It tunes thresholds for top issue pressure in the BI report, not raw mention count directly.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Metric
@@ -462,12 +633,17 @@ function SentimentSection({ state, setState }: { state: EditorState; setState: D
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<SlidersHorizontal className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Sentiment thresholds"
+        title="Negative Sentiment Share"
+        wiring="partial"
+        description="NEGATIVE_SPIKE threshold is active. Aspect-negative rules and sample-size guard are reserved for the next sentiment scorer."
         enabled={state.sentimentEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, sentimentEnabled: value }))}
       />
       {state.sentimentEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active rule: Negative spike %. It tunes the sentiment_collapse proxy from SOV entity deltas.
+          </RuntimeNote>
           <NumberField
             label="Minimum sample size"
             value={state.sentimentMinSampleSize}
@@ -513,12 +689,17 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
     <section className="rounded-2xl p-4" style={cardStyle}>
       <SectionHeader
         icon={<Users className="h-4 w-4" style={{ color: 'var(--accent)' }} />}
-        title="Influencer and virality rules"
+        title="Influencer Amplification"
+        wiring="partial"
+        description="VIRAL_NEGATIVE comment count tunes controversy_spike. HIGH_REACH, followers, shares, sentiment, and AND/OR logic are reserved."
         enabled={state.influencerEnabled}
         onToggle={(value) => setState((prev) => ({ ...prev, influencerEnabled: value }))}
       />
       {state.influencerEnabled && (
         <div className="space-y-3">
+          <RuntimeNote wiring="partial">
+            Active field: Viral negative comments. It changes thresholds for thread controversy score, which is why alerts can show controversy_spike.
+          </RuntimeNote>
           <div className="max-w-xs">
             <label className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>
               Matching logic
@@ -531,8 +712,8 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
           {state.influencerRules.map((rule, idx) => (
             <div key={idx} className="grid gap-2 rounded-xl p-3 md:grid-cols-[150px_1fr_140px_1fr_1fr_auto]" style={{ background: 'var(--bg-surface)' }}>
               <select value={rule.type} onChange={(e) => updateRule(idx, { type: e.target.value as InfluencerRule['type'] })} className={inputClass} style={inputStyle}>
-                <option value="HIGH_REACH">High reach</option>
                 <option value="VIRAL_NEGATIVE">Viral negative</option>
+                <option value="HIGH_REACH">High reach (reserved)</option>
               </select>
               <NumberField label="Followers" value={rule.min_followers ?? 0} onChange={(value) => updateRule(idx, { min_followers: value })} />
               <select value={rule.required_sentiment ?? 'NEGATIVE'} onChange={(e) => updateRule(idx, { required_sentiment: e.target.value as InfluencerRule['required_sentiment'] })} className={inputClass} style={inputStyle}>
@@ -549,6 +730,94 @@ function InfluencerSection({ state, setState }: { state: EditorState; setState: 
           <AddRuleButton onClick={() => setState((prev) => ({ ...prev, influencerRules: [...prev.influencerRules, defaultInfluencerRule()] }))} label="Add influencer rule" />
         </div>
       )}
+    </section>
+  );
+}
+
+function ResponsePolicySection({ state, setState }: { state: EditorState; setState: Dispatch<SetStateAction<EditorState>> }) {
+  return (
+    <section className="rounded-2xl p-4" style={cardStyle}>
+      <div className="mb-3 flex items-center gap-3">
+        <RefreshCw className="h-4 w-4" style={{ color: 'var(--accent)' }} />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Response Policy
+          </span>
+          <RuntimeBadge wiring="active" />
+        </div>
+      </div>
+      <RuntimeNote wiring="active">
+        Fully wired. Adaptive crawling reacts from the selected level; user alerts and ops escalation use the notification threshold and repeat cooldown.
+      </RuntimeNote>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)' }}>
+          <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.adaptiveCrawlEnabled}
+              onChange={(e) => setState((prev) => ({ ...prev, adaptiveCrawlEnabled: e.target.checked }))}
+            />
+            Adaptive crawling
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>Boost crawling from</span>
+              <select
+                value={state.adaptiveTriggerLevel}
+                onChange={(e) => setState((prev) => ({ ...prev, adaptiveTriggerLevel: e.target.value as EditorState['adaptiveTriggerLevel'] }))}
+                className={inputClass}
+                style={inputStyle}
+              >
+                <option value="WATCH">Watch</option>
+                <option value="WARNING">Warning</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </label>
+            <NumberField
+              label="Cooldown minutes"
+              value={state.adaptiveCooldownMinutes}
+              onChange={(value) => setState((prev) => ({ ...prev, adaptiveCooldownMinutes: value }))}
+            />
+          </div>
+        </div>
+        <div className="rounded-xl p-3" style={{ background: 'var(--bg-surface)' }}>
+          <label className="mb-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.notificationEnabled}
+              onChange={(e) => setState((prev) => ({ ...prev, notificationEnabled: e.target.checked }))}
+            />
+            User alerts
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-muted)' }}>Notify users from</span>
+              <select
+                value={state.notificationTriggerLevel}
+                onChange={(e) => setState((prev) => ({ ...prev, notificationTriggerLevel: e.target.value as EditorState['notificationTriggerLevel'] }))}
+                className={inputClass}
+                style={inputStyle}
+              >
+                <option value="WARNING">Warning</option>
+                <option value="CRITICAL">Critical</option>
+              </select>
+            </label>
+            <NumberField
+              label="Repeat cooldown"
+              value={state.notificationCooldownMinutes}
+              onChange={(value) => setState((prev) => ({ ...prev, notificationCooldownMinutes: value }))}
+            />
+          </div>
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={state.opsAlertOnCritical}
+              onChange={(e) => setState((prev) => ({ ...prev, opsAlertOnCritical: e.target.checked }))}
+            />
+            Escalate critical alerts to ops
+          </label>
+        </div>
+      </div>
     </section>
   );
 }
@@ -579,6 +848,17 @@ function normalizeConfig(config: CrisisConfig | CrisisConfigInput): EditorState 
   const volumeTrigger = config.volume_trigger ?? fallback.volume_trigger!;
   const sentimentTrigger = config.sentiment_trigger ?? fallback.sentiment_trigger!;
   const influencerTrigger = config.influencer_trigger ?? fallback.influencer_trigger!;
+  const defaultPolicy = buildDefaultResponsePolicy();
+  const responsePolicy = {
+    adaptive_crawl: {
+      ...defaultPolicy.adaptive_crawl,
+      ...(config.response_policy?.adaptive_crawl ?? {}),
+    },
+    notification: {
+      ...defaultPolicy.notification,
+      ...(config.response_policy?.notification ?? {}),
+    },
+  };
 
   return {
     status: config.status ?? 'NORMAL',
@@ -601,6 +881,13 @@ function normalizeConfig(config: CrisisConfig | CrisisConfigInput): EditorState 
     influencerEnabled: influencerTrigger.enabled,
     influencerLogic: influencerTrigger.logic,
     influencerRules: influencerTrigger.rules.length ? influencerTrigger.rules : fallback.influencer_trigger!.rules,
+    adaptiveCrawlEnabled: responsePolicy.adaptive_crawl.enabled,
+    adaptiveTriggerLevel: responsePolicy.adaptive_crawl.trigger_level,
+    adaptiveCooldownMinutes: responsePolicy.adaptive_crawl.cooldown_minutes,
+    notificationEnabled: responsePolicy.notification.enabled,
+    notificationTriggerLevel: responsePolicy.notification.trigger_level,
+    notificationCooldownMinutes: responsePolicy.notification.repeat_cooldown_minutes,
+    opsAlertOnCritical: responsePolicy.notification.ops_alert_on_critical,
   };
 }
 
@@ -635,6 +922,19 @@ function buildPayload(state: EditorState): CrisisConfigInput {
       enabled: state.influencerEnabled,
       logic: state.influencerLogic,
       rules: state.influencerRules,
+    },
+    response_policy: {
+      adaptive_crawl: {
+        enabled: state.adaptiveCrawlEnabled,
+        trigger_level: state.adaptiveTriggerLevel,
+        cooldown_minutes: state.adaptiveCooldownMinutes,
+      },
+      notification: {
+        enabled: state.notificationEnabled,
+        trigger_level: state.notificationTriggerLevel,
+        repeat_cooldown_minutes: state.notificationCooldownMinutes,
+        ops_alert_on_critical: state.opsAlertOnCritical,
+      },
     },
   };
 }
@@ -671,10 +971,10 @@ function defaultSentimentRule(): SentimentRuleDraft {
 
 function defaultInfluencerRule(): InfluencerRule {
   return {
-    type: 'HIGH_REACH',
-    min_followers: 50000,
+    type: 'VIRAL_NEGATIVE',
+    min_followers: 0,
     required_sentiment: 'NEGATIVE',
     min_shares: 0,
-    min_comments: 0,
+    min_comments: 150,
   };
 }

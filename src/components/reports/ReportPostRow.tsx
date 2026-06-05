@@ -28,6 +28,7 @@ function sentimentColor(s: ReportPost['sentiment']) {
 function ReportPostRowImpl({ post, selected, onToggleSelect }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [showFull, setShowFull] = useState(false);
+  const sourceUrl = post.url?.trim();
 
   return (
     <div
@@ -57,15 +58,25 @@ function ReportPostRowImpl({ post, selected, onToggleSelect }: Props) {
             <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>
               {new Date(post.postedAt).toLocaleString('vi-VN')}
             </span>
-            <a
-              href={post.url}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto text-[10px] flex items-center gap-1"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              <ExternalLink className="w-3 h-3" /> source
-            </a>
+            {sourceUrl ? (
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto text-[10px] flex items-center gap-1"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <ExternalLink className="w-3 h-3" /> source
+              </a>
+            ) : (
+              <span
+                className="ml-auto text-[10px] flex items-center gap-1 cursor-not-allowed"
+                style={{ color: 'var(--text-faint)' }}
+                title="Original link unavailable from the indexed source"
+              >
+                <ExternalLink className="w-3 h-3" /> source unavailable
+              </span>
+            )}
           </div>
 
           {/* Content */}

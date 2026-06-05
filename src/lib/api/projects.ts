@@ -28,6 +28,7 @@ export interface Project {
   created_by: string;
   created_at: string;
   updated_at: string;
+  crisis_config?: CrisisConfig;
 }
 
 export interface CreateProjectInput {
@@ -48,6 +49,11 @@ export interface UpdateProjectInput {
   domain_type_code?: string;
 }
 
+export interface ProjectDomain {
+  domain_code: string;
+  display_name: string;
+}
+
 export interface CrisisKeywordGroupInput {
   name: string;
   keywords: string[];
@@ -55,7 +61,7 @@ export interface CrisisKeywordGroupInput {
 }
 
 export interface CrisisConfigInput {
-  status?: 'NORMAL' | 'WARNING' | 'CRITICAL';
+  status?: 'NORMAL' | 'WATCH' | 'WARNING' | 'CRITICAL';
   keywords_trigger?: {
     enabled: boolean;
     logic: 'AND' | 'OR';
@@ -92,13 +98,72 @@ export interface CrisisConfigInput {
       min_comments?: number;
     }>;
   };
+  response_policy?: CrisisResponsePolicy;
 }
 
-export type CrisisConfig = CrisisConfigInput & {
+export type CrisisConfig = {
   project_id?: string;
+  status: 'NORMAL' | 'WATCH' | 'WARNING' | 'CRITICAL';
+  keywords_trigger: NonNullable<CrisisConfigInput['keywords_trigger']>;
+  volume_trigger: NonNullable<CrisisConfigInput['volume_trigger']>;
+  sentiment_trigger: NonNullable<CrisisConfigInput['sentiment_trigger']>;
+  influencer_trigger: NonNullable<CrisisConfigInput['influencer_trigger']>;
+  response_policy?: CrisisResponsePolicy;
   created_at?: string;
   updated_at?: string;
 };
+
+export interface CrisisResponsePolicy {
+  adaptive_crawl: {
+    enabled: boolean;
+    trigger_level: 'WATCH' | 'WARNING' | 'CRITICAL';
+    cooldown_minutes: number;
+  };
+  notification: {
+    enabled: boolean;
+    trigger_level: 'WARNING' | 'CRITICAL';
+    repeat_cooldown_minutes: number;
+    ops_alert_on_critical: boolean;
+  };
+}
+
+export type OntologyTargetKind = 'ASPECT' | 'ISSUE' | 'TOPIC';
+export type OntologyMatchMode = 'ANY' | 'ALL' | 'REGEX';
+
+export interface OntologySignalRule {
+  id?: string;
+  label: string;
+  description?: string;
+  target_kind: OntologyTargetKind;
+  target_key: string;
+  match_mode: OntologyMatchMode;
+  phrases: string[];
+  patterns: string[];
+  negative_phrases?: string[];
+  enabled: boolean;
+  weight: number;
+  sample_text?: string;
+}
+
+export interface ProjectOntologyRulesInput {
+  enabled: boolean;
+  rules: OntologySignalRule[];
+}
+
+export interface ProjectOntologyRules extends ProjectOntologyRulesInput {
+  project_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OntologyRuleTestResult {
+  rule_id: string;
+  label: string;
+  target_kind: OntologyTargetKind;
+  target_key: string;
+  matched: boolean;
+  evidence: string[];
+}
 
 // ─── Paginated Response (from Go backend) ────────────────────────────────────
 
@@ -136,6 +201,10 @@ export const projectApi = {
   create: (campaignId: string, data: CreateProjectInput): Promise<Project> =>
     apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.campaignProjects(campaignId), data),
 
+  /** List analysis domains available for project routing */
+  listDomains: (): Promise<ProjectDomain[]> =>
+    apiClient.get<ProjectDomain[]>(API_CONFIG.ENDPOINTS.project.domains),
+
   /** Update a project */
   update: (id: string, data: UpdateProjectInput): Promise<Project> =>
     apiClient.put<Project>(API_CONFIG.ENDPOINTS.project.project(id), data),
@@ -160,7 +229,24 @@ export const projectApi = {
   getCrisisConfig: (id: string): Promise<CrisisConfig> =>
     apiClient.get<CrisisConfig>(API_CONFIG.ENDPOINTS.project.projectCrisisConfig(id)),
 
+  /** Create or update marketing ontology/signal matching rules */
+  upsertOntologyRules: (id: string, data: ProjectOntologyRulesInput): Promise<ProjectOntologyRules> =>
+    apiClient.put<ProjectOntologyRules>(API_CONFIG.ENDPOINTS.project.projectOntologyRules(id), data),
+
+  /** Get marketing ontology/signal matching rules */
+  getOntologyRules: (id: string): Promise<ProjectOntologyRules> =>
+    apiClient.get<ProjectOntologyRules>(API_CONFIG.ENDPOINTS.project.projectOntologyRules(id)),
+
+  /** Test a draft ruleset against sample text before saving */
+  testOntologyRules: (id: string, data: ProjectOntologyRulesInput & { text: string }): Promise<OntologyRuleTestResult[]> =>
+    apiClient.post<{ matches: OntologyRuleTestResult[] }>(API_CONFIG.ENDPOINTS.project.projectOntologyRulesTest(id), data)
+      .then((resp) => resp.matches ?? []),
+
   /** Archive a project */
-  archive: (id: string): Promise<void> =>
-    apiClient.delete<void>(API_CONFIG.ENDPOINTS.project.project(id)),
+  archive: (id: string): Promise<Project> =>
+    apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectArchive(id)),
+
+  /** Restore an archived project to PAUSED so it can be reviewed before resume */
+  unarchive: (id: string): Promise<Project> =>
+    apiClient.post<Project>(API_CONFIG.ENDPOINTS.project.projectUnarchive(id)),
 };

@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,6 +25,9 @@ interface PlatformStat {
   name: string;
   mentions: number;
   mentionsChange: number;
+  mentionsChangeReliable?: boolean;
+  mentionsCurrentPeriod?: number;
+  mentionsPreviousPeriod?: number;
   engagement: string;
   engagementRaw: number;
   sentiment: number;
@@ -44,13 +52,16 @@ interface PlatformStatsResponse {
 
 const platformKeys = {
   all: ['analytics', 'platforms'] as const,
-  campaign: (campaignId: string) => [...platformKeys.all, campaignId] as const,
+  campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
+    [...platformKeys.all, campaignId, analyticsScopeKey(scope)] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchPlatformStats(campaignId: string): Promise<PlatformStatsResponse> {
-  const res = await fetch(`/api/analytics/platforms?campaignId=${encodeURIComponent(campaignId)}`);
+async function fetchPlatformStats(campaignId: string, scope?: AnalyticsScopeParams | string): Promise<PlatformStatsResponse> {
+  const params = new URLSearchParams({ campaignId });
+  appendAnalyticsScope(params, scope);
+  const res = await fetch(`/api/analytics/platforms?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Failed to fetch platform stats (${res.status})`);
@@ -68,12 +79,15 @@ async function fetchPlatformStats(campaignId: string): Promise<PlatformStatsResp
  * - timeSeries: 12-month mentions per platform (for line/bar chart)
  * - months: month labels (YYYY-MM)
  */
-export function usePlatformStats(campaignId: string | undefined) {
-  const queryKey = campaignId ? platformKeys.campaign(campaignId) : [...platformKeys.all, '__pending__'] as const;
+export function usePlatformStats(campaignId: string | undefined, scope?: AnalyticsScopeParams | string) {
+  const scopeKey = analyticsScopeKey(scope);
+  const queryKey = campaignId
+    ? platformKeys.campaign(campaignId, scope)
+    : [...platformKeys.all, '__pending__', scopeKey] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchPlatformStats(campaignId!),
+    queryFn: () => fetchPlatformStats(campaignId!, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<PlatformStatsResponse>(queryKey) : undefined,

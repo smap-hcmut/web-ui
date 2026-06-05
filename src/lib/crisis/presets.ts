@@ -58,6 +58,7 @@ export function buildDefaultCrisisConfig(): CrisisConfigInput {
         },
       ],
     },
+    response_policy: buildDefaultResponsePolicy(),
   };
 }
 
@@ -168,6 +169,23 @@ function buildAhamoveLogisticsCrisisConfig(): CrisisConfigInput {
           min_comments: 150,
         },
       ],
+    },
+    response_policy: buildDefaultResponsePolicy(),
+  };
+}
+
+export function buildDefaultResponsePolicy(): NonNullable<CrisisConfigInput['response_policy']> {
+  return {
+    adaptive_crawl: {
+      enabled: true,
+      trigger_level: 'WATCH',
+      cooldown_minutes: 30,
+    },
+    notification: {
+      enabled: true,
+      trigger_level: 'WARNING',
+      repeat_cooldown_minutes: 60,
+      ops_alert_on_critical: true,
     },
   };
 }

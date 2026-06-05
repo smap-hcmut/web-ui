@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { TopNav } from "@/components/TopNav";
 import { LiveTicker } from "@/components/LiveTicker";
 import { CampaignAssistant } from "@/components/CampaignAssistant";
@@ -11,9 +11,52 @@ import { NavProvider } from "@/components/NavProvider";
 import { ScopeProvider, useScope } from "@/components/ScopeProvider";
 import { AssistantProvider, useAssistant } from "@/components/AssistantProvider";
 import { useRecentActivity } from "@/lib/hooks";
+import { useNotificationStore } from "@/lib/stores";
+import type { ApiError } from "@/lib/api/client";
 import type { ActivityItem } from "@/lib/types";
 
 const DOCK_WIDTH = 'clamp(420px, 33vw, 600px)';
+
+function getPermissionMessage(error: ApiError | undefined): string {
+  const rawDetails = error?.details;
+  const details =
+    typeof rawDetails === 'string'
+      ? rawDetails
+      : typeof rawDetails?.message === 'string'
+        ? rawDetails.message
+        : '';
+  const role = details.match(/your_role:\s*([A-Z_]+)/i)?.[1];
+  if (role) {
+    return `Tài khoản hiện là ${role}. Chỉ ADMIN mới được tạo, sửa, xoá campaign/project hoặc trigger pipeline thu thập và phân tích dữ liệu.`;
+  }
+  return 'Chỉ ADMIN mới được tạo, sửa, xoá campaign/project hoặc trigger pipeline thu thập và phân tích dữ liệu.';
+}
+
+function PermissionDeniedNotifier() {
+  const push = useNotificationStore((s) => s.push);
+  const lastToastAt = useRef(0);
+
+  useEffect(() => {
+    const onDenied = (event: Event) => {
+      const now = Date.now();
+      if (now - lastToastAt.current < 1500) return;
+      lastToastAt.current = now;
+      const error = (event as CustomEvent<ApiError>).detail;
+      push({
+        severity: 'warning',
+        category: 'user',
+        title: 'Cần quyền ADMIN',
+        content: getPermissionMessage(error),
+        showToast: true,
+      });
+    };
+
+    window.addEventListener('smap:permission-denied', onDenied);
+    return () => window.removeEventListener('smap:permission-denied', onDenied);
+  }, [push]);
+
+  return null;
+}
 
 function SmapLayoutInner({ children }: { children: React.ReactNode }) {
   const { activeCampaignId } = useScope();
@@ -79,6 +122,7 @@ function SmapLayoutInner({ children }: { children: React.ReactNode }) {
       <CampaignAssistant />
 
       {/* Toast notifications */}
+      <PermissionDeniedNotifier />
       <NotificationToasts
         rightOffset={pushContent ? `calc(${DOCK_WIDTH} + 1.5rem)` : undefined}
       />

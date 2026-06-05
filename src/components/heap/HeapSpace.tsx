@@ -194,13 +194,21 @@ interface DragState {
    COMPONENT
    ═══════════════════════════════════════════ */
 
-export default function HeapSpace() {
+export default function HeapSpace({
+  sourceKind = 'all',
+  projectIds = [],
+  keywords = [],
+}: {
+  sourceKind?: string;
+  projectIds?: readonly string[];
+  keywords?: readonly string[];
+}) {
 
   /* ─── scope context ─── */
   const { activeCampaignId } = useScope();
 
   /* ─── real data from API ─── */
-  const { data: heapResponse } = useHeapData(activeCampaignId ?? undefined);
+  const { data: heapResponse } = useHeapData(activeCampaignId ?? undefined, { sourceKind, projectIds, keywords });
   const heapData = useMemo(
     () => enrichHeapData(heapResponse?.tree ? [heapResponse.tree as unknown as HeapNode] : []),
     [heapResponse],
@@ -211,7 +219,7 @@ export default function HeapSpace() {
     if (!activeCampaignId) return heapData.flatMap((c) => c.children ?? []);
     const camp = heapData.find((c) => c.id === activeCampaignId);
     return camp?.children ?? heapData.flatMap((c) => c.children ?? []);
-  }, [activeCampaignId]);
+  }, [activeCampaignId, heapData]);
 
   /* ─── refs ─── */
   const containerRef  = useRef<HTMLDivElement>(null);

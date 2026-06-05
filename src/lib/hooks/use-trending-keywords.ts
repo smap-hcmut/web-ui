@@ -11,6 +11,11 @@ import {
   getCachedAnalyticsUpdatedAt,
   usePersistedAnalyticsCache,
 } from './analytics-cache';
+import {
+  analyticsScopeKey,
+  appendAnalyticsScope,
+  type AnalyticsScopeParams,
+} from './analytics-scope';
 import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,17 +43,22 @@ interface KeywordsResponse {
 
 const keywordKeys = {
   all: ['analytics', 'keywords'] as const,
-  campaign: (campaignId: string, limit?: number) =>
-    [...keywordKeys.all, campaignId, { limit }] as const,
+  campaign: (campaignId: string, limit?: number, scope?: AnalyticsScopeParams | string) =>
+    [...keywordKeys.all, campaignId, { limit, ...analyticsScopeKey(scope) }] as const,
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-async function fetchKeywords(campaignId: string, limit = 50): Promise<KeywordsResponse> {
+async function fetchKeywords(
+  campaignId: string,
+  limit = 50,
+  scope?: AnalyticsScopeParams | string,
+): Promise<KeywordsResponse> {
   const params = new URLSearchParams({
     campaignId,
     limit: String(limit),
   });
+  appendAnalyticsScope(params, scope);
   const res = await fetch(`/api/analytics/keywords?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -66,14 +76,19 @@ async function fetchKeywords(campaignId: string, limit = 50): Promise<KeywordsRe
  * - keywords: ranked list with text, volume, sentiment, change%
  * - wordCloud: items with text, value, color, opacity (for word cloud visualization)
  */
-export function useTrendingKeywords(campaignId: string | undefined, limit = 50) {
+export function useTrendingKeywords(
+  campaignId: string | undefined,
+  limit = 50,
+  scope?: AnalyticsScopeParams | string,
+) {
+  const scopeKey = analyticsScopeKey(scope);
   const queryKey = campaignId
-    ? keywordKeys.campaign(campaignId, limit)
-    : [...keywordKeys.all, '__pending__', { limit }] as const;
+    ? keywordKeys.campaign(campaignId, limit, scope)
+    : [...keywordKeys.all, '__pending__', { limit, ...scopeKey }] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchKeywords(campaignId!, limit),
+    queryFn: () => fetchKeywords(campaignId!, limit, scope),
     enabled: !!campaignId,
     placeholderData: keepPreviousData,
     initialData: campaignId ? getCachedAnalyticsData<KeywordsResponse>(queryKey) : undefined,

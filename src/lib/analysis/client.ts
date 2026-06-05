@@ -9,7 +9,7 @@ const ANALYSIS_API_URL =
   'http://analysis-api.smap.svc.cluster.local';
 
 const TIMEOUT_CACHE_TTL_MS = 60_000;
-const timeoutCampaignCache = new Map<string, number>();
+const timeoutEndpointCache = new Map<string, number>();
 
 function getCampaignIdFromSearch(search: string): string | null {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
@@ -18,23 +18,30 @@ function getCampaignIdFromSearch(search: string): string | null {
   return campaignId.trim() || null;
 }
 
-function isCampaignInTimeoutWindow(campaignId: string | null): boolean {
-  if (!campaignId) return false;
-  const until = timeoutCampaignCache.get(campaignId);
+function timeoutCacheKey(campaignId: string | null, path: string, search = ''): string | null {
+  if (!campaignId) return null;
+  return `${campaignId}:${path}:${search}`;
+}
+
+function isEndpointInTimeoutWindow(campaignId: string | null, path: string, search = ''): boolean {
+  const key = timeoutCacheKey(campaignId, path, search);
+  if (!key) return false;
+  const until = timeoutEndpointCache.get(key);
   if (!until) return false;
   if (until <= Date.now()) {
-    timeoutCampaignCache.delete(campaignId);
+    timeoutEndpointCache.delete(key);
     return false;
   }
   return true;
 }
 
-function markCampaignTimeout(campaignId: string | null): void {
-  if (!campaignId) return;
-  timeoutCampaignCache.set(campaignId, Date.now() + TIMEOUT_CACHE_TTL_MS);
+function markEndpointTimeout(campaignId: string | null, path: string, search = ''): void {
+  const key = timeoutCacheKey(campaignId, path, search);
+  if (!key) return;
+  timeoutEndpointCache.set(key, Date.now() + TIMEOUT_CACHE_TTL_MS);
 }
 
-async function requestAnalysis(url: URL): Promise<{ body: string; contentType: string; status: number }> {
+async function requestAnalysis(url: URL): Promise<{ body: string; contentType: string; contentDisposition?: string; status: number }> {
   return await new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
     const req = transport(
@@ -55,6 +62,9 @@ async function requestAnalysis(url: URL): Promise<{ body: string; contentType: s
           resolve({
             body,
             contentType: String(res.headers['content-type'] || 'application/json'),
+            contentDisposition: res.headers['content-disposition']
+              ? String(res.headers['content-disposition'])
+              : undefined,
             status: res.statusCode || 502,
           });
         });
@@ -74,7 +84,7 @@ async function fetchAnalysis(request: NextRequest, path: string): Promise<Respon
   url.search = request.nextUrl.search;
 
   const campaignId = getCampaignIdFromSearch(url.search);
-  if (isCampaignInTimeoutWindow(campaignId)) {
+  if (isEndpointInTimeoutWindow(campaignId, path, url.search)) {
     return new Response(JSON.stringify({ error: 'analytics query exceeded server time limit' }), {
       status: 504,
       headers: { 'Content-Type': 'application/json' },
@@ -83,31 +93,40 @@ async function fetchAnalysis(request: NextRequest, path: string): Promise<Respon
 
   const upstream = await requestAnalysis(url);
   if (upstream.status === 504) {
-    markCampaignTimeout(campaignId);
+    markEndpointTimeout(campaignId, path, url.search);
+  }
+  const headers = new Headers({
+    'Content-Type': upstream.contentType,
+  });
+  if (upstream.contentDisposition) {
+    headers.set('Content-Disposition', upstream.contentDisposition);
   }
   return new Response(upstream.body, {
     status: upstream.status,
-    headers: {
-      'Content-Type': upstream.contentType,
-    },
+    headers,
   });
 }
 
 export async function proxyAnalysis(request: NextRequest, path: string): Promise<Response> {
   try {
     const upstream = await fetchAnalysis(request, path);
+    const headers = new Headers({
+      'Content-Type': upstream.headers.get('content-type') || 'application/json',
+    });
+    const contentDisposition = upstream.headers.get('content-disposition');
+    if (contentDisposition) {
+      headers.set('Content-Disposition', contentDisposition);
+    }
     return new Response(await upstream.text(), {
       status: upstream.status,
-      headers: {
-        'Content-Type': upstream.headers.get('content-type') || 'application/json',
-      },
+      headers,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'analysis-api unavailable';
     const status = message.toLowerCase().includes('timeout') ? 504 : 502;
     if (status === 504) {
       const campaignId = getCampaignIdFromSearch(request.nextUrl.search);
-      markCampaignTimeout(campaignId);
+      markEndpointTimeout(campaignId, path, request.nextUrl.search);
     }
     return new Response(JSON.stringify({ error: message }), {
       status,

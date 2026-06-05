@@ -10,6 +10,45 @@
 
 export type Platform = 'tiktok' | 'facebook' | 'youtube';
 
+// ─── KPI / Overview ───────────────────────────────────────────────────────────
+
+export interface MetricData {
+  label: string;
+  value: string;
+  change: number;
+  trend: number[];
+  icon: string;
+}
+
+// ─── Platform breakdown ───────────────────────────────────────────────────────
+
+export interface PlatformData {
+  platform: Platform;
+  name: string;
+  mentions: number;
+  mentionsChange: number;
+  mentionsChangeReliable?: boolean;
+  mentionsCurrentPeriod?: number;
+  mentionsPreviousPeriod?: number;
+  engagement: string;
+  engagementChange: number;
+  followers: string;
+  followersChange: number;
+  sentiment: number;
+  trend: number[];
+  status: 'active' | 'inactive';
+}
+
+// ─── Trending keywords ────────────────────────────────────────────────────────
+
+export interface TrendItem {
+  rank: number;
+  keyword: string;
+  volume: number;
+  change: number;
+  platforms: Platform[];
+}
+
 // ─── Activity / post feed ─────────────────────────────────────────────────────
 
 export interface ActivityItem {
@@ -52,6 +91,9 @@ export interface PostDetail {
   topComments: PostComment[];
   keywords: string[];
   url: string;
+  contentType?: string;
+  rootId?: string;
+  parentId?: string;
 }
 
 // ─── Stalker (post/profile monitoring) ────────────────────────────────────────
@@ -94,7 +136,7 @@ export interface ReportItem {
   scope: string;
   generatedAt: string;
   pages: number;
-  format: 'PDF' | 'CSV';
+  format: 'PDF' | 'CSV' | 'MD';
   status: ReportStatus;
   sections: string[];
 
@@ -106,6 +148,16 @@ export interface ReportItem {
   process?: CrawlerProcess;      // present while generating / after failure / cancelled
   totals?: { posts: number; comments: number };
   errorMessage?: string;
+  source?: 'manual' | 'assistant';
+  prompt?: string;
+}
+
+export interface ReportContent {
+  reportId: string;
+  content: string;
+  contentType: string;
+  fileName: string;
+  fileSize: number;
 }
 
 export type CrawlerStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
@@ -180,19 +232,27 @@ export interface PaginatedResponse<T> {
 // ─── Campaign assistant ───────────────────────────────────────────────────────
 
 export interface BotResponseBlock {
-  type: 'text' | 'bullets' | 'stats';
+  type: 'text' | 'bullets' | 'stats' | 'report';
   content?: string;
   items?: string[];
   stats?: { label: string; value: string; change?: number }[];
+  report?: {
+    id: string;
+    title: string;
+    type: ReportItem['type'];
+    status: ReportStatus;
+    href: string;
+    description?: string;
+  };
 }
 
 // ─── Crisis config (project-level) ────────────────────────────────────────────
 
 interface SentimentRule {
   type: string;
-  threshold_percent: number;
-  negative_threshold_percent: number;
-  critical_aspects: string[];
+  threshold_percent?: number;
+  negative_threshold_percent?: number;
+  critical_aspects?: string[];
 }
 
 interface VolumeRule {
@@ -210,14 +270,14 @@ interface KeywordGroup {
 
 interface InfluencerRule {
   type: string;
-  min_followers: number;
-  min_comments: number;
-  min_shares: number;
-  required_sentiment: string;
+  min_followers?: number;
+  min_comments?: number;
+  min_shares?: number;
+  required_sentiment?: string;
 }
 
 export interface CrisisConfig {
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'NORMAL' | 'WATCH' | 'WARNING' | 'CRITICAL';
   sentiment_trigger: {
     enabled: boolean;
     min_sample_size: number;
@@ -238,6 +298,19 @@ export interface CrisisConfig {
     logic: 'AND' | 'OR';
     rules: InfluencerRule[];
   };
+  response_policy?: {
+    adaptive_crawl: {
+      enabled: boolean;
+      trigger_level: 'WATCH' | 'WARNING' | 'CRITICAL';
+      cooldown_minutes: number;
+    };
+    notification: {
+      enabled: boolean;
+      trigger_level: 'WARNING' | 'CRITICAL';
+      repeat_cooldown_minutes: number;
+      ops_alert_on_critical: boolean;
+    };
+  };
   cron_schedule?: string;
 }
 
@@ -257,6 +330,6 @@ export interface Project {
   domain_type_code?: string;
   keywords: Keyword[];
   platforms?: Platform[];
-  status?: 'active' | 'paused' | 'pending';
+  status?: 'active' | 'paused' | 'pending' | 'archived';
   crisis_config?: CrisisConfig;
 }
