@@ -18,7 +18,7 @@ const ABBREVIATIONS: Record<string, string> = {
  * Abbreviate a Vietnamese phrase using known mappings.
  * Falls back to first-letter-of-each-word.
  */
-export function getAbbreviation(text: string): string {
+function getAbbreviation(text: string): string {
   for (const [phrase, abbr] of Object.entries(ABBREVIATIONS)) {
     if (text.includes(phrase)) {
       return text.replace(phrase, abbr);

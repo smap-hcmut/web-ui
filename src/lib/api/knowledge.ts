@@ -18,7 +18,7 @@ export interface ChatRequest {
   filters?: Record<string, unknown>;
 }
 
-export interface Citation {
+interface Citation {
   id: string;
   content: string;
   platform: string;

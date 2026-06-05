@@ -15,19 +15,19 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface SentimentDonutItem {
+interface SentimentDonutItem {
   label: string;
   value: number;
   color: string;
 }
 
-export interface SentimentTimelineSeries {
+interface SentimentTimelineSeries {
   label: string;
   color: string;
   data: number[];
 }
 
-export interface SentimentResponse {
+interface SentimentResponse {
   donut: SentimentDonutItem[];
   timeline: SentimentTimelineSeries[];
   months: string[];
@@ -37,7 +37,7 @@ export interface SentimentResponse {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const sentimentKeys = {
+const sentimentKeys = {
   all: ['analytics', 'sentiment'] as const,
   campaign: (campaignId: string) => [...sentimentKeys.all, campaignId] as const,
 };

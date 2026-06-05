@@ -12,10 +12,10 @@ import { API_CONFIG } from './config';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SourceType = 'TIKTOK' | 'FACEBOOK' | 'YOUTUBE';
-export type CrawlMode = 'SLEEP' | 'NORMAL' | 'CRISIS';
-export type DataSourceStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'ERROR';
-export type TargetType = 'KEYWORD' | 'PROFILE' | 'POST_URL';
-export type DryrunStatus = 'NOT_REQUIRED' | 'PENDING' | 'RUNNING' | 'SUCCESS' | 'WARNING' | 'FAILED';
+type CrawlMode = 'SLEEP' | 'NORMAL' | 'CRISIS';
+type DataSourceStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'ERROR';
+type TargetType = 'KEYWORD' | 'PROFILE' | 'POST_URL';
+type DryrunStatus = 'NOT_REQUIRED' | 'PENDING' | 'RUNNING' | 'SUCCESS' | 'WARNING' | 'FAILED';
 
 export interface DataSource {
   id: string;

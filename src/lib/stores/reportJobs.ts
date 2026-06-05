@@ -9,7 +9,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { CrawlerStatus } from '@/lib/types';
 
-export interface ReportJob {
+interface ReportJob {
   reportId: string;
   processId: string;
   campaignId: string;

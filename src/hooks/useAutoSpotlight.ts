@@ -26,7 +26,7 @@ export interface SpotlightEvent {
 
 type SpotlightState = 'idle' | 'showing' | 'cooldown' | 'paused';
 
-export interface ActiveTooltip {
+interface ActiveTooltip {
   entityId: string;
   event: SpotlightEvent;
 }
@@ -44,7 +44,7 @@ export interface UseAutoSpotlightReturn {
    DEFAULTS
    ═══════════════════════════════════════════ */
 
-export const AUTO_SPOTLIGHT_DEFAULTS: AutoSpotlightConfig = {
+const AUTO_SPOTLIGHT_DEFAULTS: AutoSpotlightConfig = {
   idleThreshold: 10_000,
   spotlightDuration: 4_500,
   eventDuration: 7_000,

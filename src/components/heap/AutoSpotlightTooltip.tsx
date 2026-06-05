@@ -116,7 +116,6 @@ interface AutoSpotlightTooltipProps {
   bubbleRadius: number;
   /** Container dimensions */
   containerSize: { width: number; height: number };
-  onDismiss: () => void;
 }
 
 export default function AutoSpotlightTooltip({
@@ -125,14 +124,12 @@ export default function AutoSpotlightTooltip({
   bubblePos,
   bubbleRadius,
   containerSize,
-  onDismiss,
 }: AutoSpotlightTooltipProps) {
   const badge = BADGE[event.type];
   const entityColor = ENTITY_COLOR[entity.type];
   const sentColor = sentimentHue(entity.metrics.sentiment);
 
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [exiting, setExiting] = useState(false);
   const [pos, setPos] = useState<TooltipPos>({ x: 0, y: 0, anchor: 'right' });
 
   // Compute position
@@ -174,7 +171,7 @@ export default function AutoSpotlightTooltip({
       {/* ── Tooltip card ── */}
       <div
         ref={tooltipRef}
-        className={`absolute auto-spotlight-enter ${exiting ? 'auto-spotlight-exit' : ''}`}
+        className="absolute auto-spotlight-enter"
         style={{
           left: pos.x,
           top: pos.y,

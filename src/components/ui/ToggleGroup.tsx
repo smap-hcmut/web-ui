@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 
-export interface ToggleOption {
+interface ToggleOption {
   value: string;
   label: string;
   icon?: React.ReactNode;

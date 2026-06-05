@@ -20,7 +20,6 @@ import { DonutChart } from "@/components/charts/DonutChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { WordCloud } from "@/components/charts/WordCloud";
 import { RadarChart } from "@/components/charts/RadarChart";
-import { GaugeChart } from "@/components/charts/GaugeChart";
 import { RankList } from "@/components/ui/RankList";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -29,7 +28,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
-import type { Platform, StalkerTarget, StalkerAlert, PostDetail, ReportItem } from "@/lib/types";
+import type { Platform, StalkerTarget, PostDetail, ReportItem, Project, Keyword } from "@/lib/types";
 import {
   useCampaignKPIs,
   usePlatformStats,
@@ -41,7 +40,6 @@ import {
   useProjectStats,
   useReports,
   useGenerateCompetitor,
-  type PostItem,
   type ProjectStat,
 } from "@/lib/hooks";
 import { detectPlatform, PLATFORM_LABEL } from "@/lib/utils/platform";
@@ -50,17 +48,11 @@ import {
   Smile,
   Heart,
   Users,
-  Search,
-  SlidersHorizontal,
   ArrowUpDown,
   Eye,
   ExternalLink,
   MessageCircle,
   Share2,
-  ThumbsUp,
-  ThumbsDown,
-  Minus,
-  X,
   Plus,
   Pause,
   Play,
@@ -71,15 +63,12 @@ import {
   AlertTriangle,
   FileText,
   Download,
-  Send,
   Link2,
   ChevronDown,
   ChevronRight,
   Target,
   BarChart3,
   Globe,
-  Calendar,
-  RotateCw,
 } from "lucide-react";
 
 /* ── Constants ── */
@@ -360,7 +349,7 @@ function MapTab() {
    ════════════════════════════════════════════ */
 function ProjectsTab() {
   const { activeCampaignId, projectIds, toggleProject } = useScope();
-  const [configModalProject, setConfigModalProject] = useState<import('@/lib/types').Project | null>(null);
+  const [configModalProject, setConfigModalProject] = useState<Project | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: apiProjects, isLoading } = useProjectsByCampaign(activeCampaignId ?? undefined);
@@ -379,7 +368,7 @@ function ProjectsTab() {
         id: p.id,
         name: p.name,
         domain_type_code: p.domain_type_code,
-        keywords: [] as import('@/lib/types').Keyword[],
+        keywords: [] as Keyword[],
         platforms: undefined,
         status: p.status === 'ACTIVE' ? ('active' as const) : ('paused' as const),
         crisis_config: undefined,

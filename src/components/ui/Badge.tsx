@@ -2,8 +2,8 @@
 
 import clsx from 'clsx';
 
-export type BadgeVariant = 'success' | 'danger' | 'warning' | 'neutral' | 'info' | 'accent';
-export type BadgeSize = 'sm' | 'md';
+type BadgeVariant = 'success' | 'danger' | 'warning' | 'neutral' | 'info' | 'accent';
+type BadgeSize = 'sm' | 'md';
 
 interface BadgeProps {
   children: React.ReactNode;

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export interface BarCategory {
+interface BarCategory {
   label: string;
   values: { key: string; value: number; color: string; formatted?: string }[];
 }

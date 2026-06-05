@@ -15,7 +15,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface PlatformStat {
+interface PlatformStat {
   platform: string;
   name: string;
   mentions: number;
@@ -28,13 +28,13 @@ export interface PlatformStat {
   color: string;
 }
 
-export interface PlatformTimeSeries {
+interface PlatformTimeSeries {
   label: string;
   data: number[];
   color: string;
 }
 
-export interface PlatformStatsResponse {
+interface PlatformStatsResponse {
   stats: PlatformStat[];
   timeSeries: PlatformTimeSeries[];
   months: string[];
@@ -42,7 +42,7 @@ export interface PlatformStatsResponse {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const platformKeys = {
+const platformKeys = {
   all: ['analytics', 'platforms'] as const,
   campaign: (campaignId: string) => [...platformKeys.all, campaignId] as const,
 };

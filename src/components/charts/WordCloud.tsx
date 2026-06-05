@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export interface WordItem {
+interface WordItem {
   text: string;
   value: number;
   color?: string;

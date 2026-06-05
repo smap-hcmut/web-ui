@@ -3,7 +3,7 @@
  * Enabled via NEXT_PUBLIC_MOCK_API=1. One demo campaign with deterministic data.
  */
 
-export const MOCK_CAMPAIGN_ID = 'mock-camp-1';
+const MOCK_CAMPAIGN_ID = 'mock-camp-1';
 const NOW = '2026-04-21T10:00:00Z';
 
 // ── Deterministic seeded helpers ─────────────────────────────────────────────
@@ -16,7 +16,7 @@ function seeded(seed: number) {
 }
 
 // ── Campaign / Projects (project-srv) ────────────────────────────────────────
-export const mockCampaign = {
+const mockCampaign = {
   id: MOCK_CAMPAIGN_ID,
   name: 'Brand Watch Q2',
   description: 'Demo campaign for offline UI debugging',
@@ -29,12 +29,12 @@ export const mockCampaign = {
   updated_at: NOW,
 };
 
-export const mockCampaignListResponse = {
+const mockCampaignListResponse = {
   campaigns: [mockCampaign],
   paginator: { page: 1, limit: 20, total: 1 },
 };
 
-export const mockProjects = [
+const mockProjects = [
   {
     id: 'mock-proj-1',
     campaign_id: MOCK_CAMPAIGN_ID,
@@ -80,7 +80,7 @@ export const mockProjects = [
   },
 ];
 
-export const mockProjectListResponse = {
+const mockProjectListResponse = {
   projects: mockProjects,
   paginator: { total: mockProjects.length, page: 1, limit: 20, total_pages: 1 },
 };
@@ -265,7 +265,7 @@ export const mockHeap = {
 // ── Proxy matchers (GET only) ────────────────────────────────────────────────
 type ProxyMatch = { test: (path: string) => boolean; body: unknown };
 
-export const proxyGetMatchers: ProxyMatch[] = [
+const proxyGetMatchers: ProxyMatch[] = [
   // Campaigns
   { test: (p) => p === '/project/api/v1/campaigns' || p.startsWith('/project/api/v1/campaigns?'),
     body: mockCampaignListResponse },

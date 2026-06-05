@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 
-export interface RadioOption {
+interface RadioOption {
   value: string;
   label: string;
 }

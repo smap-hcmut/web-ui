@@ -1,0 +1,15 @@
+{
+  "entry": [
+    "server.ts",
+    "electron/main.ts",
+    "electron/preload.ts",
+    "scripts/**/*.js",
+    "src/app/**/*.{ts,tsx}"
+  ],
+  "project": [
+    "server.ts",
+    "electron/**/*.ts",
+    "scripts/**/*.js",
+    "src/**/*.{ts,tsx}"
+  ]
+}

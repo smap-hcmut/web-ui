@@ -27,7 +27,7 @@ const colorMap: Record<ToastType, string> = {
   warning: 'var(--warning)',
 };
 
-export function Toast({ message, type = 'info', duration = 3000, onClose }: ToastProps) {
+function Toast({ message, type = 'info', duration = 3000, onClose }: ToastProps) {
   const [exiting, setExiting] = useState(false);
   const Icon = iconMap[type];
 
@@ -64,8 +64,6 @@ interface ToastItem { id: number; message: string; type: ToastType }
 
 export function useToast() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  let counter = 0;
-
   const push = (message: string, type: ToastType = 'info') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);

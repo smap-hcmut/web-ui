@@ -1,6 +1,6 @@
 'use client';
 
-export interface LineSeries {
+interface LineSeries {
   label: string;
   data: number[];
   color: string;

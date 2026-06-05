@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 
-export interface RadarAxis {
+interface RadarAxis {
   key: string;
   label: string;
   max?: number;
 }
 
-export interface RadarSeries {
+interface RadarSeries {
   label: string;
   color: string;
   values: Record<string, number>;

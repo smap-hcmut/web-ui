@@ -37,15 +37,12 @@ export function useTheme() {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>('sand');
-  const [mounted, setMounted] = useState(false);
-
   // Read from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as ThemeId | null;
     if (stored && THEMES.some(t => t.id === stored)) {
       setThemeState(stored);
     }
-    setMounted(true);
   }, []);
 
   // Apply data-theme attribute

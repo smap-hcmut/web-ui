@@ -31,7 +31,11 @@ export const API_CONFIG = {
     ingest: '/ingest',
     knowledge: '/knowledge',
     notification: '/notification',
+    // Public route prefix is /scraper. Runtime service/repo remains the
+    // legacy-compatible scapper-srv until a coordinated migration exists.
     scraper: '/scraper',
+    // Mock competitor-analysis lane. AI report generation belongs to
+    // knowledge-srv under /knowledge/api/v1/knowledge/reports.
     reports: '/reports',
   },
 
@@ -85,8 +89,12 @@ export const API_CONFIG = {
       suggestions: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/suggestions`,
       conversations: (campaignId: string) => `/knowledge/api/v1/knowledge/campaigns/${campaignId}/conversations`,
       conversation: (conversationId: string) => `/knowledge/api/v1/knowledge/conversations/${conversationId}`,
-      reports: '/knowledge/api/v1/reports',
-      report: (id: string) => `/knowledge/api/v1/reports/${id}`,
+      reports: '/knowledge/api/v1/knowledge/reports',
+      reportGenerate: '/knowledge/api/v1/knowledge/reports/generate',
+      report: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}`,
+      reportProcess: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/process`,
+      reportContent: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/content`,
+      reportDownload: (id: string) => `/knowledge/api/v1/knowledge/reports/${id}/download`,
       insights: '/knowledge/api/v1/insights',
     },
     notification: {
@@ -96,10 +104,10 @@ export const API_CONFIG = {
       tasks: '/scraper/api/v1/tasks',
       task: (id: string) => `/scraper/api/v1/tasks/${id}`,
     },
-    // NOTE: reports-srv is not implemented yet. FE calls these paths; they are
-    // served by local Next.js mock handlers under src/app/api/proxy/reports/...
-    // When backend lands, delete those mock routes and the catch-all proxy
-    // forwards identically-shaped requests.
+    // NOTE: reports-srv is not implemented yet. This lane powers the
+    // competitor-analysis UI mock, not the knowledge-srv AI report backend.
+    // FE calls these paths; they are served by local Next.js mock handlers
+    // under src/app/api/proxy/reports/...
     reports: {
       list: '/reports/api/v1',
       competitor: '/reports/api/v1/competitor',
@@ -117,5 +125,3 @@ export const API_CONFIG = {
 export const buildApiUrl = (endpoint: string): string => {
   return `${API_CONFIG.BASE_URL}${endpoint}`;
 };
-
-export type ServiceName = keyof typeof API_CONFIG.SERVICES;

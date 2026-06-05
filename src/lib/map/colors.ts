@@ -1,5 +1,5 @@
 /** Sentiment color palette — light theme */
-export const SENTIMENT = {
+const SENTIMENT = {
   positive: '#059669',
   neutral: '#d97706',
   negative: '#dc2626',

@@ -1,6 +1,6 @@
 'use client';
 
-import { Layers, TrendingUp, Eye } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import clsx from 'clsx';
 

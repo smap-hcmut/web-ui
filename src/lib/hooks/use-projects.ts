@@ -9,14 +9,12 @@ import {
   projectApi,
   type Project,
   type CreateProjectInput,
-  type UpdateProjectInput,
 } from '../api/projects';
-import { datasourceApi } from '../api/datasources';
 import { campaignKeys } from './use-campaigns';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const projectKeys = {
+const projectKeys = {
   all: ['projects'] as const,
   byCampaign: (campaignId: string) => [...projectKeys.all, 'campaign', campaignId] as const,
   detail: (id: string) => [...projectKeys.all, 'detail', id] as const,
@@ -46,55 +44,6 @@ export function useCreateProject(campaignId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
       queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
-    },
-  });
-}
-
-export function usePauseProject(campaignId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => projectApi.pause(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
-    },
-  });
-}
-
-export function useResumeProject(campaignId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => projectApi.resume(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
-    },
-  });
-}
-
-export function useActivateProject(campaignId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => projectApi.activate(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
-    },
-  });
-}
-
-/**
- * Trigger dryrun for all datasources belonging to a project.
- * Fetches datasources first, then fires dryrun on each in parallel.
- */
-export function useDryrunProject() {
-  return useMutation({
-    mutationFn: async (projectId: string) => {
-      const datasources = await datasourceApi.listByProject(projectId);
-      if (datasources.length === 0) {
-        throw new Error('No datasources found for this project');
-      }
-      await Promise.all(datasources.map((ds) => datasourceApi.triggerDryrun(ds.id)));
     },
   });
 }

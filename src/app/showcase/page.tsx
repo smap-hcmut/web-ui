@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import {
   Search, Settings, Bell, Download, Trash2, Eye, Heart, Star,
-  TrendingUp, Activity, BarChart3, Filter, Hash, Zap, Globe,
-  Map, LayoutDashboard, Lightbulb,
+  TrendingUp, Activity, Hash,
+  LayoutDashboard, Lightbulb,
 } from 'lucide-react';
 
 /* ── Primitives ── */
@@ -62,7 +62,7 @@ import { CollapsiblePanel } from '@/components/ui/CollapsiblePanel';
 
 /* ── Feedback ── */
 import { Modal } from '@/components/ui/Modal';
-import { Toast, useToast } from '@/components/ui/Toast';
+import { useToast } from '@/components/ui/Toast';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { AlertBanner } from '@/components/ui/AlertBanner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';

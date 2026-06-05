@@ -17,12 +17,6 @@ export interface ApiError {
   status: number;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
   params?: Record<string, string | number | boolean | undefined>;

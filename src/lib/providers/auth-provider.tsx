@@ -16,8 +16,6 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const fetchCurrentUser = useAuthStore((state) => state.fetchCurrentUser);
-  const isLoading = useAuthStore((state) => state.isLoading);
-
   // Check auth status on mount
   useEffect(() => {
     fetchCurrentUser();

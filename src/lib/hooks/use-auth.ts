@@ -10,7 +10,7 @@ import { API_CONFIG } from '../api/config';
 import { useAuthStore, User } from '../stores/auth';
 
 // Query keys for cache management
-export const authKeys = {
+const authKeys = {
   all: ['auth'] as const,
   me: () => [...authKeys.all, 'me'] as const,
 };

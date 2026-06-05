@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 
-export interface DonutSegment {
+interface DonutSegment {
   label: string;
   value: number;
   color: string;
