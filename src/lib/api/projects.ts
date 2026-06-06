@@ -24,7 +24,6 @@ export interface Project {
   entity_name: string;
   domain_type_code?: string;
   status: ProjectStatus;
-  is_favorite: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

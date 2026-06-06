@@ -52,8 +52,6 @@ export const API_CONFIG = {
       campaign: (id: string) => `/project/api/v1/campaigns/${id}`,
       campaignPause: (id: string) => `/project/api/v1/campaigns/${id}/pause`,
       campaignResume: (id: string) => `/project/api/v1/campaigns/${id}/resume`,
-      campaignFavorite: (id: string) => `/project/api/v1/campaigns/${id}/favorite`,
-      campaignFavorites: '/project/api/v1/campaigns/favorites',
       campaignProjects: (id: string) => `/project/api/v1/campaigns/${id}/projects`,
       domains: '/project/api/v1/domains',
       projects: '/project/api/v1/projects',

@@ -17,7 +17,6 @@ export interface Campaign {
   name: string;
   description: string;
   status?: CampaignStatus;
-  is_favorite: boolean;
   start_date?: string;
   end_date?: string;
   created_by: string;
@@ -86,10 +85,4 @@ export const campaignApi = {
 
   resume: (id: string): Promise<void> =>
     apiClient.post<void>(API_CONFIG.ENDPOINTS.project.campaignResume(id)),
-
-  favorite: (id: string): Promise<void> =>
-    apiClient.post<void>(API_CONFIG.ENDPOINTS.project.campaignFavorite(id)),
-
-  unfavorite: (id: string): Promise<void> =>
-    apiClient.delete<void>(API_CONFIG.ENDPOINTS.project.campaignFavorite(id)),
 };
