@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 /* ── Non-linear multi-select scope ──
@@ -126,19 +126,31 @@ export function ScopeProvider({ children }: { children: React.ReactNode }) {
 
   const selectionCount = scope.projectIds.size + scope.keywordIds.size;
 
+  const value = useMemo(
+    () => ({
+      activeCampaignId,
+      projectIds: scope.projectIds,
+      keywordIds: scope.keywordIds,
+      toggleProject,
+      toggleKeyword,
+      clearAll,
+      hasSelection,
+      selectionCount,
+    }),
+    [
+      activeCampaignId,
+      scope.projectIds,
+      scope.keywordIds,
+      toggleProject,
+      toggleKeyword,
+      clearAll,
+      hasSelection,
+      selectionCount,
+    ],
+  );
+
   return (
-    <ScopeContext.Provider
-      value={{
-        activeCampaignId,
-        projectIds: scope.projectIds,
-        keywordIds: scope.keywordIds,
-        toggleProject,
-        toggleKeyword,
-        clearAll,
-        hasSelection,
-        selectionCount,
-      }}
-    >
+    <ScopeContext.Provider value={value}>
       {children}
     </ScopeContext.Provider>
   );

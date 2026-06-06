@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 
 export type AssistantMode = 'floating' | 'docked';
 
@@ -56,8 +56,16 @@ export function AssistantProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Memoize the context value so consumers do not re-render every time the
+  // provider itself re-renders — only state changes on (open, mode) should
+  // trigger downstream updates.
+  const value = useMemo(
+    () => ({ open, mode, setOpen, toggleOpen, setMode, toggleMode }),
+    [open, mode, setOpen, toggleOpen, setMode, toggleMode],
+  );
+
   return (
-    <AssistantContext.Provider value={{ open, mode, setOpen, toggleOpen, setMode, toggleMode }}>
+    <AssistantContext.Provider value={value}>
       {children}
     </AssistantContext.Provider>
   );

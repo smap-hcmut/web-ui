@@ -12,13 +12,20 @@ export function GlowCard({ children, color = 'var(--accent)', className }: GlowC
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 50, y: 50 });
   const [hovering, setHovering] = useState(false);
+  // requestAnimationFrame handle so a fast mouse only schedules one
+  // setState per paint; previously every pixel of mouse movement triggered
+  // a re-render which became hundreds of updates per second on hover.
+  const rafRef = useRef<number | null>(null);
 
   const onMove = (e: React.MouseEvent) => {
     if (!ref.current) return;
+    if (rafRef.current !== null) return;
     const rect = ref.current.getBoundingClientRect();
-    setPos({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      setPos({ x, y });
     });
   };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 export type ThemeId = 'mist' | 'midnight' | 'sand';
 
@@ -55,10 +55,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, t);
   }, []);
 
+  const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
+
   // Prevent flash by setting default theme attribute before hydration
   // The suppressHydrationWarning on <html> handles any mismatch
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

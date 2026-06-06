@@ -1040,7 +1040,9 @@ function ProjectProfileSettings({ campaignId, project }: { campaignId: string; p
         old ? old.map((item) => (item.id === updated.id ? updated : item)) : old,
       );
       queryClient.setQueryData<ApiProject>(projectKeys.detail(updated.id), updated);
-      queryClient.invalidateQueries({ queryKey: projectKeys.byCampaign(campaignId) });
+      // Skipped: invalidateQueries on the same key would force a refetch that
+      // re-overwrites the fresh data we just setQueryData'd in. Either path
+      // alone is enough; the previous code paid for both round trips.
       setMessage("Project info saved.");
     },
   });

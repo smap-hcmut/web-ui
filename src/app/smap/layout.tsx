@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { NavProvider } from "@/components/NavProvider";
 import { ScopeProvider, useScope } from "@/components/ScopeProvider";
 import { AssistantProvider, useAssistant } from "@/components/AssistantProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useRecentActivity } from "@/lib/hooks";
 import { useNotificationStore } from "@/lib/stores";
 import type { ApiError } from "@/lib/api/client";
@@ -116,7 +117,9 @@ function SmapLayoutInner({ children }: { children: React.ReactNode }) {
       <TopNav />
 
       {/* Main content */}
-      <main className="relative z-10 pb-16">{children}</main>
+      <main className="relative z-10 pb-16">
+        <ErrorBoundary scope="smap-main">{children}</ErrorBoundary>
+      </main>
 
       {/* Campaign AI Assistant */}
       <CampaignAssistant />
