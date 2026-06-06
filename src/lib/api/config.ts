@@ -31,6 +31,8 @@ export const API_CONFIG = {
     ingest: '/ingest',
     knowledge: '/knowledge',
     notification: '/notification',
+    // Public route prefix is /scraper. Runtime service/repo remains the
+    // legacy-compatible scapper-srv until a coordinated migration exists.
     scraper: '/scraper',
   },
 
@@ -126,5 +128,3 @@ export const API_CONFIG = {
 export const buildApiUrl = (endpoint: string): string => {
   return `${API_CONFIG.BASE_URL}${endpoint}`;
 };
-
-export type ServiceName = keyof typeof API_CONFIG.SERVICES;

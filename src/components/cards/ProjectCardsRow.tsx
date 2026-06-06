@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CrisisConfigEditorModal } from '@/components/crisis/CrisisConfigEditor';
 import { useScope } from '@/components/ScopeProvider';
@@ -21,20 +21,10 @@ import type { Project, CrisisConfig, Platform } from '@/lib/types';
 import type { EntityType, ProjectDomain } from '@/lib/api/projects';
 import { PlatformIcon } from '@/components/icons/PlatformIcon';
 import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  Plus,
   Settings,
   Shield,
   ShieldOff,
-  Activity,
-  Volume2,
-  Key,
-  Users,
   Clock,
-  Smile,
   Pause,
   Play,
   Archive,

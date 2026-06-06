@@ -1,6 +1,6 @@
 'use client';
 
-export interface FunnelStage {
+interface FunnelStage {
   label: string;
   value: number;
   color: string;
@@ -35,7 +35,6 @@ export function FunnelChart({ stages, height = 260, className }: FunnelChartProp
           const barW = minBarW + (maxBarW - minBarW) * pct;
           const x = (vw - barW) / 2;
           const y = i * stageH;
-          const barH = stageH * 0.7;
           const convPct = i > 0 ? ((stage.value / stages[i - 1].value) * 100).toFixed(0) : '100';
 
           // Trapezoid: current width -> next width

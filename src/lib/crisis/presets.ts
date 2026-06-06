@@ -62,7 +62,7 @@ export function buildDefaultCrisisConfig(): CrisisConfigInput {
   };
 }
 
-export function buildAhamoveLogisticsCrisisConfig(): CrisisConfigInput {
+function buildAhamoveLogisticsCrisisConfig(): CrisisConfigInput {
   return {
     status: 'NORMAL',
     keywords_trigger: {

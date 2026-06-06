@@ -297,8 +297,6 @@ function CampaignSettingsContent() {
   const [campDesc, setCampDesc] = useState('');
 
   // Sync form state when campaign data loads
-  const campNameResolved = campName || camp?.name || '';
-
   return (
     <div className="max-w-[1600px] mx-auto px-6 pt-24 pb-20">
       {/* Back button + header */}

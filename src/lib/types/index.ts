@@ -98,7 +98,7 @@ export interface PostDetail {
 
 // ─── Stalker (post/profile monitoring) ────────────────────────────────────────
 
-export interface StalkerAlert {
+interface StalkerAlert {
   id: string;
   type: 'new_post' | 'comment_spike' | 'engagement_threshold' | 'sentiment_shift';
   title: string;
@@ -127,7 +127,7 @@ export interface StalkerTarget {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
-export type ReportStatus = 'ready' | 'generating' | 'failed' | 'cancelled';
+type ReportStatus = 'ready' | 'generating' | 'failed' | 'cancelled';
 
 export interface ReportItem {
   id: string;
@@ -183,7 +183,7 @@ export interface CrawlerProcess {
   errorMessage?: string;
 }
 
-export interface ReportPostReactions {
+interface ReportPostReactions {
   like?: number;
   love?: number;
   haha?: number;
@@ -192,7 +192,7 @@ export interface ReportPostReactions {
   angry?: number;
 }
 
-export interface ReportPostSentimentBreakdown {
+interface ReportPostSentimentBreakdown {
   positive: number;
   neutral: number;
   negative: number;
@@ -231,12 +231,6 @@ export interface PaginatedResponse<T> {
 
 // ─── Campaign assistant ───────────────────────────────────────────────────────
 
-export interface SuggestedQuestion {
-  id: string;
-  text: string;
-  icon: string;
-}
-
 export interface BotResponseBlock {
   type: 'text' | 'bullets' | 'stats' | 'report';
   content?: string;
@@ -254,27 +248,27 @@ export interface BotResponseBlock {
 
 // ─── Crisis config (project-level) ────────────────────────────────────────────
 
-export interface SentimentRule {
+interface SentimentRule {
   type: string;
   threshold_percent?: number;
   negative_threshold_percent?: number;
   critical_aspects?: string[];
 }
 
-export interface VolumeRule {
+interface VolumeRule {
   baseline: string;
   comparison_window_hours: number;
   level: string;
   threshold_percent_growth: number;
 }
 
-export interface KeywordGroup {
+interface KeywordGroup {
   name: string;
   keywords: string[];
   weight: number;
 }
 
-export interface InfluencerRule {
+interface InfluencerRule {
   type: string;
   min_followers?: number;
   min_comments?: number;

@@ -18,12 +18,6 @@ export function timeAgo(date: Date): string {
   return `${Math.floor(d / 30)}mo ago`;
 }
 
-/** Truncate text with ellipsis */
-export function truncText(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1).trimEnd() + '…';
-}
-
 /** Deterministic color from a string (for avatar fallback) */
 export function stringToColor(str: string): string {
   let h = 0;

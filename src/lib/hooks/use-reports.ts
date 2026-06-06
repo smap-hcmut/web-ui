@@ -28,7 +28,7 @@ import type {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const reportKeys = {
+const reportKeys = {
   all: ['reports'] as const,
   lists: () => [...reportKeys.all, 'list'] as const,
   list: (campaignId: string) => [...reportKeys.lists(), campaignId] as const,
@@ -117,7 +117,7 @@ export function useReportPosts(reportId: string | null, params: ListPostsParams)
 
 // ─── Lazy comments (paginated — "load more") ──────────────────────────────────
 
-export const COMMENTS_PAGE_SIZE = 20;
+const COMMENTS_PAGE_SIZE = 20;
 
 export function usePostComments(postId: string | null, enabled: boolean) {
   return useInfiniteQuery<PaginatedResponse<ReportComment>>({

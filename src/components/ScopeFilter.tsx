@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useScope } from './ScopeProvider';
 import { useProjectsByCampaign, useTrendingKeywords } from '@/lib/hooks';
-import { Filter, X, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Filter, X, Loader2 } from 'lucide-react';
 
 export function ScopeFilter() {
   const {
@@ -18,7 +18,6 @@ export function ScopeFilter() {
   } = useScope();
 
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Fetch real projects for active campaign
@@ -41,15 +40,6 @@ export function ScopeFilter() {
     document.addEventListener('pointerdown', handleClick);
     return () => document.removeEventListener('pointerdown', handleClick);
   }, [open]);
-
-  const toggleExpand = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   // Collect selected labels for chips
   const chips: { id: string; label: string; type: 'project' | 'keyword'; onRemove: () => void }[] = [];

@@ -20,28 +20,28 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface KeywordItem {
+interface KeywordItem {
   text: string;
   volume: number;
   sentiment: number;
   change: number;
 }
 
-export interface WordCloudItem {
+interface WordCloudItem {
   text: string;
   value: number;
   color: string;
   opacity: number;
 }
 
-export interface KeywordsResponse {
+interface KeywordsResponse {
   keywords: KeywordItem[];
   wordCloud: WordCloudItem[];
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const keywordKeys = {
+const keywordKeys = {
   all: ['analytics', 'keywords'] as const,
   campaign: (campaignId: string, limit?: number, scope?: AnalyticsScopeParams | string) =>
     [...keywordKeys.all, campaignId, { limit, ...analyticsScopeKey(scope) }] as const,

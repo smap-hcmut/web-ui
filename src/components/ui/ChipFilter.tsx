@@ -1,10 +1,9 @@
 'use client';
 
-import { X } from 'lucide-react';
 import { Tag } from './Tag';
 import clsx from 'clsx';
 
-export interface ActiveFilter {
+interface ActiveFilter {
   key: string;
   label: string;
   color?: string;

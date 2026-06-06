@@ -10,8 +10,6 @@ import {
   type Campaign,
   type CampaignListResponse,
   type CampaignListParams,
-  type CreateCampaignInput,
-  type UpdateCampaignInput,
 } from '../api/campaigns';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -51,40 +49,6 @@ export function useCampaign(id: string) {
 }
 
 // ─── Mutation Hooks ───────────────────────────────────────────────────────────
-
-export function useCreateCampaign() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: CreateCampaignInput) => campaignApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
-    },
-  });
-}
-
-export function useUpdateCampaign(id: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: UpdateCampaignInput) => campaignApi.update(id, data),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Campaign>(campaignKeys.detail(id), updated);
-      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
-    },
-  });
-}
-
-export function useArchiveCampaign() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => campaignApi.archive(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
-    },
-  });
-}
 
 export function useStopCampaign() {
   const queryClient = useQueryClient();
@@ -136,35 +100,6 @@ export function useResumeCampaign() {
     mutationFn: (id: string) => campaignApi.resume(id),
     onSuccess: (_, id) => {
       updateCampaignStatus(queryClient, id, 'ACTIVE');
-      queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
-    },
-  });
-}
-
-/**
- * Toggle favorite status for a campaign.
- * Optimistically updates the list cache.
- */
-export function useToggleCampaignFavorite() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, isFavorite }: { id: string; isFavorite: boolean }) =>
-      isFavorite ? campaignApi.unfavorite(id) : campaignApi.favorite(id),
-    onSuccess: (_data, { id, isFavorite }) => {
-      // Optimistically flip is_favorite in all list caches
-      queryClient.setQueriesData<{ campaigns: Campaign[] }>(
-        { queryKey: campaignKeys.lists() },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            campaigns: old.campaigns.map((c) =>
-              c.id === id ? { ...c, is_favorite: !isFavorite } : c,
-            ),
-          };
-        },
-      );
       queryClient.invalidateQueries({ queryKey: campaignKeys.lists() });
     },
   });

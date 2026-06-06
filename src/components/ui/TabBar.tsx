@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 
-export interface Tab {
+interface Tab {
   value: string;
   label: string;
   icon?: React.ReactNode;

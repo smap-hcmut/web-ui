@@ -79,7 +79,7 @@ async function requestAnalysis(url: URL): Promise<{ body: string; contentType: s
   });
 }
 
-export async function fetchAnalysis(request: NextRequest, path: string): Promise<Response> {
+async function fetchAnalysis(request: NextRequest, path: string): Promise<Response> {
   const url = new URL(path, ANALYSIS_API_URL);
   url.search = request.nextUrl.search;
 

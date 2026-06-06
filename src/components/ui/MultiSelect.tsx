@@ -5,7 +5,7 @@ import { ChevronDown, Check } from 'lucide-react';
 import { Tag } from './Tag';
 import clsx from 'clsx';
 
-export interface MultiSelectOption {
+interface MultiSelectOption {
   value: string;
   label: string;
 }

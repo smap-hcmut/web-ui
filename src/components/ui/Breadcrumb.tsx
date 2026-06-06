@@ -3,7 +3,7 @@
 import { ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 
-export interface BreadcrumbItem {
+interface BreadcrumbItem {
   label: string;
   href?: string;
   onClick?: () => void;

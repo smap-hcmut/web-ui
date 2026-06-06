@@ -6,7 +6,7 @@
  * Used for: LiveTicker, PostCard list, Post detail modal.
  */
 
-import { keepPreviousData, useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   getCachedAnalyticsData,
   getCachedAnalyticsUpdatedAt,
@@ -17,7 +17,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface PostItem {
+interface PostItem {
   id: string;
   platform: string;
   author: string;
@@ -65,7 +65,7 @@ export interface PostsParams {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const postsKeys = {
+const postsKeys = {
   all: ['analytics', 'posts'] as const,
   list: (params: Omit<PostsParams, 'offset'>) =>
     [...postsKeys.all, params] as const,
@@ -119,25 +119,4 @@ export function useRecentActivity(params: Omit<PostsParams, 'campaignId'> & { ca
   usePersistedAnalyticsCache(queryKey, query.data, query.dataUpdatedAt, !!campaignId);
 
   return query;
-}
-
-/**
- * Infinite scrolling posts for a campaign with filters.
- * Use for: scrollable post feed with "Load More".
- */
-export function useInfinitePosts(params: Omit<PostsParams, 'campaignId' | 'offset'> & { campaignId?: string }) {
-  const { campaignId, limit = 30, ...rest } = params;
-  return useInfiniteQuery({
-    queryKey: postsKeys.list({ campaignId: campaignId!, limit, ...rest }),
-    queryFn: ({ pageParam = 0 }) =>
-      fetchPosts({ campaignId: campaignId!, limit, offset: pageParam as number, ...rest }),
-    enabled: !!campaignId,
-    initialPageParam: 0,
-    ...analyticsQueryOptions,
-    staleTime: 30_000,
-    getNextPageParam: (lastPage, _allPages, lastPageParam) => {
-      const nextOffset = (lastPageParam as number) + limit;
-      return nextOffset < lastPage.total ? nextOffset : undefined;
-    },
-  });
 }

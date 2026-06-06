@@ -10,7 +10,7 @@ import { API_CONFIG } from './config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CampaignStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+type CampaignStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 
 export interface Campaign {
   id: string;
@@ -25,7 +25,7 @@ export interface Campaign {
   updated_at: string;
 }
 
-export interface Paginator {
+interface Paginator {
   page: number;
   limit: number;
   total: number;

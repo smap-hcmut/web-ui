@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 
-export interface AreaSeries {
+interface AreaSeries {
   label: string;
   data: number[];
   color: string;

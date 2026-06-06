@@ -27,7 +27,7 @@ function seeded(seed: number) {
 }
 
 // ── Campaign / Projects (project-srv) ────────────────────────────────────────
-export const mockCampaign = {
+const mockCampaign = {
   id: MOCK_CAMPAIGN_ID,
   name: 'Brand Watch Q2',
   description: 'Demo campaign for offline UI debugging',
@@ -40,12 +40,12 @@ export const mockCampaign = {
   updated_at: NOW,
 };
 
-export const mockCampaignListResponse = {
+const mockCampaignListResponse = {
   campaigns: [mockCampaign],
   paginator: { page: 1, limit: 20, total: 1 },
 };
 
-export const mockProjects = [
+const mockProjects = [
   {
     id: 'mock-proj-1',
     campaign_id: MOCK_CAMPAIGN_ID,
@@ -91,7 +91,7 @@ export const mockProjects = [
   },
 ];
 
-export const mockProjectListResponse = {
+const mockProjectListResponse = {
   projects: mockProjects,
   paginator: { total: mockProjects.length, page: 1, limit: 20, total_pages: 1 },
 };

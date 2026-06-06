@@ -20,14 +20,14 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface HeapNodeMetrics {
+interface HeapNodeMetrics {
   mentions: number;
   engagement: number;
   sentiment: number;
   childCount: number;
 }
 
-export interface HeapNode {
+interface HeapNode {
   id: string;
   type: 'campaign' | 'project' | 'keyword';
   name: string;
@@ -36,13 +36,13 @@ export interface HeapNode {
   children?: HeapNode[];
 }
 
-export interface HeapResponse {
+interface HeapResponse {
   tree: HeapNode | null;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const heapKeys = {
+const heapKeys = {
   all: ['analytics', 'heap'] as const,
   campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
     [...heapKeys.all, campaignId, analyticsScopeKey(scope)] as const,

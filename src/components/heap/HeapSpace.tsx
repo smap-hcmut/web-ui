@@ -261,7 +261,7 @@ export default function HeapSpace({
   /* ─── auto-spotlight ─── */
   const bubblePosMap = useRef<Map<string, { x: number; y: number }>>(new Map());
   const spotlightPaused = !!(hovered || phase !== 'idle' || searchOpen || detailNode || !mounted);
-  const { activeTooltip: spotlight, spotlightedId, dismiss: dismissSpotlight } = useAutoSpotlight(
+  const { activeTooltip: spotlight, spotlightedId } = useAutoSpotlight(
     entities,
     containerRef.current,
     spotlightPaused,
@@ -1057,7 +1057,6 @@ export default function HeapSpace({
             bubblePos={spotPos}
             bubbleRadius={spotR}
             containerSize={{ width: cw, height: ch }}
-            onDismiss={dismissSpotlight}
           />
         );
       })()}

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { Calendar } from 'lucide-react';
 import clsx from 'clsx';
 
-export interface DateRange {
+interface DateRange {
   label: string;
   value: string;
 }

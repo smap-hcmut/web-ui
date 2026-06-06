@@ -11,14 +11,12 @@ import {
   type ProjectStatus,
   type ProjectDomain,
   type CreateProjectInput,
-  type UpdateProjectInput,
 } from '../api/projects';
-import { datasourceApi } from '../api/datasources';
 import { campaignKeys } from './use-campaigns';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-export const projectKeys = {
+const projectKeys = {
   all: ['projects'] as const,
   domains: () => [...projectKeys.all, 'domains'] as const,
   byCampaign: (campaignId: string) => [...projectKeys.all, 'campaign', campaignId] as const,

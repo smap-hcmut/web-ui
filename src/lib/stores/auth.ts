@@ -49,14 +49,14 @@ const initialState = {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       ...initialState,
 
       /**
        * Initiate OAuth login by redirecting to identity-srv
        * Browser will be redirected to: smap-api.tantai.dev/identity/v1/authentication/login
        */
-      login: (provider: 'google' | 'azure' | 'okta' = 'google') => {
+      login: (_provider: 'google' | 'azure' | 'okta' = 'google') => {
         if (typeof window === 'undefined') return;
 
         // OAuth login goes through the proxy so Set-Cookie gets rewritten
