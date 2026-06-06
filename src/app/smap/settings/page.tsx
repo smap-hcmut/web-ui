@@ -48,7 +48,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-const inputClass = 'w-full px-4 py-2.5 rounded-xl text-[13px] outline-none transition-all duration-200';
+const inputClass = 'w-full min-h-[44px] rounded-lg px-4 py-2.5 text-[13px] outline-none transition-all duration-200';
 const inputStyle = {
   background: 'var(--input-bg)',
   border: '1px solid var(--input-border)',
@@ -114,7 +114,7 @@ function LifecycleIconButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="p-2 rounded-lg transition-colors disabled:cursor-not-allowed"
+      className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed"
       style={{ color: toneColor, opacity: disabled ? 0.45 : 1 }}
       title={title}
       aria-label={title}
@@ -305,7 +305,7 @@ function CampaignSettingsContent() {
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => router.push(`/smap?camp_id=${campId}`)}
-          className="p-2 rounded-xl transition-colors"
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors"
           style={{ color: 'var(--text-muted)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -333,7 +333,7 @@ function CampaignSettingsContent() {
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-medium whitespace-nowrap transition-all duration-200"
+                  className="flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 py-2 text-[12px] font-medium whitespace-nowrap transition-all duration-200"
                   style={{
                     background: active ? 'var(--accent-subtle)' : 'transparent',
                     color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -355,7 +355,7 @@ function CampaignSettingsContent() {
 
         {/* Content */}
         <div
-          className="flex-1 rounded-2xl p-6"
+          className="flex-1 rounded-lg p-6"
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border)',
@@ -411,7 +411,7 @@ function CampaignSettingsContent() {
                 </div>
               </div>
               <button
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white"
+                className="flex min-h-[44px] items-center gap-2 rounded-lg px-5 py-2.5 text-[13px] font-semibold text-white"
                 style={{ background: 'var(--accent)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent-hover)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
@@ -430,7 +430,7 @@ function CampaignSettingsContent() {
                   Projects ({projects?.length ?? 0})
                 </h2>
                 <button
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-white"
                   style={{ background: 'var(--accent)' }}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -446,7 +446,7 @@ function CampaignSettingsContent() {
                   return (
                     <div
                       key={proj.id}
-                      className="flex items-center justify-between gap-4 p-4 rounded-xl transition-colors"
+                      className="flex items-center justify-between gap-4 rounded-lg p-4 transition-colors"
                       style={{ background: 'var(--bg-hover)' }}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -518,7 +518,7 @@ function CampaignSettingsContent() {
                         )}
                         <button
                           type="button"
-                          className="p-2 rounded-lg transition-colors"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors"
                           style={{ color: 'var(--text-muted)' }}
                           title="Edit project"
                           aria-label="Edit project"
@@ -555,7 +555,7 @@ function CampaignSettingsContent() {
                   Monitored Targets {targets && targets.length > 0 ? `(${targets.length})` : ''}
                 </h2>
                 <button
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-white"
                   style={{ background: 'var(--accent)' }}
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -572,7 +572,7 @@ function CampaignSettingsContent() {
                   {targets.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between px-4 py-3 rounded-xl"
+                      className="flex items-center justify-between rounded-lg px-4 py-3"
                       style={{ background: 'var(--bg-hover)' }}
                     >
                       <div className="flex items-center gap-3">
@@ -590,7 +590,13 @@ function CampaignSettingsContent() {
                         <Badge variant={t.is_active ? 'success' : 'warning'} dot size="sm">
                           {t.is_active ? 'active' : 'inactive'}
                         </Badge>
-                        <button className="p-1" style={{ color: 'var(--danger)' }}>
+                        <button
+                          type="button"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg"
+                          style={{ color: 'var(--danger)' }}
+                          title="Remove target"
+                          aria-label="Remove target"
+                        >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>

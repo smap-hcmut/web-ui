@@ -3,8 +3,19 @@
  * Enabled via NEXT_PUBLIC_MOCK_API=1. One demo campaign with deterministic data.
  */
 
+import type { CrisisConfig } from '@/lib/api/projects';
+import { buildDefaultCrisisConfig } from '@/lib/crisis/presets';
+
 export const MOCK_CAMPAIGN_ID = 'mock-camp-1';
 const NOW = '2026-04-21T10:00:00Z';
+
+export const mockCurrentUser = {
+  id: 'mock-user',
+  email: 'demo@smap.local',
+  full_name: 'SMAP Demo Admin',
+  role: 'ADMIN',
+  is_active: true,
+};
 
 // ── Deterministic seeded helpers ─────────────────────────────────────────────
 function seeded(seed: number) {
@@ -83,6 +94,20 @@ export const mockProjects = [
 export const mockProjectListResponse = {
   projects: mockProjects,
   paginator: { total: mockProjects.length, page: 1, limit: 20, total_pages: 1 },
+};
+
+const defaultCrisisConfig = buildDefaultCrisisConfig();
+
+export const mockCrisisConfig: CrisisConfig = {
+  project_id: mockProjects[0].id,
+  status: defaultCrisisConfig.status ?? 'NORMAL',
+  keywords_trigger: defaultCrisisConfig.keywords_trigger!,
+  volume_trigger: defaultCrisisConfig.volume_trigger!,
+  sentiment_trigger: defaultCrisisConfig.sentiment_trigger!,
+  influencer_trigger: defaultCrisisConfig.influencer_trigger!,
+  response_policy: defaultCrisisConfig.response_policy,
+  created_at: NOW,
+  updated_at: NOW,
 };
 
 // ── Analytics: KPIs ──────────────────────────────────────────────────────────
@@ -269,6 +294,9 @@ export const mockHeap = {
 type ProxyMatch = { test: (path: string) => boolean; body: unknown };
 
 export const proxyGetMatchers: ProxyMatch[] = [
+  // Identity
+  { test: (p) => p === '/identity/api/v1/authentication/me',
+    body: mockCurrentUser },
   // Campaigns
   { test: (p) => p === '/project/api/v1/campaigns' || p.startsWith('/project/api/v1/campaigns?'),
     body: mockCampaignListResponse },
@@ -285,6 +313,10 @@ export const proxyGetMatchers: ProxyMatch[] = [
   ...mockProjects.map((pr) => ({
     test: (p: string) => p === `/project/api/v1/projects/${pr.id}`,
     body: pr,
+  })),
+  ...mockProjects.map((pr) => ({
+    test: (p: string) => p === `/project/api/v1/projects/${pr.id}/crisis-config`,
+    body: { ...mockCrisisConfig, project_id: pr.id },
   })),
   // Workspaces (return empty list so FE can render)
   { test: (p) => p === '/project/api/v1/workspaces' || p.startsWith('/project/api/v1/workspaces?'),
