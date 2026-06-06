@@ -14,7 +14,7 @@ import {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-const datasourceKeys = {
+export const datasourceKeys = {
   all: ['datasources'] as const,
   byProject: (projectId: string) => [...datasourceKeys.all, 'project', projectId] as const,
   targets: (datasourceId: string) => [...datasourceKeys.all, 'targets', datasourceId] as const,

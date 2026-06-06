@@ -20,7 +20,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface KeywordItem {
+export interface KeywordItem {
   text: string;
   volume: number;
   sentiment: number;

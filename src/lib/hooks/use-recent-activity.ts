@@ -17,7 +17,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface PostItem {
+export interface PostItem {
   id: string;
   platform: string;
   author: string;

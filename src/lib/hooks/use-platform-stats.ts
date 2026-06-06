@@ -20,7 +20,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface PlatformStat {
+export interface PlatformStat {
   platform: string;
   name: string;
   mentions: number;

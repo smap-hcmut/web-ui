@@ -28,7 +28,7 @@ import type {
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-const reportKeys = {
+export const reportKeys = {
   all: ['reports'] as const,
   lists: () => [...reportKeys.all, 'list'] as const,
   list: (campaignId: string) => [...reportKeys.lists(), campaignId] as const,

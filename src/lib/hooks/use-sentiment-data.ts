@@ -20,7 +20,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface SentimentDonutItem {
+export interface SentimentDonutItem {
   label: string;
   value: number;
   color: string;

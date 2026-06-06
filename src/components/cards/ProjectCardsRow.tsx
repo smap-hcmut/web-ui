@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { CrisisConfigEditorModal } from '@/components/crisis/CrisisConfigEditor';
 import { useScope } from '@/components/ScopeProvider';
@@ -31,6 +31,15 @@ import {
   RotateCcw,
   Zap,
   Loader2,
+  Activity,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Key,
+  Plus,
+  Smile,
+  Users,
+  Volume2,
 } from 'lucide-react';
 
 type ProjectCardStatus = NonNullable<Project['status']>;

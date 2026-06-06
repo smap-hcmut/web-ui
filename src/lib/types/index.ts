@@ -127,7 +127,7 @@ export interface StalkerTarget {
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 
-type ReportStatus = 'ready' | 'generating' | 'failed' | 'cancelled';
+export type ReportStatus = 'ready' | 'generating' | 'failed' | 'cancelled';
 
 export interface ReportItem {
   id: string;

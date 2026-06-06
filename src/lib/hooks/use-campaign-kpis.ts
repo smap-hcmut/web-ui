@@ -20,7 +20,7 @@ import { analyticsQueryOptions } from './analytics-query-options';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface KPIMetric {
+export interface KPIMetric {
   label: string;
   value: number;
   formatted: string;
@@ -30,21 +30,21 @@ interface KPIMetric {
   suffix?: string;
 }
 
-interface EngagementBreakdown {
+export interface EngagementBreakdown {
   views: number;
   likes: number;
   comments: number;
   shares: number;
 }
 
-interface KPIsResponse {
+export interface KPIsResponse {
   metrics: KPIMetric[];
   engagement: EngagementBreakdown;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-const kpiKeys = {
+export const kpiKeys = {
   all: ['analytics', 'kpis'] as const,
   campaign: (campaignId: string, scope?: AnalyticsScopeParams | string) =>
     [...kpiKeys.all, campaignId, analyticsScopeKey(scope)] as const,

@@ -36,12 +36,16 @@ export { useCampaignKPIs, kpiKeys } from './use-campaign-kpis';
 export type { KPIMetric, EngagementBreakdown, KPIsResponse } from './use-campaign-kpis';
 
 export { usePlatformStats } from './use-platform-stats';
+export type { PlatformStat } from './use-platform-stats';
 
 export { useSentimentData } from './use-sentiment-data';
+export type { SentimentDonutItem } from './use-sentiment-data';
 
 export { useTrendingKeywords } from './use-trending-keywords';
+export type { KeywordItem } from './use-trending-keywords';
 
 export { useRecentActivity } from './use-recent-activity';
+export type { PostItem } from './use-recent-activity';
 
 export { useHeapData } from './use-heap-data';
 
@@ -56,4 +60,5 @@ export {
   useGenerateCompetitor,
   useCancelReport,
   useRetryReport,
+  reportKeys,
 } from './use-reports';

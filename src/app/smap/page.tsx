@@ -25,7 +25,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PlatformOverviewCard } from "@/components/cards/PlatformOverviewCard";
 import { PostCard } from "@/components/cards/PostCard";
 import { PlatformIcon } from "@/components/icons/PlatformIcon";
-import type { Platform, PostDetail, ReportItem } from "@/lib/types";
+import type { Platform, PostDetail, ReportItem, Keyword } from "@/lib/types";
 import {
   datasourceApi,
   type DataSource,
@@ -87,6 +87,9 @@ import {
   Target,
   BarChart3,
   Globe,
+  SlidersHorizontal,
+  RotateCw,
+  Search,
 } from "lucide-react";
 
 /* ── Constants ── */

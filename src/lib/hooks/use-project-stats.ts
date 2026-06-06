@@ -22,13 +22,13 @@ export interface ProjectStat {
   platforms: string[];
 }
 
-interface ProjectStatsResponse {
+export interface ProjectStatsResponse {
   stats: ProjectStat[];
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 
-const projectStatsKeys = {
+export const projectStatsKeys = {
   all: ['analytics', 'project-stats'] as const,
   campaign: (campaignId: string) => [...projectStatsKeys.all, campaignId] as const,
 };

@@ -11,7 +11,7 @@ import { API_CONFIG } from './config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProjectStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type ProjectStatus = 'PENDING' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 export type EntityType = 'product' | 'campaign' | 'service' | 'competitor' | 'topic';
 
 export interface Project {
