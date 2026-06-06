@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNav } from "@/components/NavProvider";
@@ -10,7 +11,13 @@ import { GeneratingReportCard } from "@/components/reports/GeneratingReportCard"
 import { ReviewPostsModal } from "@/components/reports/ReviewPostsModal";
 import { ProjectFlipCard, CreateProjectModal, toProjectCardStatus } from "@/components/cards/ProjectCardsRow";
 import { CrisisConfigEditor } from "@/components/crisis/CrisisConfigEditor";
-import HeapSpace from "@/components/heap/HeapSpace";
+// HeapSpace ships ~1500 lines of charts + interactions. Lazy-load it so the
+// MAP tab only fetches that bundle once the user actually opens it; the
+// initial Insight / Projects / Reports render stays small.
+const HeapSpace = dynamic(() => import("@/components/heap/HeapSpace"), {
+  ssr: false,
+  loading: () => <div className="h-[600px] animate-pulse rounded-2xl" style={{ background: "var(--bg-hover)" }} />,
+});
 import { GlowCard } from "@/components/animated/GlowCard";
 import { AnimatedCounter } from "@/components/animated/AnimatedCounter";
 import { TrendArrow } from "@/components/animated/TrendArrow";
