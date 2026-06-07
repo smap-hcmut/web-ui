@@ -147,6 +147,7 @@ function parseNotification(rawData: string) {
   const mapped = mapEnvelope(envelope.type ?? "SYSTEM", payload);
 
   const isCrisis = mapped.category === "crisis";
+  const isAnalysis = mapped.category === "analysis";
 
   return {
     id: crypto.randomUUID(),
@@ -161,7 +162,7 @@ function parseNotification(rawData: string) {
     timestamp,
     createdAt: timestamp,
     read: false,
-    showToast: isCrisis,
+    showToast: isCrisis || isAnalysis,
     showBanner: isCrisis && mapped.kind === "critical",
     payload,
   };
