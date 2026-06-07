@@ -43,7 +43,6 @@ const PLATFORMS: { value: SourceType; label: string }[] = [
   { value: 'TIKTOK', label: 'TikTok' },
 ];
 
-const CRAWL_INTERVAL_MINUTES = 60;
 const AHAMOVE_DOMAIN_CODE = 'ahamove';
 
 // ─── Input styling helpers ───────────────────────────────────────────────────
@@ -112,6 +111,7 @@ export default function OnboardingPage() {
   );
   const [projectKeywords, setProjectKeywords] = useState<string[][]>([]);
   const [keywordInputs, setKeywordInputs] = useState<string[]>([]);
+  const [crawlIntervalMinutes, setCrawlIntervalMinutes] = useState('30');
 
   // Fetch available domain types from project-srv on mount
   useEffect(() => {
@@ -360,14 +360,14 @@ export default function OnboardingPage() {
               name: `${draft.entityName} - ${platform}`,
               source_type: platform,
               crawl_mode: 'NORMAL',
-              crawl_interval_minutes: CRAWL_INTERVAL_MINUTES,
+              crawl_interval_minutes: Math.max(5, Number(crawlIntervalMinutes) || 30),
             });
 
             // 3b. Create keyword target
             const target = await datasourceApi.createKeywordTarget(ds.id, {
               values: keywords,
               label: keywords.join(', '),
-              crawl_interval_minutes: CRAWL_INTERVAL_MINUTES,
+              crawl_interval_minutes: Math.max(5, Number(crawlIntervalMinutes) || 30),
             });
 
             // 3c. Activate target immediately for all platforms
@@ -808,6 +808,30 @@ export default function OnboardingPage() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Crawl interval */}
+              <div className="mb-5">
+                <label className="block text-[11px] font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Crawl interval (minutes)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={5}
+                    value={crawlIntervalMinutes}
+                    onChange={(e) => setCrawlIntervalMinutes(e.target.value)}
+                    className="w-24 px-3 py-2 rounded-xl text-[12px] outline-none"
+                    style={{
+                      background: 'var(--input-bg)',
+                      border: '1px solid var(--input-border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    Every {Math.max(5, Number(crawlIntervalMinutes) || 30)}m
+                  </span>
                 </div>
               </div>
 
