@@ -1418,7 +1418,11 @@ function collectionPlatformToSourceType(platform: Platform): SourceType {
    ════════════════════════════════════════════ */
 function InsightsTab() {
   const { activeCampaignId, projectIds, keywordIds } = useScope();
-  const [postDetailId, setPostDetailId] = useState<string | null>(null);
+  // Snapshot the clicked post in state. Deriving from filteredPosts.find()
+  // breaks when the user paginates or changes filters: keepPreviousData hands
+  // back a stale page during refetch, and once the new page lands the post is
+  // no longer in filteredPosts so the modal blanks out mid-view.
+  const [selectedPost, setSelectedPost] = useState<PostItem | null>(null);
   const [platformFilter, setPlatformFilter] = useState<Platform | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<string>("all");
   const [sourceScope, setSourceScope] = useState<AnalyticsSourceScope>("all");
@@ -1601,9 +1605,6 @@ function InsightsTab() {
   }, [postPage, totalMentionPages, totalMentions]);
 
   // Post detail — build from PostItem instead of generatePostDetail
-  const selectedPost = postDetailId
-    ? filteredPosts.find((p) => p.id === postDetailId)
-    : null;
   const selectedPostSentiment = selectedPost
     ? normalizeMentionSentiment(selectedPost.sentiment, selectedPost.sentimentScore)
     : "neutral";
@@ -1844,7 +1845,7 @@ function InsightsTab() {
                 time={post.time}
                 originalUrl={isValidHttpUrl(post.url) ? post.url : undefined}
                 contentType={post.contentType}
-                onOpen={() => setPostDetailId(post.id)}
+                onOpen={() => setSelectedPost(post)}
               />
             ))}
           </div>
@@ -1913,7 +1914,7 @@ function InsightsTab() {
       <PostDetailModal
         post={postDetail}
         open={!!postDetail}
-        onClose={() => setPostDetailId(null)}
+        onClose={() => setSelectedPost(null)}
       />
     </div>
   );
