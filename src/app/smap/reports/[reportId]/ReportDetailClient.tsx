@@ -9,6 +9,8 @@ import {
   Target,
   BarChart3,
   RotateCw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -25,6 +27,7 @@ interface Props {
 }
 
 const MAX_SELECTED_IN_URL = 100;
+const POSTS_PAGE_SIZE = 25;
 
 function parseSelected(raw: string | null): Set<string> {
   if (!raw) return new Set();
@@ -41,11 +44,25 @@ export function ReportDetailClient({ reportId }: Props) {
     reportId,
     report?.status === 'ready',
   );
+
+  const [postsPage, setPostsPage] = useState(1);
   // Knowledge-srv returns the current evidence window from indexed campaign data.
-  const { data: postsData, isLoading: postsLoading } = useReportPosts(reportId, {
-    page: 1,
-    pageSize: 50,
-  });
+  const { data: postsData, isLoading: postsLoading, isFetching: postsFetching } = useReportPosts(
+    reportId,
+    { page: postsPage, pageSize: POSTS_PAGE_SIZE },
+  );
+  // Lifted comment-thread expand state — virtualised rows unmount on scroll
+  // out, so row-local useState would forget the toggle every time the user
+  // scrolls past and back.
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(() => new Set());
+  const toggleCommentsExpanded = useCallback((postId: string) => {
+    setExpandedComments((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  }, []);
 
   const [selected, setSelected] = useState<Set<string>>(() =>
     parseSelected(searchParams.get('selected')),
@@ -90,6 +107,16 @@ export function ReportDetailClient({ reportId }: Props) {
   }, []);
 
   const posts = postsData?.items ?? [];
+  const totalPosts = postsData?.total ?? 0;
+  const totalPostsPages = Math.max(1, Math.ceil(totalPosts / POSTS_PAGE_SIZE));
+  const postsPageStart = totalPosts > 0 ? (postsPage - 1) * POSTS_PAGE_SIZE + 1 : 0;
+  const postsPageEnd = Math.min(postsPage * POSTS_PAGE_SIZE, totalPosts);
+
+  useEffect(() => {
+    if (totalPosts > 0 && postsPage > totalPostsPages) {
+      setPostsPage(totalPostsPages);
+    }
+  }, [postsPage, totalPosts, totalPostsPages]);
 
   const selectAllOnPage = useCallback(() => {
     setSelected((prev) => {
@@ -324,9 +351,46 @@ export function ReportDetailClient({ reportId }: Props) {
               isLoading={postsLoading}
               selectedIds={selected}
               onToggleSelect={toggle}
+              expandedIds={expandedComments}
+              onToggleExpand={toggleCommentsExpanded}
               height={Math.max(360, Math.min(640, viewportHeight - 360))}
             />
           </div>
+
+          {totalPosts > 0 && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                Showing {postsPageStart}-{postsPageEnd} of {totalPosts} evidence posts
+              </p>
+              {totalPostsPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPostsPage((page) => Math.max(1, page - 1))}
+                    disabled={postsPage === 1 || postsFetching}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-40"
+                    style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+                  >
+                    <ChevronLeft className="w-3 h-3" /> Prev
+                  </button>
+                  <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                    Page {postsPage} / {totalPostsPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPostsPage((page) => Math.min(totalPostsPages, page + 1))
+                    }
+                    disabled={postsPage >= totalPostsPages || postsFetching}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-40"
+                    style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+                  >
+                    Next <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

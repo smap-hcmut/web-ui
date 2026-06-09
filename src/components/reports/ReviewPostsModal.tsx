@@ -20,7 +20,16 @@ const MAX_SELECTED = 100;
 export function ReviewPostsModal({ open, onClose, report }: Props) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(() => new Set());
   const [listHeight, setListHeight] = useState(480);
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedComments((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const update = () => setListHeight(Math.max(320, window.innerHeight * 0.55));
@@ -87,6 +96,8 @@ export function ReviewPostsModal({ open, onClose, report }: Props) {
             isLoading={isLoading}
             selectedIds={selected}
             onToggleSelect={toggleSelect}
+            expandedIds={expandedComments}
+            onToggleExpand={toggleExpand}
             height={listHeight}
           />
         </div>

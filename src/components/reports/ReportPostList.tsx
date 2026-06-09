@@ -13,6 +13,9 @@ interface Props {
   isLoading?: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** Lifted comment-thread expand state — survives virtualizer remount. */
+  expandedIds: Set<string>;
+  onToggleExpand: (id: string) => void;
   /** The scrollable viewport height. */
   height: number;
   /** Estimated row height for the virtualiser. */
@@ -24,6 +27,8 @@ export function ReportPostList({
   isLoading,
   selectedIds,
   onToggleSelect,
+  expandedIds,
+  onToggleExpand,
   height,
   estimatedSize = 180,
 }: Props) {
@@ -40,6 +45,7 @@ export function ReportPostList({
   // unrelated state changes. The caller already provides a stable fn, but we
   // wrap in useCallback for symmetry.
   const handleToggle = useCallback((id: string) => onToggleSelect(id), [onToggleSelect]);
+  const handleExpand = useCallback((id: string) => onToggleExpand(id), [onToggleExpand]);
 
   if (isLoading) {
     return (
@@ -89,7 +95,9 @@ export function ReportPostList({
               <ReportPostRow
                 post={post}
                 selected={selectedIds.has(post.id)}
+                expanded={expandedIds.has(post.id)}
                 onToggleSelect={handleToggle}
+                onToggleExpand={handleExpand}
               />
             </div>
           );

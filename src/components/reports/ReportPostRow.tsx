@@ -10,7 +10,9 @@ import type { ReportPost } from '@/lib/types';
 interface Props {
   post: ReportPost;
   selected: boolean;
+  expanded: boolean;
   onToggleSelect: (id: string) => void;
+  onToggleExpand: (id: string) => void;
 }
 
 function formatNumber(n: number): string {
@@ -25,8 +27,7 @@ function sentimentColor(s: ReportPost['sentiment']) {
   return 'var(--text-muted)';
 }
 
-function ReportPostRowImpl({ post, selected, onToggleSelect }: Props) {
-  const [expanded, setExpanded] = useState(false);
+function ReportPostRowImpl({ post, selected, expanded, onToggleSelect, onToggleExpand }: Props) {
   const [showFull, setShowFull] = useState(false);
   const sourceUrl = post.url?.trim();
 
@@ -120,7 +121,7 @@ function ReportPostRowImpl({ post, selected, onToggleSelect }: Props) {
 
           {/* Comments toggle */}
           <button
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => onToggleExpand(post.id)}
             className="mt-2 flex items-center gap-1 text-[11px] font-medium"
             style={{ color: 'var(--accent)' }}
           >
@@ -139,6 +140,8 @@ export const ReportPostRow = memo(ReportPostRowImpl, (prev, next) => {
   return (
     prev.post.id === next.post.id &&
     prev.selected === next.selected &&
-    prev.onToggleSelect === next.onToggleSelect
+    prev.expanded === next.expanded &&
+    prev.onToggleSelect === next.onToggleSelect &&
+    prev.onToggleExpand === next.onToggleExpand
   );
 });
