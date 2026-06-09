@@ -1,15 +1,17 @@
 'use client';
 
-// staleTime + gcTime give React Query enough cache headroom that hopping
-// between tabs no longer triggers a refetch storm. refetchOnMount used to be
-// true which forced every Insight render to re-issue 5 endpoints regardless
-// of cache freshness — defaulting to React Query's 'always-when-stale'
-// behaviour lets the 60s staleness window do its job.
+// staleTime + refetchInterval are tuned so the Insight dashboard tracks
+// the backend's 2-min rollup cadence without hammering it. staleTime
+// 15 s means a manual refresh always re-fetches; refetchInterval 30 s
+// pulls fresh numbers on its own while the tab is open. refetchOnMount
+// is back on so reloading the page (or navigating away and back)
+// shows the current value — the previous false setting was the visible
+// half of the "vẫn 3.2K" bug.
 export const analyticsQueryOptions = {
   retry: false,
-  staleTime: 60_000,
+  staleTime: 15_000,
   gcTime: 10 * 60_000,
-  refetchInterval: false,
-  refetchOnReconnect: false,
-  refetchOnMount: false,
+  refetchInterval: 30_000,
+  refetchOnReconnect: true,
+  refetchOnMount: true,
 } as const;
